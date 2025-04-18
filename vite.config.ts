@@ -21,6 +21,7 @@ function getGitTag() {
 }
 
 export default defineConfig({
+  publicDir: 'assets',
   plugins: [react(), tailwindcss()],
   resolve: {
     alias: {
