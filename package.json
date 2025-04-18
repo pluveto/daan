@@ -1,0 +1,78 @@
+{
+  "name": "@pluveto/daan",
+  "version": "0.1.0",
+  "author": "Pluveto <zijing.zhang@proton.me>",
+  "repository": {
+    "type": "git",
+    "url": "git://github.com/pluveto/daan.git"
+  },
+  "type": "module",
+  "engines": {
+    "node": ">=22.0.0",
+    "pnpm": ">=9.0.0"
+  },
+  "dependencies": {
+    "@radix-ui/react-dialog": "^1.1.7",
+    "@radix-ui/react-label": "^2.1.3",
+    "@radix-ui/react-select": "^2.1.7",
+    "@radix-ui/react-slot": "^1.2.0",
+    "@radix-ui/react-switch": "^1.1.4",
+    "@tailwindcss/forms": "^0.5.10",
+    "@tailwindcss/vite": "^4.1.4",
+    "@types/react-syntax-highlighter": "^15.5.13",
+    "class-variance-authority": "^0.7.1",
+    "clsx": "^2.1.1",
+    "copy-to-clipboard": "^3.3.3",
+    "jotai": "^2.12.3",
+    "lucide-react": "^0.488.0",
+    "openai": "^4.95.0",
+    "radix-ui": "^1.2.0",
+    "react": "^19.1.0",
+    "react-dom": "^19.1.0",
+    "react-icons": "^5.5.0",
+    "react-markdown": "^10.1.0",
+    "react-syntax-highlighter": "^15.6.1",
+    "rehype-highlight": "^7.0.2",
+    "remark-gfm": "^4.0.1",
+    "tailwind-merge": "^3.2.0",
+    "tw-animate-css": "^1.2.5",
+    "uuid": "^11.1.0"
+  },
+  "devDependencies": {
+    "@ianvs/prettier-plugin-sort-imports": "^4.4.1",
+    "@nkzw/eslint-config": "^2.2.0",
+    "@swc/core": "^1.11.21",
+    "@tailwindcss/typography": "^0.5.16",
+    "@types/node": "^22.14.1",
+    "@types/react": "^19.1.2",
+    "@types/react-dom": "^19.1.2",
+    "@types/uuid": "^10.0.0",
+    "@vitejs/plugin-react": "^4.4.0",
+    "eslint": "^9.24.0",
+    "npm-run-all2": "^7.0.2",
+    "prettier": "^3.5.3",
+    "prettier-plugin-tailwindcss": "^0.6.11",
+    "tailwindcss": "^4.1.4",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.8.3",
+    "vite": "^6.3.0",
+    "vitest": "^3.1.1"
+  },
+  "scripts": {
+    "preinstall": "command -v git >/dev/null 2>&1 && git config core.hooksPath git-hooks || true",
+    "build": "vite build",
+    "dev:update-deps": "rm -rf pnpm-lock.yaml node_modules/ **/node_modules && pnpm install",
+    "dev": "vite dev",
+    "format": "prettier --write .",
+    "lint:format": "prettier --cache --check .",
+    "lint": "eslint --cache .",
+    "test": "npm-run-all --parallel tsc:check vitest:run lint lint:format",
+    "tsc:check": "tsc",
+    "vitest:run": "vitest run"
+  },
+  "browserslist": [
+    ">0.2%",
+    "not dead",
+    "not op_mini all"
+  ]
+}
