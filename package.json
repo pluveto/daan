@@ -40,7 +40,6 @@
   },
   "devDependencies": {
     "@ianvs/prettier-plugin-sort-imports": "^4.4.1",
-    "@nkzw/eslint-config": "^2.2.0",
     "@swc/core": "^1.11.21",
     "@tailwindcss/typography": "^0.5.16",
     "@types/node": "^22.14.1",
@@ -48,7 +47,6 @@
     "@types/react-dom": "^19.1.2",
     "@types/uuid": "^10.0.0",
     "@vitejs/plugin-react": "^4.4.0",
-    "eslint": "^9.24.0",
     "npm-run-all2": "^7.0.2",
     "prettier": "^3.5.3",
     "prettier-plugin-tailwindcss": "^0.6.11",
@@ -65,8 +63,7 @@
     "dev": "vite dev",
     "format": "prettier --write .",
     "lint:format": "prettier --cache --check .",
-    "lint": "eslint --cache .",
-    "test": "npm-run-all --parallel tsc:check vitest:run lint lint:format",
+    "test": "npm-run-all --parallel tsc:check vitest:run lint:format",
     "tsc:check": "tsc",
     "vitest:run": "vitest run"
   },
