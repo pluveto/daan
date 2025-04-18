@@ -50,7 +50,7 @@ export const CodeBlock: React.FC<CodeBlockProps> = ({
   // For block code
   return (
     <div className="code-block group relative my-2 text-sm">
-      <div className="flex items-center justify-between rounded-t-md border-b border-neutral-300 bg-neutral-200 px-3 py-1 dark:border-neutral-600 dark:bg-neutral-900">
+      <div className="flex items-center justify-between rounded-t-md border-b border-neutral-300 bg-neutral-200 px-3 py-1 dark:border-neutral-600 dark:bg-neutral-800">
         <span className="text-xs text-neutral-500 dark:text-neutral-400">
           {lang}
         </span>
@@ -73,6 +73,9 @@ export const CodeBlock: React.FC<CodeBlockProps> = ({
         language={lang}
         style={isNightMode ? oneDark : oneLight}
         wrapLongLines={true} // Or false, depending on preference
+        customStyle={{
+          borderRadius: '0 0 0.5rem 0.5rem',
+        }}
       >
         {codeString}
       </SyntaxHighlighter>

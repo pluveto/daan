@@ -151,6 +151,7 @@ body {
   --color-neutral-950: oklch(0.145 0 0);
   --color-code: oklch(0.29 0.0157 264.3);
   --font-roboto: 'Roboto', sans-serif;
+  --tw-prose-pre-bg: transparent;
 }
 
 /* 全局滚动条样式 */
@@ -186,4 +187,8 @@ body {
 
 .dark ::-webkit-scrollbar-thumb:hover {
   background: #777; /* 暗色模式悬停滑块颜色 */
+}
+
+pre {
+  background-color: transparent;
 }

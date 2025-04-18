@@ -220,7 +220,12 @@ export const ChatHistory: React.FC<ChatHistoryProps> = ({ className }) => {
                 {!isEditing ? (
                   <>
                     <ReactMarkdown
-                      components={{ code: CodeBlock }}
+                      components={{
+                        code: CodeBlock,
+                        p: ({ children }) => (
+                          <div className="mb-2">{children}</div>
+                        ),
+                      }}
                       remarkPlugins={[remarkGfm]}
                     >
                       {message.content}
