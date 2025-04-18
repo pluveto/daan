@@ -1,51 +1,46 @@
-# Starter Kit for Vite, React, TypeScript, Tailwind and Node.js ESM
+<center>
+<div>
+<h1>DAAN</h1><p> Lightweight Language Model Client</p>
+</div>
+<img src="cover.png" width="200" />
+</center>
 
-_Minimal, sensible defaults, fast._
+Daan ("Answer") is a concise and lightweight LLM client designed to provide you with a smooth and efficient AI experience. It is compatible with OpenAI's GPT series.
 
-Read [the blog post about this template](https://cpojer.net/posts/fastest-frontend-tooling-in-2022).
+## Features
 
-## Technologies
+- **Minimalist Interface:** Focuses on core functionality, eliminating redundancy and allowing you to concentrate on the conversation.
+- **Flexible Model Selection:** Supports custom models, making it easy to switch to your preferred LLM.
+- **Custom API Address:** In addition to OpenAI, you can use other compatible APIs.
+- **Secure Storage:** API keys are securely stored locally in the browser, so you don't have to worry about leaks.
+- **Personalized Settings:** Customize system prompts, the number of historical messages, etc., to create your own AI assistant.
+- **Theme Switching:** Supports night mode to protect your eyes.
+- **Timestamp Display:** Convenient for tracking conversation history.
+- **Chat Summary (WIP):** (Work In Progress) Chat summary feature to help you quickly review conversation content.
 
-- [Vite](https://vitejs.dev/)
-- [React](https://reactjs.org/)
-- [TypeScript](https://www.typescriptlang.org)
-- [Tailwind](https://tailwindcss.com/)
-- [pnpm](https://pnpm.io/ja/) (_Optional_)
+## Quick Start
 
-![screenshot of `App.tsx`](./screenshot.png)
+1.  **Get an API Key:** You need a valid OpenAI API key (or a key for another compatible API).
+2.  **Configure Daan:** Enter your API key in Daan's settings, and you can also select the model you want to use.
+3.  **Start a Conversation:** Click "+ New Chat" to start a new conversation, enter your question, and Daan will provide you with an answer!
 
-## Setup
+## Usage
 
-- Press the "Use this template" on the top of this repository's GitHub page.
-- Run `pnpm install` (or `npm install` if you don't use `pnpm`).
-- `pnpm dev` for development.
-- Use `pnpm test` to run tests.
-- `pnpm build` for production builds.
+- **Model Selection:** Select the LLM model you want to use in the settings. You can use predefined models, or add custom models.
+- **System Prompt:** By customizing the system prompt, you can change the behavior of the AI. For example, you can have the AI play the role of an expert in a specific field.
+- **Number of Historical Messages:** Control the number of historical messages sent to the API, which can save token consumption.
+- **More Settings:** Adjust other settings according to your needs, such as theme, timestamp display, etc.
 
-_Note: You can install `pnpm` via `homebrew` on macOS: `brew install pnpm`._
+## Contribution
 
-## Protips for the fastest Developer Experience
+Everyone is welcome to participate in the development of Daan! You can contribute in the following ways:
 
-- Use [`npm-run-all`](https://github.com/mysticatea/npm-run-all) to parallelize local test runs.
-- Prettier and eslint have `--cache` flags. Use them!
-- Do not run prettier inside of `eslint`. It commonly takes 50% of the eslint runtime!
-- Automatically sort imports when running prettier/saving the document via [`@ianvs/prettier-plugin-sort-imports`](https://github.com/ianvs/prettier-plugin-sort-imports).
-- Use `swc` with `ts-node` for fast node scripts with [ESM](https://hacks.mozilla.org/2018/03/es-modules-a-cartoon-deep-dive/). See below ↓
+- Submit Issue: Report bugs or suggest new features.
+- Submit Pull Request: Fix bugs or add new features.
+- Participate in Discussions: Participate in discussions and share your ideas.
 
-## Run node scripts with ESM and TypeScript, fast.
+## License
 
-Create a `script.ts` file, run `chmod x script.ts` and execute it via `./script.ts`.
+Daan is licensed under the AGPL-3.0 license, see the [LICENSE](LICENSE) file for details.
 
-```
-#!/usr/bin/env node --no-warnings --experimental-specifier-resolution=node --loader ts-node/esm
-
-console.log('Your code goes here.');
-```
-
-Use this to restart your scripts instantly when a file changes:
-
-```
-#!/usr/bin/env NODE_ENV=development node --watch --no-warnings --experimental-specifier-resolution=node --loader ts-node/esm
-
-console.log('This processes instantly restarts when a file changes.');
-```
+Non-commercial use is completely free, commercial use requires authorization (free authorization, but registration is required).
