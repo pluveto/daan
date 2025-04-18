@@ -13,8 +13,10 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { LuBot, LuClock, LuLoader, LuUser } from 'react-icons/lu'; // Added LuClock
 
 import ReactMarkdown from 'react-markdown';
+import rehypeKatex from 'rehype-katex';
 import rehypeRaw from 'rehype-raw';
 import remarkGfm from 'remark-gfm';
+import remarkMath from 'remark-math';
 import { MessageToolbar } from './MessageToolbar.tsx';
 import { Button } from './ui/Button.tsx';
 import { CodeBlock } from './ui/CodeBlock.tsx';
@@ -236,8 +238,8 @@ export const ChatHistory: React.FC<ChatHistoryProps> = ({ className }) => {
                           <div className="mb-2">{children}</div>
                         ),
                       }}
-                      remarkPlugins={[remarkGfm]}
-                      rehypePlugins={[rehypeRaw]}
+                      remarkPlugins={[remarkGfm, remarkMath]}
+                      rehypePlugins={[rehypeRaw, rehypeKatex]}
                     >
                       {msgPostProcess(message.content)}
                     </ReactMarkdown>
