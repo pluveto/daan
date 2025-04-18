@@ -192,7 +192,7 @@ export const ChatHistory: React.FC<ChatHistoryProps> = ({ className }) => {
           >
             {/* Sender Info and Timestamp */}
             <div className="mb-1.5 flex items-center space-x-2 text-sm font-medium text-neutral-900 dark:text-neutral-200">
-              <span className="flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full bg-neutral-200 text-neutral-600 dark:bg-neutral-700 dark:text-neutral-300">
+              <span className="flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full">
                 {getSenderIcon(message.role)}
               </span>
               <span className="font-semibold">

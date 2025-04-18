@@ -161,6 +161,7 @@ export const MessageInput: React.FC = () => {
 
       {/* Message Input Area */}
       <Textarea
+        variant="flat"
         ref={textareaRef}
         rows={1}
         placeholder={
@@ -175,9 +176,6 @@ export const MessageInput: React.FC = () => {
         onKeyDown={handleKeyDown}
         className={cn(
           'max-h-[200px] min-h-[40px] flex-1 resize-none overflow-y-auto',
-          'rounded-md border px-3 py-2',
-          'focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none',
-          'bg-white placeholder-neutral-400 dark:bg-neutral-800 dark:placeholder-neutral-500',
         )}
         disabled={!activeChat || isLoading} // Disable input while loading
         aria-label="Chat message input"

@@ -70,7 +70,7 @@ export const CodeBlock: React.FC<CodeBlockProps> = ({
         style={isNightMode ? oneDark : oneLight}
         language={lang}
         PreTag="div"
-        className="!m-0 overflow-x-auto rounded-b-md !bg-neutral-50 !p-3 dark:!bg-gray-900"
+        className="dark:!bg-code !m-0 overflow-x-auto rounded-b-md !bg-neutral-50 !p-3"
         wrapLongLines={true} // Or false, depending on preference
       >
         {codeString}
