@@ -1,6 +1,6 @@
 <center>
 <div>
-<h1>DAAN</h1><p> Lightweight Language Model Client</p>
+<h1>DAAN</h1><p> A Lightweight Language Model Client</p>
 </div>
 <img src="cover.png" width="200" />
 </center>
