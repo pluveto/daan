@@ -5,7 +5,9 @@
 <img src="cover.png" width="200" />
 </center>
 
-Daan ("Answer") is a concise and lightweight LLM client designed to provide you with a smooth and efficient AI experience. It is compatible with OpenAI's GPT series.
+English | [中文](使用说明.md)
+
+Daan (答案，"Answer" in Chinese) is a concise and lightweight LLM client designed to provide you with a smooth and efficient AI experience. It is compatible with OpenAI's GPT series.
 
 ## Features
 
