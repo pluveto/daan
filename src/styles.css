@@ -50,11 +50,6 @@
   }
 }
 
-body {
-  background-color: var(--background-color);
-  color: var(--text-color);
-}
-
 @theme inline {
   --radius-sm: calc(var(--radius) - 4px);
   --radius-md: calc(var(--radius) - 2px);
