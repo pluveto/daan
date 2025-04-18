@@ -33,6 +33,7 @@
     "react-markdown": "^10.1.0",
     "react-syntax-highlighter": "^15.6.1",
     "rehype-highlight": "^7.0.2",
+    "rehype-raw": "^7.0.0",
     "remark-gfm": "^4.0.1",
     "tailwind-merge": "^3.2.0",
     "tw-animate-css": "^1.2.5",

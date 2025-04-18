@@ -13,6 +13,7 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { LuBot, LuClock, LuLoader, LuUser } from 'react-icons/lu'; // Added LuClock
 
 import ReactMarkdown from 'react-markdown';
+import rehypeRaw from 'rehype-raw';
 import remarkGfm from 'remark-gfm';
 import { MessageToolbar } from './MessageToolbar.tsx';
 import { Button } from './ui/Button.tsx';
@@ -28,6 +29,15 @@ const formatTimestamp = (timestamp: number): string => {
   const date = new Date(timestamp);
   // Example format: 1:30 PM (adjust as needed)
   return date.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+};
+
+const msgPostProcess = (content: string) => {
+  return content
+    .replace(
+      /<think>/g,
+      '<div class="thought text-neutral-500 dark:text-neutral-400 font-serif italic">',
+    )
+    .replace(/<\/think>/g, '</div>');
 };
 
 export const ChatHistory: React.FC<ChatHistoryProps> = ({ className }) => {
@@ -227,8 +237,9 @@ export const ChatHistory: React.FC<ChatHistoryProps> = ({ className }) => {
                         ),
                       }}
                       remarkPlugins={[remarkGfm]}
+                      rehypePlugins={[rehypeRaw]}
                     >
-                      {message.content}
+                      {msgPostProcess(message.content)}
                     </ReactMarkdown>
                     {message.isStreaming && (
                       <LuLoader className="ml-1 inline-block h-4 w-4 animate-spin text-neutral-500 dark:text-neutral-400" />
