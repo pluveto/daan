@@ -187,3 +187,7 @@
 pre {
   background-color: transparent;
 }
+
+.katex-html {
+  display: none;
+}
