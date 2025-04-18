@@ -55,7 +55,7 @@ export const ChatHistory: React.FC<ChatHistoryProps> = ({ className }) => {
   const scrollToBottom = useCallback((behavior: ScrollBehavior = 'smooth') => {
     const element = scrollRef.current;
     if (element) {
-      element.scrollTo({ top: element.scrollHeight, behavior });
+      element.scrollTo({ behavior, top: element.scrollHeight });
     }
   }, []);
 
@@ -71,10 +71,12 @@ export const ChatHistory: React.FC<ChatHistoryProps> = ({ className }) => {
     if (isNearBottomRef.current) {
       scrollToBottom('smooth');
     }
-    const lastMessage = messages[messages.length - 1];
+    const lastMessage = messages.at(-1);
     if (lastMessage?.isStreaming && messages.length > 0) {
       setTimeout(() => {
-        if (isNearBottomRef.current) scrollToBottom('auto');
+        if (isNearBottomRef.current) {
+          scrollToBottom('auto');
+        }
       }, 50);
     }
   }, [messages, scrollToBottom]);
@@ -89,7 +91,9 @@ export const ChatHistory: React.FC<ChatHistoryProps> = ({ className }) => {
   }, [editingId, messages]);
 
   const handleSaveEdit = () => {
-    if (!editingId || !editContent.trim()) return;
+    if (!editingId || !editContent.trim()) {
+      return;
+    }
     updateMessageContent({
       messageId: editingId,
       newContent: editContent.trim(),
@@ -137,11 +141,11 @@ export const ChatHistory: React.FC<ChatHistoryProps> = ({ className }) => {
 
   return (
     <div
-      ref={scrollRef}
       className={cn(
         'relative flex-1 space-y-6 overflow-y-auto p-4 md:p-6',
         className,
       )}
+      ref={scrollRef}
     >
       {messages.length === 0 && (
         <div className="absolute inset-0 flex items-center justify-center">
@@ -155,19 +159,21 @@ export const ChatHistory: React.FC<ChatHistoryProps> = ({ className }) => {
         const isDivider = message.role === 'divider'; // Check for divider role
 
         // Optionally hide system messages
-        if (isSystem) return null;
+        if (isSystem) {
+          return null;
+        }
 
         // Render divider
         if (isDivider) {
           return (
             <div
-              key={message.id}
-              className="relative py-3"
               aria-label="Context Cleared"
+              className="relative py-3"
+              key={message.id}
             >
               <div
-                className="absolute inset-0 flex items-center"
                 aria-hidden="true"
+                className="absolute inset-0 flex items-center"
               >
                 <div className="w-full border-t border-dashed border-neutral-300 dark:border-neutral-700"></div>
               </div>
@@ -184,11 +190,11 @@ export const ChatHistory: React.FC<ChatHistoryProps> = ({ className }) => {
 
         return (
           <div
-            key={message.id}
             className={cn(
               'group message-item relative flex flex-col', // Use flex-col
               { 'message-editing': isEditing },
             )}
+            key={message.id}
           >
             {/* Sender Info and Timestamp */}
             <div className="mb-1.5 flex items-center space-x-2 text-sm font-medium text-neutral-900 dark:text-neutral-200">
@@ -214,8 +220,8 @@ export const ChatHistory: React.FC<ChatHistoryProps> = ({ className }) => {
                 {!isEditing ? (
                   <>
                     <ReactMarkdown
-                      remarkPlugins={[remarkGfm]}
                       components={{ code: CodeBlock }}
+                      remarkPlugins={[remarkGfm]}
                     >
                       {message.content}
                     </ReactMarkdown>
@@ -226,25 +232,25 @@ export const ChatHistory: React.FC<ChatHistoryProps> = ({ className }) => {
                 ) : (
                   <div className="space-y-2">
                     <Textarea
-                      value={editContent}
+                      autoFocus
+                      className="min-h-[60px] w-full resize-none text-sm"
                       onChange={(e) => setEditContent(e.target.value)}
                       onKeyDown={handleEditKeyDown}
-                      className="min-h-[60px] w-full resize-none text-sm"
-                      autoFocus
                       rows={Math.max(3, editContent.split('\n').length)}
+                      value={editContent}
                     />
                     <div className="flex justify-end space-x-2">
                       <Button
-                        variant="ghost"
-                        size="sm"
                         onClick={handleCancelEdit}
+                        size="sm"
+                        variant="ghost"
                       >
                         Cancel
                       </Button>
                       <Button
-                        size="sm"
-                        onClick={handleSaveEdit}
                         disabled={!editContent.trim()}
+                        onClick={handleSaveEdit}
+                        size="sm"
                       >
                         Save
                       </Button>

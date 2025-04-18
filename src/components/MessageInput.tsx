@@ -48,27 +48,31 @@ export const MessageInput: React.FC = () => {
   const handleSend = useCallback(() => {
     const trimmedInput = input.trim();
     // Prevent sending if already loading, no input, or no active chat
-    if (!trimmedInput || !activeChat || isLoading) return;
+    if (!trimmedInput || !activeChat || isLoading) {
+      return;
+    }
 
     // Context Clearing
     if (trimmedInput === '---') {
       const dividerMessage: Message = {
+        content: '---',
         id: uuidv4(),
         role: 'divider',
-        content: '---',
         timestamp: Date.now(),
       };
       upsertMessage(dividerMessage);
       setInput('');
       textareaRef.current?.focus();
-      if (textareaRef.current) textareaRef.current.style.height = 'auto';
+      if (textareaRef.current) {
+        textareaRef.current.style.height = 'auto';
+      }
       return;
     }
 
     const userMessage: Message = {
+      content: trimmedInput,
       id: uuidv4(),
       role: 'user',
-      content: trimmedInput,
       timestamp: Date.now(),
     };
     upsertMessage(userMessage);
@@ -93,7 +97,9 @@ export const MessageInput: React.FC = () => {
     );
 
     setInput('');
-    if (textareaRef.current) textareaRef.current.style.height = 'auto';
+    if (textareaRef.current) {
+      textareaRef.current.style.height = 'auto';
+    }
     setTimeout(() => textareaRef.current?.focus(), 50);
   }, [
     input,
@@ -133,8 +139,8 @@ export const MessageInput: React.FC = () => {
     !isLoading &&
     activeChat &&
     activeChat.messages.length > 0 &&
-    activeChat.messages[activeChat.messages.length - 1].role === 'assistant' &&
-    !activeChat.messages[activeChat.messages.length - 1].isStreaming; // Don't allow regenerate if last message is still streaming
+    activeChat.messages.at(-1).role === 'assistant' &&
+    !activeChat.messages.at(-1).isStreaming; // Don't allow regenerate if last message is still streaming
 
   return (
     <div
@@ -144,16 +150,16 @@ export const MessageInput: React.FC = () => {
     >
       {/* Regenerate Button */}
       <Button
-        variant="outline"
-        size="icon"
-        onClick={regenerateAction}
-        disabled={!canRegenerate || isLoading} // Also disable if loading
+        aria-label="Regenerate last response"
         className={cn(
           'flex-shrink-0 self-end',
           (!canRegenerate || isLoading) && 'cursor-not-allowed opacity-50',
         )}
-        aria-label="Regenerate last response"
+        disabled={!canRegenerate || isLoading} // Also disable if loading
+        onClick={regenerateAction}
+        size="icon"
         title="Regenerate last response"
+        variant="outline"
       >
         {/* Optional: Show loader on regenerate button if regenerate itself takes time? Not implemented here. */}
         <LuRefreshCw className={cn('h-5 w-5')} />
@@ -161,9 +167,13 @@ export const MessageInput: React.FC = () => {
 
       {/* Message Input Area */}
       <Textarea
-        variant="flat"
-        ref={textareaRef}
-        rows={1}
+        aria-label="Chat message input"
+        className={cn(
+          'max-h-[200px] min-h-[40px] flex-1 resize-none overflow-y-auto',
+        )}
+        disabled={!activeChat || isLoading} // Disable input while loading
+        onChange={(e) => setInput(e.target.value)}
+        onKeyDown={handleKeyDown}
         placeholder={
           isLoading
             ? 'Assistant is thinking...'
@@ -171,18 +181,19 @@ export const MessageInput: React.FC = () => {
               ? "Type message or '---' to clear context..."
               : 'Select or create a chat first'
         }
+        ref={textareaRef}
+        rows={1}
         value={input}
-        onChange={(e) => setInput(e.target.value)}
-        onKeyDown={handleKeyDown}
-        className={cn(
-          'max-h-[200px] min-h-[40px] flex-1 resize-none overflow-y-auto',
-        )}
-        disabled={!activeChat || isLoading} // Disable input while loading
-        aria-label="Chat message input"
+        variant="flat"
       />
 
       {/* Send / Stop Button */}
       <Button
+        aria-label={isLoading ? 'Stop generation' : 'Send message'}
+        className="flex-shrink-0 self-end"
+        size="icon"
+        title={isLoading ? 'Stop generation' : 'Send message'}
+        variant={isLoading ? 'destructive' : 'default'} // Style Stop button differently
         onClick={isLoading ? cancelGeneration : handleSend} // Click action depends on loading state
         // Disable Send if no input/chat OR if loading AND no abort controller yet (brief moment)
         // Disable Stop if not loading
@@ -191,11 +202,6 @@ export const MessageInput: React.FC = () => {
             ? !abortInfo // Disable Stop briefly until controller is ready
             : !input.trim() || !activeChat // Disable Send if no input/chat
         }
-        size="icon"
-        variant={isLoading ? 'destructive' : 'default'} // Style Stop button differently
-        className="flex-shrink-0 self-end"
-        aria-label={isLoading ? 'Stop generation' : 'Send message'}
-        title={isLoading ? 'Stop generation' : 'Send message'}
       >
         {isLoading ? (
           <LuSquare className="h-5 w-5" />

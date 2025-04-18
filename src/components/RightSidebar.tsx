@@ -80,17 +80,17 @@ export const RightSidebar: React.FC = () => {
       <div className="space-y-5">
         {/* API Key Input */}
         <div>
-          <Label htmlFor="apiKey" className="mb-1">
+          <Label className="mb-1" htmlFor="apiKey">
             OpenAI API Key
           </Label>
           <Input
             id="apiKey"
-            type="password" // Keep as password
-            placeholder="sk-..."
-            value={apiKey}
             onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
               setApiKey(e.target.value)
             }
+            placeholder="sk-..."
+            type="password" // Keep as password
+            value={apiKey}
           />
           <p className="mt-1 text-xs text-neutral-500 dark:text-neutral-400">
             Stored insecurely in browser localStorage.
@@ -99,36 +99,36 @@ export const RightSidebar: React.FC = () => {
 
         {/* API Base URL Input */}
         <div>
-          <Label htmlFor="apiBaseUrl" className="mb-1">
+          <Label className="mb-1" htmlFor="apiBaseUrl">
             API Base URL (Optional)
           </Label>
           <Input
             id="apiBaseUrl"
-            type="text"
-            placeholder="e.g., https://api.openai.com/v1"
-            value={apiBaseUrl}
             onChange={(e) => setApiBaseUrl(e.target.value)}
+            placeholder="e.g., https://api.openai.com/v1"
+            type="text"
+            value={apiBaseUrl}
           />
         </div>
 
         {/* Custom Models Input */}
         <div>
-          <Label htmlFor="customModels" className="mb-1">
+          <Label className="mb-1" htmlFor="customModels">
             Custom Models (comma-separated)
           </Label>
           <div className="flex gap-2">
             <Input
               id="customModels"
-              type="text"
-              placeholder="model-1, model-2"
-              value={customModelsInput}
-              onChange={(e) => setCustomModelsInput(e.target.value)}
               onBlur={handleCustomModelsSave} // Save on blur
+              onChange={(e) => setCustomModelsInput(e.target.value)}
+              placeholder="model-1, model-2"
+              type="text"
+              value={customModelsInput}
             />
             <Button
               onClick={handleCustomModelsSave}
-              variant="outline"
               size="sm"
+              variant="outline"
             >
               Save
             </Button>
@@ -137,11 +137,11 @@ export const RightSidebar: React.FC = () => {
 
         {/* Default Model Select */}
         <div>
-          <Label htmlFor="defaultModel" className="mb-1">
+          <Label className="mb-1" htmlFor="defaultModel">
             Default Chat Model
           </Label>
-          <Select value={defaultModel} onValueChange={setDefaultModel}>
-            <SelectTrigger id="defaultModel" className="w-full">
+          <Select onValueChange={setDefaultModel} value={defaultModel}>
+            <SelectTrigger className="w-full" id="defaultModel">
               <SelectValue placeholder="Select default model" />
             </SelectTrigger>
             <SelectContent>
@@ -169,14 +169,14 @@ export const RightSidebar: React.FC = () => {
 
         {/* Default Summary Model Select */}
         <div>
-          <Label htmlFor="defaultSummaryModel" className="mb-1">
+          <Label className="mb-1" htmlFor="defaultSummaryModel">
             Default Summary Model
           </Label>
           <Select
-            value={defaultSummaryModel}
             onValueChange={setDefaultSummaryModel}
+            value={defaultSummaryModel}
           >
-            <SelectTrigger id="defaultSummaryModel" className="w-full">
+            <SelectTrigger className="w-full" id="defaultSummaryModel">
               <SelectValue placeholder="Select summary model" />
             </SelectTrigger>
             <SelectContent>
@@ -204,32 +204,32 @@ export const RightSidebar: React.FC = () => {
 
         {/* Default System Prompt Textarea */}
         <div>
-          <Label htmlFor="defaultPrompt" className="mb-1">
+          <Label className="mb-1" htmlFor="defaultPrompt">
             Default System Prompt
           </Label>
           <Textarea
+            className="text-sm"
             id="defaultPrompt"
+            onChange={(e) => setDefaultPrompt(e.target.value)}
             rows={4}
             value={defaultPrompt}
-            onChange={(e) => setDefaultPrompt(e.target.value)}
-            className="text-sm"
           />
         </div>
 
         {/* Default Max History Input */}
         <div>
-          <Label htmlFor="defaultMaxHistory" className="mb-1">
+          <Label className="mb-1" htmlFor="defaultMaxHistory">
             Default Max History (Messages)
           </Label>
           <Input
             id="defaultMaxHistory"
-            type="number"
             min="0"
-            step="1"
-            value={defaultMaxHistory}
             onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
-              setDefaultMaxHistory(parseInt(e.target.value, 10) || 0)
+              setDefaultMaxHistory(Number.parseInt(e.target.value, 10) || 0)
             }
+            step="1"
+            type="number"
+            value={defaultMaxHistory}
           />
           <p className="mt-1 text-xs text-neutral-500 dark:text-neutral-400">
             Number of past messages sent to the API.
@@ -239,36 +239,36 @@ export const RightSidebar: React.FC = () => {
         {/* UI Toggles */}
         <div className="space-y-3 pt-2">
           <div className="flex items-center justify-between">
-            <Label htmlFor="nightMode" className="cursor-pointer">
+            <Label className="cursor-pointer" htmlFor="nightMode">
               Night Mode
             </Label>
             <Switch
-              id="nightMode"
               checked={nightMode}
+              id="nightMode"
               onCheckedChange={setNightMode}
             />
           </div>
 
           <div className="flex items-center justify-between">
-            <Label htmlFor="showTimestamps" className="cursor-pointer">
+            <Label className="cursor-pointer" htmlFor="showTimestamps">
               Show Timestamps
             </Label>
             <Switch
-              id="showTimestamps"
               checked={showTimestamps}
+              id="showTimestamps"
               onCheckedChange={setShowTimestamps} // Use setter directly
             />
           </div>
 
           <div className="flex items-center justify-between opacity-50">
-            <Label htmlFor="generateSummary" className="cursor-not-allowed">
+            <Label className="cursor-not-allowed" htmlFor="generateSummary">
               Generate Chat Summary (WIP)
             </Label>
             <Switch
-              id="generateSummary"
               checked={generateSummary}
-              onCheckedChange={setGenerateSummary}
               disabled // Feature not fully implemented yet
+              id="generateSummary"
+              onCheckedChange={setGenerateSummary}
               title="Summary generation not implemented"
             />
           </div>

@@ -51,11 +51,11 @@ export const MessageToolbar: React.FC<MessageToolbarProps> = ({
     <div className="absolute top-0 right-1 z-10 flex items-center space-x-0.5 rounded-md border border-neutral-200 bg-white p-0.5 opacity-0 shadow-sm transition-opacity duration-150 group-hover:opacity-100 focus-within:opacity-100 md:right-2 dark:border-neutral-700 dark:bg-neutral-800">
       {/* Copy Button */}
       <Button
-        variant="ghost"
-        size="xs"
-        onClick={handleCopy}
         aria-label="Copy message"
+        onClick={handleCopy}
+        size="xs"
         title="Copy"
+        variant="ghost"
       >
         <LuCopy className="h-3.5 w-3.5" />
       </Button>
@@ -63,13 +63,13 @@ export const MessageToolbar: React.FC<MessageToolbarProps> = ({
       {/* Regenerate Button (Only for Assistant messages) */}
       {message.role === 'assistant' && onRegenerate && (
         <Button
-          variant="ghost"
-          size="xs"
-          onClick={onRegenerate}
-          disabled={!canRegenerate} // Disable if loading
           aria-label="Regenerate response"
-          title="Regenerate response"
           className={cn(!canRegenerate && 'cursor-not-allowed opacity-50')}
+          disabled={!canRegenerate} // Disable if loading
+          onClick={onRegenerate}
+          size="xs"
+          title="Regenerate response"
+          variant="ghost"
         >
           <LuRefreshCw
             className={cn(
@@ -83,11 +83,11 @@ export const MessageToolbar: React.FC<MessageToolbarProps> = ({
       {/* Edit Button (Only for User messages) */}
       {message.role === 'user' && (
         <Button
-          variant="ghost"
-          size="xs"
-          onClick={handleEdit}
           aria-label="Edit message"
+          onClick={handleEdit}
+          size="xs"
           title="Edit"
+          variant="ghost"
         >
           <LuPencil className="h-3.5 w-3.5" />
         </Button>
@@ -95,12 +95,12 @@ export const MessageToolbar: React.FC<MessageToolbarProps> = ({
 
       {/* Delete Button */}
       <Button
-        variant="ghost"
-        size="xs"
-        onClick={handleDelete}
-        className="text-red-500 hover:text-red-600"
         aria-label="Delete message"
+        className="text-red-500 hover:text-red-600"
+        onClick={handleDelete}
+        size="xs"
         title="Delete"
+        variant="ghost"
       >
         <LuTrash2 className="h-3.5 w-3.5" />
       </Button>

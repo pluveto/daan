@@ -74,9 +74,9 @@ export const LeftSidebar: React.FC = () => {
       <div className="border-b border-neutral-200 p-4 dark:border-neutral-700">
         <div className="flex items-center gap-3 leading-none">
           <img
-            src={logoUrl}
             alt={`${appName} Logo`}
             className="h-10 w-10 flex-shrink-0 rounded-md object-contain"
+            src={logoUrl}
           />
           <div className="flex flex-col items-start justify-center overflow-hidden">
             <h1 className="truncate text-lg font-semibold text-neutral-900 dark:text-neutral-100">
@@ -91,15 +91,15 @@ export const LeftSidebar: React.FC = () => {
 
       {/* Controls */}
       <div className="flex gap-2 p-3">
-        <Button onClick={createNewChat} className="flex-1">
+        <Button className="flex-1" onClick={createNewChat}>
           <LuPlus className="mr-2 h-4 w-4" /> New Chat
         </Button>
         <Button
-          onClick={handleClearUnpinned}
-          variant="outline"
-          size="icon"
           aria-label="Clear Unpinned Chats"
+          onClick={handleClearUnpinned}
+          size="icon"
           title="Clear Unpinned Chats"
+          variant="outline"
         >
           <LuArchiveRestore className="h-4 w-4" />
         </Button>
@@ -119,11 +119,7 @@ export const LeftSidebar: React.FC = () => {
         )}
         {chats.map((chat) => (
           <div
-            key={chat.id}
-            role="button"
-            tabIndex={0}
-            onClick={() => setActiveChatId(chat.id)}
-            onKeyDown={(e) => handleKeyDown(e, chat.id)}
+            aria-current={activeChatId === chat.id ? 'page' : undefined}
             className={cn(
               'group relative flex w-full cursor-pointer items-center justify-between rounded-md px-3 py-2 text-left text-sm',
               'focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 dark:focus-visible:ring-blue-400',
@@ -132,13 +128,17 @@ export const LeftSidebar: React.FC = () => {
                 ? 'bg-neutral-200 font-medium text-neutral-900 dark:bg-neutral-800 dark:text-neutral-100'
                 : 'text-neutral-700 dark:text-neutral-300',
             )}
-            aria-current={activeChatId === chat.id ? 'page' : undefined}
+            key={chat.id}
+            onClick={() => setActiveChatId(chat.id)}
+            onKeyDown={(e) => handleKeyDown(e, chat.id)}
+            role="button"
+            tabIndex={0}
           >
             {/* Pin Indicator */}
             {chat.isPinned && (
               <LuPin
-                className="mr-2 h-3.5 w-3.5 flex-shrink-0 text-blue-500 dark:text-blue-400"
                 aria-label="Pinned"
+                className="mr-2 h-3.5 w-3.5 flex-shrink-0 text-blue-500 dark:text-blue-400"
               />
             )}
             {!chat.isPinned && (
@@ -158,17 +158,17 @@ export const LeftSidebar: React.FC = () => {
             {/* Action Buttons (Appear on Hover/Focus) */}
             <div className="absolute top-1/2 right-1 flex -translate-y-1/2 items-center bg-inherit opacity-0 transition-opacity duration-150 group-focus-within:opacity-100 group-hover:opacity-100">
               <Button
-                variant="ghost"
-                size="xs" // Use smaller size if available or adjust padding
-                className="h-6 w-6 p-1 text-neutral-500 hover:text-blue-600 dark:text-neutral-400 dark:hover:text-blue-400"
-                onClick={(e) => handlePinToggle(e, chat.id)}
                 aria-label={
                   chat.isPinned
                     ? `Unpin chat ${chat.name}`
                     : `Pin chat ${chat.name}`
                 }
-                title={chat.isPinned ? 'Unpin' : 'Pin'}
+                className="h-6 w-6 p-1 text-neutral-500 hover:text-blue-600 dark:text-neutral-400 dark:hover:text-blue-400"
+                onClick={(e) => handlePinToggle(e, chat.id)}
+                size="xs" // Use smaller size if available or adjust padding
                 tabIndex={0}
+                title={chat.isPinned ? 'Unpin' : 'Pin'}
+                variant="ghost"
               >
                 {chat.isPinned ? (
                   <LuPinOff className="h-4 w-4" />
@@ -177,13 +177,13 @@ export const LeftSidebar: React.FC = () => {
                 )}
               </Button>
               <Button
-                variant="ghost"
-                size="xs" // Use smaller size
+                aria-label={`Delete chat ${chat.name}`}
                 className="h-6 w-6 p-1 text-neutral-500 hover:text-red-500 dark:text-neutral-400 dark:hover:text-red-500"
                 onClick={(e) => handleDelete(e, chat.id)}
-                aria-label={`Delete chat ${chat.name}`}
-                title="Delete"
+                size="xs" // Use smaller size
                 tabIndex={0}
+                title="Delete"
+                variant="ghost"
               >
                 <LuTrash2 className="h-4 w-4" />
               </Button>
@@ -195,7 +195,7 @@ export const LeftSidebar: React.FC = () => {
       {/* Footer with Version Info */}
       <div className="border-t border-neutral-200 p-3 text-center text-xs text-neutral-500 dark:border-neutral-700 dark:text-neutral-400">
         Version: {version}{' '}
-        {commitInfo !== 'N/A' ? `(${commitInfo.substring(0, 7)})` : ''}
+        {commitInfo !== 'N/A' ? `(${commitInfo.slice(0, 7)})` : ''}
       </div>
     </div>
   );

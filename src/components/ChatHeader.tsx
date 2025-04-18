@@ -28,11 +28,11 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({ chat }) => {
     <div className="flex h-16 flex-shrink-0 items-center justify-between border-b border-neutral-200 bg-white px-4 dark:border-neutral-700 dark:bg-neutral-950">
       {/* Left Sidebar Toggle */}
       <Button
-        variant="ghost"
-        size="icon"
-        onClick={() => setIsLeftOpen(!isLeftOpen)}
-        className="flex-shrink-0"
         aria-label={isLeftOpen ? 'Close left sidebar' : 'Open left sidebar'}
+        className="flex-shrink-0"
+        onClick={() => setIsLeftOpen(!isLeftOpen)}
+        size="icon"
+        variant="ghost"
       >
         {isLeftOpen ? (
           <LuPanelLeftClose className="h-5 w-5" />
@@ -68,21 +68,21 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({ chat }) => {
       <div className="flex flex-shrink-0 items-center space-x-1">
         {chat && ( // Only show settings button if a chat is active
           <Button
-            variant="ghost"
-            size="icon"
-            onClick={() => setIsChatSettingsModalOpen(true)}
             aria-label="Chat Settings"
+            onClick={() => setIsChatSettingsModalOpen(true)}
+            size="icon"
+            variant="ghost"
           >
             <LuSettings2 className="h-5 w-5" />
           </Button>
         )}
         <Button
-          variant="ghost"
-          size="icon"
-          onClick={() => setIsRightOpen(!isRightOpen)}
           aria-label={
             isRightOpen ? 'Close right sidebar' : 'Open right sidebar'
           }
+          onClick={() => setIsRightOpen(!isRightOpen)}
+          size="icon"
+          variant="ghost"
         >
           {isRightOpen ? (
             <LuPanelRightClose className="h-5 w-5" />

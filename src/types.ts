@@ -2,27 +2,29 @@
 export type ValidRoles = 'user' | 'assistant' | 'system';
 
 export interface Message {
+  content: string;
   id: string;
+  isStreaming?: boolean;
   // Add 'divider' role
   role: ValidRoles | 'divider';
-  content: string;
   timestamp: number;
-  isStreaming?: boolean;
   // Optional: Add other metadata if needed, e.g., error state
   // error?: string;
 }
 
 export interface Chat {
-  id: string;
-  name: string;
-  icon: string; // Emoji
-  model: string;
-  systemPrompt: string;
-  messages: Message[];
   createdAt: number;
-  updatedAt: number;
-  isPinned: boolean; // Added for pinning
-  maxHistory: number | null; // Added for per-chat history limit (null = use global)
+  icon: string;
+  id: string;
+  isPinned: boolean;
+  // Added for pinning
+  maxHistory: number | null;
+  messages: Message[];
+  // Emoji
+  model: string;
+  name: string;
+  systemPrompt: string;
+  updatedAt: number; // Added for per-chat history limit (null = use global)
   // Optional: Add summary later if needed
   // summary?: string;
 }

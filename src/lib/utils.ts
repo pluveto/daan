@@ -9,7 +9,7 @@ function isJsonable(
   try {
     JSON.stringify(value);
     return true;
-  } catch (e) {
+  } catch {
     return false;
   }
 }
@@ -36,10 +36,13 @@ export function atomWithSafeStorage<Value>(
         }
         try {
           return JSON.parse(storedValue) as Value;
-        } catch (e) {
-          console.error(`Error parsing localStorage key "${key}":`, e);
+        } catch (error) {
+          console.error(`Error parsing localStorage key "${key}":`, error);
           return initialValue; // Fallback to initial value if parsing fails
         }
+      },
+      removeItem: (key) => {
+        (storage ?? localStorage).removeItem(key);
       },
       setItem: (key, newValue) => {
         if (isJsonable(newValue)) {
@@ -53,13 +56,10 @@ export function atomWithSafeStorage<Value>(
           // For now, we just prevent storing it to avoid breaking localStorage
         }
       },
-      removeItem: (key) => {
-        (storage ?? localStorage).removeItem(key);
-      },
       subscribe: (key, callback, initialValue) => {
         if (
           typeof window === 'undefined' ||
-          typeof window.addEventListener === 'undefined'
+          window.addEventListener === undefined
         ) {
           return () => {}; // Return no-op function when not in browser env
         }
@@ -67,13 +67,15 @@ export function atomWithSafeStorage<Value>(
           if (e.storageArea === (storage ?? localStorage) && e.key === key) {
             let newValue: Value;
             try {
-              if (e.newValue === null) {
-                newValue = initialValue;
-              } else {
-                newValue = JSON.parse(e.newValue) as Value;
-              }
-            } catch (e) {
-              console.error(`Error parsing storage event for key "${key}":`, e);
+              newValue =
+                e.newValue === null
+                  ? initialValue
+                  : (JSON.parse(e.newValue) as Value);
+            } catch (error) {
+              console.error(
+                `Error parsing storage event for key "${key}":`,
+                error,
+              );
               newValue = initialValue; // Fallback on error
             }
             callback(newValue);

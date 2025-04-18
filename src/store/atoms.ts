@@ -77,7 +77,9 @@ export const activeChatIdAtom = atomWithSafeStorage<string | null>(
 export const activeChatAtom = atom<Chat | null>((get) => {
   const chats = get(chatsAtom);
   const activeId = get(activeChatIdAtom);
-  if (!activeId) return null;
+  if (!activeId) {
+    return null;
+  }
   return chats.find((chat) => chat.id === activeId) ?? null;
 });
 
@@ -102,16 +104,16 @@ export const createNewChatAtom = atom(null, (get, set) => {
   const newId = uuidv4();
   const now = Date.now();
   const newChat: Chat = {
-    id: newId,
-    name: `Chat ${new Date(now).toLocaleTimeString()}`,
-    icon: '💬',
-    model: get(defaultModelAtom),
-    systemPrompt: get(defaultPromptAtom),
-    messages: [],
     createdAt: now,
-    updatedAt: now,
+    icon: '💬',
+    id: newId,
     isPinned: false,
     maxHistory: null,
+    messages: [],
+    model: get(defaultModelAtom),
+    name: `Chat ${new Date(now).toLocaleTimeString()}`,
+    systemPrompt: get(defaultPromptAtom),
+    updatedAt: now,
   };
   set(chatsAtom, (prevChats) => [newChat, ...prevChats]);
   set(activeChatIdAtom, newId);
@@ -210,7 +212,9 @@ export const upsertMessageInActiveChatAtom = atom(
   null,
   (get, set, message: Message) => {
     const activeId = get(activeChatIdAtom);
-    if (!activeId) return;
+    if (!activeId) {
+      return;
+    }
 
     set(chatsAtom, (prevChats) =>
       prevChats.map((chat) => {
@@ -252,7 +256,9 @@ export const deleteMessageFromActiveChatAtom = atom(
   null,
   (get, set, messageId: string) => {
     const activeId = get(activeChatIdAtom);
-    if (!activeId) return;
+    if (!activeId) {
+      return;
+    }
 
     // If deleting the message currently being generated, cancel the generation
     const abortInfo = get(abortControllerAtom);
@@ -287,10 +293,12 @@ export const appendContentToMessageAtom = atom(
   (
     get,
     set,
-    { messageId, contentChunk }: { messageId: string; contentChunk: string },
+    { contentChunk, messageId }: { contentChunk: string; messageId: string },
   ) => {
     const activeId = get(activeChatIdAtom);
-    if (!activeId) return;
+    if (!activeId) {
+      return;
+    }
 
     set(chatsAtom, (prevChats) =>
       prevChats.map((chat) => {
@@ -404,7 +412,9 @@ export const updateMessageContentAtom = atom(
     { messageId, newContent }: { messageId: string; newContent: string },
   ) => {
     const activeId = get(activeChatIdAtom);
-    if (!activeId) return;
+    if (!activeId) {
+      return;
+    }
 
     set(chatsAtom, (prevChats) =>
       prevChats.map((chat) => {
@@ -438,8 +448,8 @@ export const regenerateLastResponseAtom = atom(null, (get, set) => {
   const upsertMessage = (msg: Message) =>
     set(upsertMessageInActiveChatAtom, msg);
   const appendContent = (payload: {
-    messageId: string;
     contentChunk: string;
+    messageId: string;
   }) => set(appendContentToMessageAtom, payload);
   const finalizeStream = (msgId: string) =>
     set(finalizeStreamingMessageAtom, msgId);
@@ -449,7 +459,9 @@ export const regenerateLastResponseAtom = atom(null, (get, set) => {
     ctrl: { controller: AbortController; messageId: string } | null,
   ) => set(abortControllerAtom, ctrl);
 
-  if (!activeChat || get(isAssistantLoadingAtom)) return;
+  if (!activeChat || get(isAssistantLoadingAtom)) {
+    return;
+  }
 
   const messages = activeChat.messages;
   let lastAssistantIndex = -1;
@@ -533,7 +545,7 @@ async function callOpenAIStreamLogic(
   messagesToSend: OpenAI.ChatCompletionMessageParam[],
   setIsLoading: (loading: boolean) => void,
   upsertMessage: (message: Message) => void,
-  appendContent: (payload: { messageId: string; contentChunk: string }) => void,
+  appendContent: (payload: { contentChunk: string; messageId: string }) => void,
   finalizeStream: (messageId: string) => void,
   setAbortController: (
     controllerInfo: { controller: AbortController; messageId: string } | null,
@@ -552,28 +564,29 @@ async function callOpenAIStreamLogic(
 
   // Add placeholder assistant message
   const placeholderMessage: Message = {
+    content: '',
     id: assistantMessageId,
+    isStreaming: true,
     role: 'assistant',
-    content: '', // Start empty, content will be appended
-    timestamp: Date.now(),
-    isStreaming: true, // Mark as streaming immediately
+    // Start empty, content will be appended
+    timestamp: Date.now(), // Mark as streaming immediately
   };
   upsertMessage(placeholderMessage);
 
   try {
     const openai = new OpenAI({
-      apiKey: apiKey,
+      apiKey,
       baseURL: apiBaseUrl || undefined,
       dangerouslyAllowBrowser: true,
     });
 
     console.log('Sending request to OpenAI:', {
-      model,
       messages: messagesToSend.length,
+      model,
     });
     const stream = await openai.chat.completions.create({
-      model: model,
       messages: messagesToSend,
+      model,
       stream: true,
       //   signal: controller.signal,
     });
@@ -591,7 +604,7 @@ async function callOpenAIStreamLogic(
       const contentChunk = chunk.choices[0]?.delta?.content || '';
       if (contentChunk) {
         contentReceived = true;
-        appendContent({ messageId: assistantMessageId, contentChunk });
+        appendContent({ contentChunk, messageId: assistantMessageId });
       }
       // Handle finish reason if needed (e.g., length, stop, content_filter)
       const finishReason = chunk.choices[0]?.finish_reason;
@@ -665,14 +678,14 @@ function getHistoryForApi(
   const messagesToSend: OpenAI.ChatCompletionMessageParam[] = [];
 
   if (systemPrompt) {
-    messagesToSend.push({ role: 'system', content: systemPrompt });
+    messagesToSend.push({ content: systemPrompt, role: 'system' });
   }
 
   history.forEach((msg) => {
     // Type assertion needed as filter guarantees role is 'user' or 'assistant'
     messagesToSend.push({
-      role: msg.role as 'user' | 'assistant',
       content: msg.content,
+      role: msg.role as 'user' | 'assistant',
     });
   });
 

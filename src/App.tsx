@@ -37,11 +37,9 @@ function App() {
 
   // Update window title based on active chat
   useEffect(() => {
-    if (activeChat) {
-      document.title = `${activeChat.name} - ${appName}`;
-    } else {
-      document.title = defaultTitle;
-    }
+    document.title = activeChat
+      ? `${activeChat.name} - ${appName}`
+      : defaultTitle;
     // Cleanup function to reset title if component unmounts (optional)
     // return () => { document.title = defaultTitle; };
   }, [activeChat]); // Re-run effect when activeChat changes

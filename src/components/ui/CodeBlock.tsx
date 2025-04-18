@@ -13,16 +13,17 @@ import {
 // Choose themes
 
 interface CodeBlockProps {
-  node?: any; // From react-markdown
-  inline?: boolean;
-  className?: string;
   children?: React.ReactNode;
+  className?: string;
+  // From react-markdown
+  inline?: boolean;
+  node?: any;
 }
 
 export const CodeBlock: React.FC<CodeBlockProps> = ({
-  inline,
-  className,
   children,
+  className,
+  inline,
   ...props
 }) => {
   const [isCopied, setIsCopied] = useState(false);
@@ -54,9 +55,9 @@ export const CodeBlock: React.FC<CodeBlockProps> = ({
           {lang}
         </span>
         <button
-          onClick={handleCopy}
-          className="rounded p-1 text-neutral-500 opacity-50 transition-opacity group-hover:opacity-100 hover:text-neutral-700 dark:text-neutral-400 dark:hover:text-neutral-200"
           aria-label={isCopied ? 'Copied!' : 'Copy code'}
+          className="rounded p-1 text-neutral-500 opacity-50 transition-opacity group-hover:opacity-100 hover:text-neutral-700 dark:text-neutral-400 dark:hover:text-neutral-200"
+          onClick={handleCopy}
         >
           {isCopied ? (
             <LuCheck className="h-4 w-4 text-green-500" />
@@ -67,10 +68,10 @@ export const CodeBlock: React.FC<CodeBlockProps> = ({
       </div>
       <SyntaxHighlighter
         {...props}
-        style={isNightMode ? oneDark : oneLight}
-        language={lang}
         PreTag="div"
         className="dark:!bg-code !m-0 overflow-x-auto rounded-b-md !bg-neutral-50 !p-3"
+        language={lang}
+        style={isNightMode ? oneDark : oneLight}
         wrapLongLines={true} // Or false, depending on preference
       >
         {codeString}
