@@ -269,11 +269,7 @@ export const ChatHistory: React.FC<ChatHistoryProps> = ({ className }) => {
             {!isEditing && !message.isStreaming && (
               <MessageToolbar
                 message={message}
-                onRegenerate={
-                  message.role === 'assistant'
-                    ? regenerateLastResponse
-                    : undefined
-                }
+                onRegenerate={regenerateLastResponse}
               />
             )}
           </div>

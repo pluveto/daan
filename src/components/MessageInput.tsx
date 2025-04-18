@@ -139,8 +139,8 @@ export const MessageInput: React.FC = () => {
     !isLoading &&
     activeChat &&
     activeChat.messages.length > 0 &&
-    activeChat.messages.at(-1).role === 'assistant' &&
-    !activeChat.messages.at(-1).isStreaming; // Don't allow regenerate if last message is still streaming
+    activeChat.messages.at(-1)?.role === 'assistant' &&
+    !activeChat.messages.at(-1)?.isStreaming; // Don't allow regenerate if last message is still streaming
 
   return (
     <div

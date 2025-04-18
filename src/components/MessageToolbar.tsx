@@ -43,8 +43,7 @@ export const MessageToolbar: React.FC<MessageToolbarProps> = ({
   };
 
   // Disable regenerate button if loading or not an assistant message
-  const canRegenerate =
-    message.role === 'assistant' && !!onRegenerate && !isLoading;
+  const canRegenerate = !!onRegenerate && !isLoading;
 
   return (
     // Position slightly adjusted, ensure z-index is high enough
@@ -60,8 +59,8 @@ export const MessageToolbar: React.FC<MessageToolbarProps> = ({
         <LuCopy className="h-3.5 w-3.5" />
       </Button>
 
-      {/* Regenerate Button (Only for Assistant messages) */}
-      {message.role === 'assistant' && onRegenerate && (
+      {/* Regenerate Button */}
+      {onRegenerate && (
         <Button
           aria-label="Regenerate response"
           className={cn(!canRegenerate && 'cursor-not-allowed opacity-50')}
@@ -72,10 +71,7 @@ export const MessageToolbar: React.FC<MessageToolbarProps> = ({
           variant="ghost"
         >
           <LuRefreshCw
-            className={cn(
-              'h-3.5 w-3.5',
-              isLoading && message.role === 'assistant' && 'animate-spin',
-            )}
+            className={cn('h-3.5 w-3.5', isLoading && 'animate-spin')}
           />
         </Button>
       )}
