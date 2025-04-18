@@ -4,7 +4,6 @@ import {
   type Chat,
   type Message,
   type SupportedModels,
-  type ValidRoles,
 } from '@/types.ts';
 import { atom } from 'jotai';
 import OpenAI from 'openai';
@@ -576,7 +575,7 @@ async function callOpenAIStreamLogic(
       model: model,
       messages: messagesToSend,
       stream: true,
-      signal: controller.signal, // Pass the abort signal
+      //   signal: controller.signal,
     });
 
     let contentReceived = false;

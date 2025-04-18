@@ -15,7 +15,6 @@ import {
   LuSettings2,
 } from 'react-icons/lu';
 import { Button } from './ui/Button.tsx';
-import { Switch } from './ui/Switch.tsx';
 
 interface ChatHeaderProps {
   chat: Chat | null;

@@ -18,7 +18,7 @@ import type { Message } from '@/types.ts';
 import { useAtom, useAtomValue, useSetAtom } from 'jotai';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 // Use a different icon for Stop, e.g., LuSquare or LuX
-import { LuLoader, LuRefreshCw, LuSend, LuSquare } from 'react-icons/lu';
+import { LuRefreshCw, LuSend, LuSquare } from 'react-icons/lu';
 import { v4 as uuidv4 } from 'uuid';
 import { Button } from './ui/Button.tsx';
 import { Textarea } from './ui/Textarea.tsx';
