@@ -51,8 +51,10 @@ function App() {
 
   // Close sidebars when switching between mobile/desktop view
   useEffect(() => {
-    setIsLeftOpen(false);
-    setIsRightOpen(false);
+    if (isMobile && (isLeftOpen || isRightOpen)) {
+      setIsLeftOpen(false);
+      setIsRightOpen(false);
+    }
   }, [isMobile, setIsLeftOpen, setIsRightOpen]);
 
   return (

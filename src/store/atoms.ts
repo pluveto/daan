@@ -10,8 +10,14 @@ import OpenAI from 'openai';
 import { v4 as uuidv4 } from 'uuid';
 
 // --- UI State Atoms ---
-export const isLeftSidebarOpenAtom = atom(true);
-export const isRightSidebarOpenAtom = atom(true);
+export const isLeftSidebarOpenAtom = atomWithSafeStorage(
+  'leftSidebarOpen',
+  true,
+);
+export const isRightSidebarOpenAtom = atomWithSafeStorage(
+  'rightSidebarOpen',
+  true,
+);
 export const isChatSettingsModalOpenAtom = atom(false);
 export const isAssistantLoadingAtom = atom(false); // Global flag: Is *any* assistant request running?
 export const editingMessageIdAtom = atom<string | null>(null);
