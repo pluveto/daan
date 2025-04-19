@@ -89,7 +89,7 @@ export const ConversationSearchDialog: React.FC = () => {
 
       const lowerCaseTerm = term.toLowerCase();
       const results: SearchResult[] = [];
-      const maxResults = 20; // Limit results
+      const maxResults = 40; // Limit results
       const snippetLength = 50; // Chars before/after match
 
       for (const chat of chatList) {
@@ -160,7 +160,9 @@ export const ConversationSearchDialog: React.FC = () => {
   );
 
   useEffect(() => {
-    performSearch(searchTerm);
+    if (searchTerm.length >= 3) {
+      performSearch(searchTerm);
+    }
     // Cleanup debounce on unmount or when searchTerm changes before debounce triggers
     return () => {
       performSearch.cancel();

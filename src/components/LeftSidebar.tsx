@@ -235,8 +235,10 @@ export const LeftSidebar: React.FC = () => {
         </Button>
       </div>
       {/* Characters Header */}
-      <div className="flex items-center px-3 pt-2 pb-1 text-xs font-medium tracking-wider text-neutral-500 uppercase dark:text-neutral-400">
-        <div className="flex-1">Characters</div>
+      <div className="flex items-center px-3 pt-2 pb-1 text-xs text-neutral-500 dark:text-neutral-400">
+        <div className="flex-1 font-medium tracking-wider uppercase">
+          Characters
+        </div>
         {/* Trigger for Character Editor */}
         <Button
           variant="ghost"
@@ -280,8 +282,10 @@ export const LeftSidebar: React.FC = () => {
       </div>
 
       {/* Conversations Header */}
-      <div className="flex items-center px-3 pt-2 pb-1 text-xs font-medium tracking-wider text-neutral-500 uppercase dark:text-neutral-400">
-        <div className="flex-1">Conversations</div>
+      <div className="flex items-center px-3 pt-2 pb-1 text-xs text-neutral-500 dark:text-neutral-400">
+        <div className="flex-1 font-medium tracking-wider uppercase">
+          Conversations
+        </div>
         <div>
           <ConversationActionsMenu />
         </div>
