@@ -97,9 +97,7 @@ export const LeftSidebar: React.FC = () => {
 
   const handleDelete = (e: React.MouseEvent, chatId: string) => {
     e.stopPropagation();
-    if (window.confirm(`Are you sure you want to delete this chat?`)) {
-      deleteChat(chatId);
-    }
+    deleteChat(chatId);
   };
 
   const handlePinToggle = (e: React.MouseEvent, chatId: string) => {
