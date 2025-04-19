@@ -437,11 +437,6 @@ export const CharacterEditor: React.FC = () => {
                           variant="destructive"
                           disabled={!selectedCharacterId}
                           aria-disabled={!selectedCharacterId}
-                          className={
-                            !selectedCharacterId
-                              ? '!text-muted-foreground/50 !hover:bg-transparent cursor-not-allowed'
-                              : ''
-                          }
                           // 阻止 DropdownMenuItem 自身的默认行为
                           onSelect={(e) => e.preventDefault()}
                         >
@@ -480,8 +475,8 @@ export const CharacterEditor: React.FC = () => {
                       <DropdownMenuSubTrigger
                         disabled={characters.length === 0}
                       >
-                        <LuDownload className="mr-2 h-4 w-4" /> Export to
-                        JSON...
+                        <LuDownload className="mr-2 h-4 w-4" />
+                        Export to JSON...
                       </DropdownMenuSubTrigger>
                       <DropdownMenuSubContent>
                         <DropdownMenuItem
