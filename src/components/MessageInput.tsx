@@ -86,7 +86,7 @@ export const MessageInput: React.FC = () => {
   const debouncedUpdateGlobalInput = useCallback(
     debounce((value: string) => {
       if (activeChat) {
-        console.log('Debounced: Updating global input state');
+        console.log('Debounced: Updating global input state with', value);
         updateChat({ id: activeChat.id, input: value });
       }
     }, DEBOUNCE_DELAY),
@@ -139,6 +139,7 @@ export const MessageInput: React.FC = () => {
         upsertMessage(dividerMessage);
       }
       setInputRaw(''); // Clear local input
+      debouncedUpdateGlobalInput('');
       if (textareaRef.current) textareaRef.current.style.height = 'auto';
       textareaRef.current?.focus();
       return;
@@ -192,6 +193,8 @@ export const MessageInput: React.FC = () => {
 
     // Clear Input & Reset Height & Focus
     setInputRaw(''); // Clear local input state
+    debouncedUpdateGlobalInput('');
+
     if (textareaRef.current) textareaRef.current.style.height = 'auto';
     setTimeout(() => textareaRef.current?.focus(), 50);
   }, [
@@ -238,8 +241,7 @@ export const MessageInput: React.FC = () => {
   );
 
   const numTokens = useMemo(
-    () =>
-      showEstimatedTokens ? approximateTokenSize(input) : 0, // Calculate based on local input
+    () => (showEstimatedTokens ? approximateTokenSize(input) : 0), // Calculate based on local input
     [showEstimatedTokens, input],
   ); // Depends on local input
 
@@ -295,7 +297,7 @@ export const MessageInput: React.FC = () => {
                 ? "Type message or '---' to clear context..."
                 : 'Select or create a chat first'
           }
-          // variant="flat" // Assuming this is a valid prop for your Textarea
+          variant="flat"
         />
         <Button
           aria-label={isLoading ? 'Stop generation' : 'Send message'}

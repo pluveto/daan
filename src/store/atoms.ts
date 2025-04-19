@@ -9,6 +9,9 @@ import { atom } from 'jotai';
 import OpenAI from 'openai';
 import { v4 as uuidv4 } from 'uuid';
 
+// --- 类型定义 ---
+export type ChatsRecord = Record<string, Chat>;
+
 // --- UI State Atoms ---
 export const isLeftSidebarOpenAtom = atomWithSafeStorage(
   'leftSidebarOpen',
@@ -19,17 +22,18 @@ export const isRightSidebarOpenAtom = atomWithSafeStorage(
   true,
 );
 export const isChatSettingsModalOpenAtom = atom(false);
-export const isAssistantLoadingAtom = atom(false); // Global flag: Is *any* assistant request running?
+export const isAssistantLoadingAtom = atom(false);
 export const editingMessageIdAtom = atom<string | null>(null);
 
 // --- Request State Atom ---
-// Holds the controller to abort the current OpenAI stream request
+// (与原代码相同)
 export const abortControllerAtom = atom<{
   controller: AbortController;
   messageId: string;
 } | null>(null);
 
 // --- Global Settings Atoms ---
+// (与原代码相同, 注意: 每个 atomWithSafeStorage 都会有存储开销)
 export const apiKeyAtom = atomWithSafeStorage<string>(
   'globalSettings_apiKey',
   '',
@@ -76,7 +80,8 @@ export const customModelsAtom = atomWithSafeStorage<string[]>(
 );
 
 // --- Chat Data Atoms ---
-export const chatsAtom = atomWithSafeStorage<Chat[]>('chats', []);
+// ! 主要优化点：使用 Record<string, Chat> 替代 Chat[]
+export const chatsAtom = atomWithSafeStorage<ChatsRecord>('chats', {});
 export const activeChatIdAtom = atomWithSafeStorage<string | null>(
   'activeChatId',
   null,
@@ -84,26 +89,32 @@ export const activeChatIdAtom = atomWithSafeStorage<string | null>(
 
 // --- Derived Atoms ---
 
+// ! 优化: O(1) 查找
 export const activeChatAtom = atom<Chat | null>((get) => {
   const chats = get(chatsAtom);
   const activeId = get(activeChatIdAtom);
-  if (!activeId) {
-    return null;
-  }
-  return chats.find((chat) => chat.id === activeId) ?? null;
+  // 直接通过 ID 访问，如果 ID 无效或不存在则为 null
+  return activeId ? (chats[activeId] ?? null) : null;
 });
 
+// (与原代码相同)
 export const availableModelsAtom = atom<SupportedModels[]>((get) => {
   const custom = get(customModelsAtom);
+  // 使用 Set 去重
   return [...new Set([...exampleModels, ...custom])];
 });
 
+// ! 优化: 从 Object.values 获取数组再排序
 export const sortedChatsAtom = atom<Chat[]>((get) => {
   const chats = get(chatsAtom);
-  return [...chats].sort((a, b) => {
+  // 获取所有 chat 对象，然后排序
+  const chatList = Object.values(chats);
+  return chatList.sort((a, b) => {
+    // 优先按置顶排序
     if (a.isPinned !== b.isPinned) {
-      return a.isPinned ? -1 : 1;
+      return a.isPinned ? -1 : 1; // true (pinned) 排在前面
     }
+    // 按更新时间降序排序
     return b.updatedAt - a.updatedAt;
   });
 });
@@ -119,146 +130,240 @@ export const createNewChatAtom = atom(null, (get, set) => {
     id: newId,
     isPinned: false,
     input: '',
-    maxHistory: null,
+    maxHistory: null, // 使用全局默认值
     messages: [],
-    model: get(defaultModelAtom),
-    name: `Chat ${new Date(now).toLocaleTimeString()}`,
-    systemPrompt: get(defaultPromptAtom),
+    model: get(defaultModelAtom), // 使用全局默认模型
+    name: `Chat ${new Date(now).toLocaleTimeString()}`, // 初始名称
+    systemPrompt: get(defaultPromptAtom), // 使用全局默认提示
     updatedAt: now,
   };
-  set(chatsAtom, (prevChats) => [newChat, ...prevChats]);
+
+  // ! 优化: O(1) 添加
+  set(chatsAtom, (prevChats) => ({
+    ...prevChats,
+    [newId]: newChat, // 直接添加新条目
+  }));
+
+  // 设置新创建的聊天为活动聊天
   set(activeChatIdAtom, newId);
+  // 重置编辑状态和加载状态
   set(editingMessageIdAtom, null);
-  set(isAssistantLoadingAtom, false); // Ensure loading is off when creating new chat
-  set(abortControllerAtom, null); // Clear any potential leftover controller
+  set(isAssistantLoadingAtom, false);
+  set(abortControllerAtom, null);
 });
 
 export const updateChatAtom = atom(
   null,
-  (_get, set, update: Partial<Chat> & { id: string }) => {
-    set(chatsAtom, (prevChats) =>
-      prevChats.map((chat) =>
-        chat.id === update.id
-          ? { ...chat, ...update, updatedAt: Date.now() }
-          : chat,
-      ),
-    );
+  (_get, set, update: Partial<Omit<Chat, 'id'>> & { id: string }) => {
+    const chatId = update.id;
+    // ! 优化: O(1) 更新
+    set(chatsAtom, (prevChats) => {
+      const chatToUpdate = prevChats[chatId];
+      // 确保聊天存在才更新
+      if (!chatToUpdate) {
+        console.warn(`Chat with ID ${chatId} not found for update.`);
+        return prevChats; // 返回原状态
+      }
+      // 创建新的聊天对象进行更新，保持不变性
+      const updatedChat = {
+        ...chatToUpdate,
+        ...update, // 应用传入的更新
+        updatedAt: Date.now(), // 更新时间戳
+      };
+      // 返回包含更新后聊天的新状态对象
+      return {
+        ...prevChats,
+        [chatId]: updatedChat,
+      };
+    });
   },
 );
 
 export const deleteChatAtom = atom(null, (get, set, chatId: string) => {
-  const currentActiveId = get(activeChatIdAtom);
-  let nextActiveId: string | null = null;
+  const currentChats = get(chatsAtom);
+  const chatToDelete = currentChats[chatId];
 
+  if (!chatToDelete) {
+    console.warn(`Chat with ID ${chatId} not found for deletion.`);
+    return; // 聊天不存在，直接返回
+  }
+
+  const currentActiveId = get(activeChatIdAtom);
+  let nextActiveId: string | null = currentActiveId;
+
+  // 如果删除的是当前活动的聊天
   if (currentActiveId === chatId) {
-    const sortedChats = get(sortedChatsAtom);
+    // 需要确定下一个活动的聊天 ID
+    const sortedChats = get(sortedChatsAtom); // 获取排序后的列表来决定邻近项
     const currentIndex = sortedChats.findIndex((c) => c.id === chatId);
     const chatsWithoutDeleted = sortedChats.filter((c) => c.id !== chatId);
+
     if (chatsWithoutDeleted.length > 0) {
-      nextActiveId =
-        chatsWithoutDeleted[currentIndex]?.id ??
-        chatsWithoutDeleted[currentIndex - 1]?.id ??
-        chatsWithoutDeleted[0]?.id;
+      // 尝试选择当前索引位置的下一个（如果存在），否则选择前一个，最后选择第一个
+      const nextIndex = Math.min(currentIndex, chatsWithoutDeleted.length - 1);
+      nextActiveId = chatsWithoutDeleted[nextIndex]?.id ?? null;
+      // 更鲁棒的查找方式：
+      // nextActiveId = chatsWithoutDeleted[currentIndex]?.id ?? // Try same index
+      //               chatsWithoutDeleted[currentIndex - 1]?.id ?? // Try previous index
+      //               chatsWithoutDeleted[0]?.id; // Fallback to first
+    } else {
+      nextActiveId = null; // 没有其他聊天了
     }
-    // If deleting the active chat while loading, cancel generation
+
+    // 如果删除活动聊天时正在加载，取消请求
     const abortInfo = get(abortControllerAtom);
     if (abortInfo) {
       console.log('Cancelling generation due to active chat deletion.');
       abortInfo.controller.abort();
       set(abortControllerAtom, null);
       set(isAssistantLoadingAtom, false);
-      // Find the streaming message and finalize it (optional, finalize might handle it)
-      // set(finalizeStreamingMessageAtom, abortInfo.messageId); // Let finalize handle it
+      // finalizeStreamingMessageAtom 可能需要被调用，但这通常在 abort 的 finally 块中处理
     }
-  } else {
-    nextActiveId = currentActiveId;
   }
 
-  set(chatsAtom, (prevChats) => prevChats.filter((chat) => chat.id !== chatId));
+  // ! 优化: O(1) 删除 (通过创建新对象实现)
+  set(chatsAtom, (prevChats) => {
+    const newChats = { ...prevChats };
+    delete newChats[chatId]; // 从对象中移除属性
+    return newChats;
+  });
+
+  // 更新 activeChatIdAtom
   set(activeChatIdAtom, nextActiveId);
 
+  // 如果删除的是活动聊天，重置编辑状态
   if (currentActiveId === chatId) {
     set(editingMessageIdAtom, null);
   }
 });
 
 export const togglePinChatAtom = atom(null, (_get, set, chatId: string) => {
-  set(chatsAtom, (prevChats) =>
-    prevChats.map((chat) =>
-      chat.id === chatId
-        ? { ...chat, isPinned: !chat.isPinned, updatedAt: Date.now() }
-        : chat,
-    ),
-  );
+  // ! 优化: O(1) 更新
+  set(chatsAtom, (prevChats) => {
+    const chatToToggle = prevChats[chatId];
+    if (!chatToToggle) {
+      console.warn(`Chat with ID ${chatId} not found for pinning.`);
+      return prevChats;
+    }
+    const updatedChat = {
+      ...chatToToggle,
+      isPinned: !chatToToggle.isPinned, // 切换置顶状态
+      updatedAt: Date.now(), // 更新时间戳
+    };
+    return {
+      ...prevChats,
+      [chatId]: updatedChat,
+    };
+  });
 });
 
 export const clearUnpinnedChatsAtom = atom(null, (get, set) => {
+  const currentChats = get(chatsAtom);
   const currentActiveId = get(activeChatIdAtom);
-  const pinnedChats = get(chatsAtom).filter((chat) => chat.isPinned);
-  const unpinnedChats = get(chatsAtom).filter((chat) => !chat.isPinned);
-  const activeChatIsUnpinned = unpinnedChats.some(
-    (chat) => chat.id === currentActiveId,
-  );
+  let activeChatIsUnpinned = false;
+  const pinnedChats: ChatsRecord = {};
 
-  // If the active chat is unpinned and loading, cancel generation
+  // 遍历当前聊天记录
+  for (const chatId in currentChats) {
+    const chat = currentChats[chatId];
+    if (chat.isPinned) {
+      pinnedChats[chatId] = chat; // 保留置顶的聊天
+    } else if (chatId === currentActiveId) {
+      activeChatIsUnpinned = true; // 标记活动聊天是否未置顶
+    }
+  }
+
+  // 如果活动聊天未置顶且正在加载，则取消
   if (activeChatIsUnpinned && get(isAssistantLoadingAtom)) {
     const abortInfo = get(abortControllerAtom);
     if (abortInfo) {
-      console.log('Cancelling generation due to active chat being cleared.');
+      console.log(
+        'Cancelling generation due to active (unpinned) chat being cleared.',
+      );
       abortInfo.controller.abort();
       set(abortControllerAtom, null);
       set(isAssistantLoadingAtom, false);
     }
   }
 
+  // ! 优化: 更新为只包含置顶聊天的对象
   set(chatsAtom, pinnedChats);
 
+  // 如果活动聊天被清除了，设置新的活动聊天
   if (activeChatIsUnpinned) {
-    set(activeChatIdAtom, pinnedChats.length > 0 ? pinnedChats[0].id : null);
-    set(editingMessageIdAtom, null);
+    // 从剩余的（置顶的）聊天中选择第一个作为新的活动聊天
+    const firstPinnedChatId = Object.keys(pinnedChats)[0] ?? null;
+    set(activeChatIdAtom, firstPinnedChatId);
+    set(editingMessageIdAtom, null); // 重置编辑状态
   }
 });
+
+// --- Message Specific Actions ---
+
+// Helper function to update messages in a specific chat immutably
+const updateMessagesInChat = (
+  chats: ChatsRecord,
+  chatId: string,
+  messageUpdater: (messages: Message[]) => Message[],
+  updateTimestamp: boolean = true,
+): ChatsRecord => {
+  const chatToUpdate = chats[chatId];
+  if (!chatToUpdate) {
+    console.warn(`Chat with ID ${chatId} not found for message update.`);
+    return chats;
+  }
+  const newMessages = messageUpdater(chatToUpdate.messages);
+  // 只有当消息列表实际改变时才更新时间戳（可选优化）
+  // const timestamp = newMessages !== chatToUpdate.messages && updateTimestamp ? Date.now() : chatToUpdate.updatedAt;
+  const timestamp = updateTimestamp ? Date.now() : chatToUpdate.updatedAt;
+
+  const updatedChat = {
+    ...chatToUpdate,
+    messages: newMessages,
+    updatedAt: timestamp,
+  };
+  return {
+    ...chats,
+    [chatId]: updatedChat,
+  };
+};
 
 export const upsertMessageInActiveChatAtom = atom(
   null,
   (get, set, message: Message) => {
     const activeId = get(activeChatIdAtom);
-    if (!activeId) {
-      return;
-    }
+    if (!activeId) return; // 如果没有活动聊天，则不执行任何操作
 
+    // ! 优化: O(1) 访问聊天，O(M) 更新消息列表
     set(chatsAtom, (prevChats) =>
-      prevChats.map((chat) => {
-        if (chat.id === activeId) {
-          const existingMsgIndex = chat.messages.findIndex(
+      updateMessagesInChat(
+        prevChats,
+        activeId,
+        (currentMessages) => {
+          const existingMsgIndex = currentMessages.findIndex(
             (m) => m.id === message.id,
           );
           let newMessages: Message[];
+
           if (existingMsgIndex > -1) {
-            // Update existing message
-            newMessages = [...chat.messages];
-            // Preserve isStreaming flag if the update is for a streaming message
-            // unless the incoming message explicitly sets it to false
+            // 更新现有消息
+            newMessages = [...currentMessages];
             const isCurrentlyStreaming =
               newMessages[existingMsgIndex].isStreaming;
             newMessages[existingMsgIndex] = {
               ...message,
-              // Keep streaming true if it was already true and the update doesn't change it
+              // 保持流状态，除非新消息明确设置为 false
               isStreaming: message.isStreaming ?? isCurrentlyStreaming,
             };
           } else {
-            // Add new message
-            newMessages = [...chat.messages, message];
+            // 添加新消息
+            newMessages = [...currentMessages, message];
           }
-          return {
-            ...chat,
-            messages: newMessages,
-            // Only update timestamp if not currently streaming this message
-            updatedAt: message.isStreaming ? chat.updatedAt : Date.now(),
-          };
-        }
-        return chat;
-      }),
+          return newMessages;
+          // 只有当消息不是流式传输时才更新聊天的时间戳（因为流式更新会非常频繁）
+        },
+        !message.isStreaming,
+      ),
     );
   },
 );
@@ -267,11 +372,9 @@ export const deleteMessageFromActiveChatAtom = atom(
   null,
   (get, set, messageId: string) => {
     const activeId = get(activeChatIdAtom);
-    if (!activeId) {
-      return;
-    }
+    if (!activeId) return;
 
-    // If deleting the message currently being generated, cancel the generation
+    // 如果删除的是正在生成的消息，取消生成
     const abortInfo = get(abortControllerAtom);
     if (abortInfo?.messageId === messageId) {
       console.log(
@@ -282,32 +385,28 @@ export const deleteMessageFromActiveChatAtom = atom(
       set(isAssistantLoadingAtom, false);
     }
 
-    let chatFound = false;
-    set(chatsAtom, (prevChats) =>
-      prevChats.map((chat) => {
-        if (chat.id === activeId) {
-          chatFound = true;
-          const originalLength = chat.messages.length;
-          const filteredMessages = chat.messages.filter(
-            (msg) => msg.id !== messageId,
-          );
-          // Only update timestamp if a message was actually deleted
-          const updatedAt =
-            filteredMessages.length < originalLength
-              ? Date.now()
-              : chat.updatedAt;
-          return {
-            ...chat,
-            messages: filteredMessages,
-            updatedAt,
-          };
-        }
-        return chat;
-      }),
+    let messageWasDeleted = false;
+    // ! 优化: O(1) 访问聊天，O(M) 更新消息列表
+    set(
+      chatsAtom,
+      (prevChats) =>
+        updateMessagesInChat(
+          prevChats,
+          activeId,
+          (currentMessages) => {
+            const originalLength = currentMessages.length;
+            const filteredMessages = currentMessages.filter(
+              (msg) => msg.id !== messageId,
+            );
+            messageWasDeleted = filteredMessages.length < originalLength;
+            return filteredMessages;
+          },
+          messageWasDeleted,
+        ), // 仅在实际删除消息时更新时间戳
     );
 
-    // Clear editing state if the deleted message was being edited
-    if (chatFound && get(editingMessageIdAtom) === messageId) {
+    // 如果删除的消息正在被编辑，清除编辑状态
+    if (messageWasDeleted && get(editingMessageIdAtom) === messageId) {
       set(editingMessageIdAtom, null);
     }
   },
@@ -321,29 +420,39 @@ export const appendContentToMessageAtom = atom(
     { contentChunk, messageId }: { contentChunk: string; messageId: string },
   ) => {
     const activeId = get(activeChatIdAtom);
-    if (!activeId) {
-      return;
-    }
+    if (!activeId) return;
 
-    set(chatsAtom, (prevChats) =>
-      prevChats.map((chat) => {
-        if (chat.id === activeId) {
-          const msgIndex = chat.messages.findIndex((m) => m.id === messageId);
-          if (msgIndex > -1) {
-            const updatedMessages = [...chat.messages];
-            const currentContent = updatedMessages[msgIndex].content ?? '';
-            updatedMessages[msgIndex] = {
-              ...updatedMessages[msgIndex],
-              content: currentContent + contentChunk,
-              isStreaming: true, // Ensure it's marked as streaming
-              timestamp: updatedMessages[msgIndex].timestamp, // Keep original timestamp
-            };
-            // Do not update chat's updatedAt during streaming appends
-            return { ...chat, messages: updatedMessages };
-          }
-        }
-        return chat;
-      }),
+    // ! 优化: O(1) 访问聊天，O(M) 查找消息
+    // ! 潜在问题: 频繁调用此 Action 可能导致频繁的 state 更新和 localStorage 写入 (取决于 atomWithSafeStorage 实现)
+    //   考虑的优化：
+    //   1. Debounce/Throttle 对 chatsAtom 的 set 操作（如果 atomWithSafeStorage 不支持）
+    //   2. 使用一个临时的内存原子存储流式块，在 finalize 时合并
+    //   3. 确保 atomWithSafeStorage 内部有高效的写入策略
+    set(
+      chatsAtom,
+      (prevChats) =>
+        updateMessagesInChat(
+          prevChats,
+          activeId,
+          (currentMessages) => {
+            const msgIndex = currentMessages.findIndex(
+              (m) => m.id === messageId,
+            );
+            if (msgIndex > -1) {
+              const updatedMessages = [...currentMessages];
+              const currentContent = updatedMessages[msgIndex].content ?? '';
+              updatedMessages[msgIndex] = {
+                ...updatedMessages[msgIndex],
+                content: currentContent + contentChunk,
+                isStreaming: true, // 确保标记为流式
+                // timestamp: updatedMessages[msgIndex].timestamp, // 保持原始时间戳
+              };
+              return updatedMessages;
+            }
+            return currentMessages; // 如果找不到消息，返回原始列表
+          },
+          false,
+        ), // ! 不在流式追加时更新聊天时间戳
     );
   },
 );
@@ -353,53 +462,57 @@ export const finalizeStreamingMessageAtom = atom(
   (get, set, messageId: string) => {
     const activeId = get(activeChatIdAtom);
     if (!activeId) {
-      // If no active chat, ensure loading state is off
+      // 如果没有活动聊天（可能在流完成前被删除），确保重置状态
       set(isAssistantLoadingAtom, false);
-      set(abortControllerAtom, null); // Also clear controller if finalizing without active chat
+      set(abortControllerAtom, null);
       return;
     }
 
     let messageFoundAndFinalized = false;
-    set(chatsAtom, (prevChats) =>
-      prevChats.map((chat) => {
-        if (chat.id === activeId) {
-          const msgIndex = chat.messages.findIndex((m) => m.id === messageId);
-          if (msgIndex > -1 && chat.messages[msgIndex].isStreaming) {
-            const updatedMessages = [...chat.messages];
-            updatedMessages[msgIndex] = {
-              ...updatedMessages[msgIndex],
-              isStreaming: false, // Mark as finished
-            };
-            messageFoundAndFinalized = true;
-            // Update chat timestamp when streaming finishes
-            return {
-              ...chat,
-              messages: updatedMessages,
-              updatedAt: Date.now(),
-            };
-          }
-        }
-        return chat;
-      }),
+    // ! 优化: O(1) 访问聊天，O(M) 查找消息
+    set(
+      chatsAtom,
+      (prevChats) =>
+        updateMessagesInChat(
+          prevChats,
+          activeId,
+          (currentMessages) => {
+            const msgIndex = currentMessages.findIndex(
+              (m) => m.id === messageId,
+            );
+            // 确保消息存在且当前正在流式传输
+            if (msgIndex > -1 && currentMessages[msgIndex].isStreaming) {
+              const updatedMessages = [...currentMessages];
+              updatedMessages[msgIndex] = {
+                ...updatedMessages[msgIndex],
+                isStreaming: false, // 标记为完成
+              };
+              messageFoundAndFinalized = true;
+              return updatedMessages;
+            }
+            return currentMessages; // 消息不存在或未在流式传输，则不更改
+          },
+          true,
+        ), // ! 在流结束后更新聊天的时间戳
     );
 
-    // Only turn off global loading if the message was actually found and finalized
-    // This prevents turning off loading prematurely if finalize is called unexpectedly
+    // 只有当消息确实被找到并标记为完成时，才关闭全局加载状态
     if (messageFoundAndFinalized) {
       set(isAssistantLoadingAtom, false);
-      // No need to clear abortController here, finally block in callOpenAIStreamLogic handles it
+      // abortController 通常在调用此函数的 finally 块中清除，这里无需处理
     } else {
-      // If the message wasn't found (e.g., deleted before finalize), ensure loading is off
+      // 如果消息未找到（例如，在 finalize 之前被删除），则检查是否需要重置加载状态
       const abortInfo = get(abortControllerAtom);
       if (abortInfo?.messageId === messageId) {
         set(isAssistantLoadingAtom, false);
-        set(abortControllerAtom, null); // Clean up controller if message is gone
+        set(abortControllerAtom, null); // 清理控制器
       }
     }
   },
 );
 
 // Action to cancel the current streaming generation
+// (逻辑与原代码类似，主要是状态依赖可能变化)
 export const cancelGenerationAtom = atom(null, (get, set) => {
   const abortInfo = get(abortControllerAtom);
   if (abortInfo) {
@@ -407,21 +520,21 @@ export const cancelGenerationAtom = atom(null, (get, set) => {
       'User requested cancellation for message:',
       abortInfo.messageId,
     );
-    abortInfo.controller.abort(); // Signal cancellation
-    // The finally block in callOpenAIStreamLogic and the finalize atom
-    // will handle resetting loading state and clearing the controller atom.
-    // We don't strictly need to set loading false here, but it can make UI feel faster.
+    abortInfo.controller.abort(); // 发出中止信号
+    // 注意：实际的状态清理（isAssistantLoadingAtom, abortControllerAtom）
+    // 应该由调用 OpenAI 的逻辑中的 finally 块和 finalizeStreamingMessageAtom 来处理
+    // 提前设置 isAssistantLoadingAtom 为 false 可以让 UI 响应更快，但不是必须的
     // set(isAssistantLoadingAtom, false);
-    // set(abortControllerAtom, null); // Let finally block handle this
   } else {
     console.warn('Cancel requested, but no active abort controller found.');
-    // Ensure loading state is reset if somehow cancellation is triggered without a controller
+    // 以防万一，如果取消时没有控制器但仍在加载，重置加载状态
     if (get(isAssistantLoadingAtom)) {
       set(isAssistantLoadingAtom, false);
     }
   }
 });
 
+// (与原代码相同)
 export const setEditingMessageIdAtom = atom(
   null,
   (_get, set, messageId: string | null) => {
@@ -437,43 +550,49 @@ export const updateMessageContentAtom = atom(
     { messageId, newContent }: { messageId: string; newContent: string },
   ) => {
     const activeId = get(activeChatIdAtom);
-    if (!activeId) {
-      return;
-    }
+    if (!activeId) return;
 
-    set(chatsAtom, (prevChats) =>
-      prevChats.map((chat) => {
-        if (chat.id === activeId) {
-          const msgIndex = chat.messages.findIndex((m) => m.id === messageId);
-          if (msgIndex > -1) {
-            const updatedMessages = [...chat.messages];
-            updatedMessages[msgIndex] = {
-              ...updatedMessages[msgIndex],
-              content: newContent,
-              isStreaming: false, // Ensure streaming is off after edit
-            };
-            return {
-              ...chat,
-              messages: updatedMessages,
-              updatedAt: Date.now(),
-            };
-          }
-        }
-        return chat;
-      }),
+    // ! 优化: O(1) 访问聊天，O(M) 查找消息
+    set(
+      chatsAtom,
+      (prevChats) =>
+        updateMessagesInChat(
+          prevChats,
+          activeId,
+          (currentMessages) => {
+            const msgIndex = currentMessages.findIndex(
+              (m) => m.id === messageId,
+            );
+            if (msgIndex > -1) {
+              const updatedMessages = [...currentMessages];
+              updatedMessages[msgIndex] = {
+                ...updatedMessages[msgIndex],
+                content: newContent,
+                isStreaming: false, // 确保编辑后流状态为 false
+              };
+              return updatedMessages;
+            }
+            return currentMessages; // 消息未找到
+          },
+          true,
+        ), // 更新聊天时间戳
     );
-    set(editingMessageIdAtom, null);
+    set(editingMessageIdAtom, null); // 编辑完成后清除编辑状态
   },
 );
 
-// --- NEW REGENERATION ATOM ---
+// --- Regeneration Logic ---
 
+// ! 已优化: 使用 get(activeChatAtom) 获取活动聊天 (O(1))
 export const regenerateMessageAtom = atom(
   null,
   (get, set, targetMessageId: string) => {
+    // ! 优化: 直接从派生 atom 获取活动聊天，更高效
     const activeChat = get(activeChatAtom);
     const apiKey = get(apiKeyAtom);
-    const apiBaseUrl = get(apiBaseUrlAtom);
+    const apiBaseUrl = get(apiBaseUrlAtom) || null; // 确保是 string | null
+
+    // 获取所需的 setter 函数 (与原代码一致)
     const upsertMessage = (msg: Message) =>
       set(upsertMessageInActiveChatAtom, msg);
     const appendContent = (payload: {
@@ -487,7 +606,10 @@ export const regenerateMessageAtom = atom(
     const setAbortCtrl = (
       ctrl: { controller: AbortController; messageId: string } | null,
     ) => set(abortControllerAtom, ctrl);
+    const deleteMessage = (msgId: string) =>
+      set(deleteMessageFromActiveChatAtom, msgId); // 使用优化后的删除 action
 
+    // 条件检查 (与原代码一致)
     if (!activeChat || get(isAssistantLoadingAtom) || !targetMessageId) {
       console.warn('Regeneration conditions not met:', {
         hasActiveChat: !!activeChat,
@@ -497,9 +619,8 @@ export const regenerateMessageAtom = atom(
       return;
     }
 
-    const targetIndex = activeChat.messages.findIndex(
-      (m) => m.id === targetMessageId,
-    );
+    const messages = activeChat.messages; // 从活动聊天对象获取消息数组
+    const targetIndex = messages.findIndex((m) => m.id === targetMessageId);
 
     if (targetIndex === -1) {
       console.error(
@@ -508,63 +629,60 @@ export const regenerateMessageAtom = atom(
       return;
     }
 
-    const targetMessage = activeChat.messages[targetIndex];
+    const targetMessage = messages[targetIndex];
     const maxHistory = activeChat.maxHistory ?? get(defaultMaxHistoryAtom);
 
     let historySlice: Message[];
     let messageIdToDelete: string | null = null;
 
+    // --- 确定历史记录和要删除的消息 ID (逻辑与原代码一致) ---
     if (targetMessage.role === 'assistant') {
-      // Regenerate Assistant Message:
-      // History includes messages *before* this assistant message.
-      historySlice = activeChat.messages.slice(0, targetIndex);
-      // We will delete the original assistant message.
-      messageIdToDelete = targetMessageId;
+      // 再生助手消息: 历史是此消息之前的所有消息
+      historySlice = messages.slice(0, targetIndex);
+      messageIdToDelete = targetMessageId; // 删除原始助手消息
     } else if (targetMessage.role === 'user') {
-      // Regenerate based on User Message:
-      // History includes messages *up to and including* this user message.
-      historySlice = activeChat.messages.slice(0, targetIndex + 1);
-      // We need to delete the *next* message if it's an assistant response.
-      const nextMessage = activeChat.messages[targetIndex + 1];
+      // 基于用户消息再生: 历史是此消息（包括）之前的所有消息
+      historySlice = messages.slice(0, targetIndex + 1);
+      // 检查下一条消息是否是助手响应，如果是则删除它
+      const nextMessage = messages[targetIndex + 1];
       if (nextMessage?.role === 'assistant') {
         messageIdToDelete = nextMessage.id;
       }
-      // If the next message isn't an assistant message, we delete nothing and just append.
     } else {
-      // Don't regenerate other message types (like dividers)
       console.warn(`Cannot regenerate message type: ${targetMessage.role}`);
       return;
     }
 
-    // Prepare messages for API call using the determined history slice
+    // --- 准备 API 调用 (逻辑与原代码一致) ---
     const relevantHistory = getHistoryForApi(
       historySlice,
       maxHistory,
       activeChat.systemPrompt,
     );
 
-    // Check if there's enough context to generate a response
-    // (Allowing just a system prompt is okay if the first message is user/assistant)
+    // 检查是否有足够上下文 (逻辑与原代码一致)
     if (
       relevantHistory.length === 0 ||
       (relevantHistory.length === 1 &&
         relevantHistory[0].role === 'system' &&
-        historySlice.length === 0) // Only system prompt is not enough if there was no user msg
+        historySlice.length === 0)
     ) {
       console.warn(
         'Not enough history context to regenerate response for message:',
         targetMessageId,
       );
-      // We might have decided to delete a message; if regeneration fails early,
-      // ensure the deletion happens IF it was planned.
+      // 如果计划了删除，但提前失败，确保删除发生
       if (messageIdToDelete) {
-        // Check if message still exists before deleting
-        if (activeChat.messages.some((m) => m.id === messageIdToDelete)) {
+        // ! 优化: 再次获取最新状态检查消息是否存在
+        const currentChatState = get(activeChatAtom);
+        if (
+          currentChatState?.messages.some((m) => m.id === messageIdToDelete)
+        ) {
           console.log(
             'Deleting message before failed regeneration:',
             messageIdToDelete,
           );
-          set(deleteMessageFromActiveChatAtom, messageIdToDelete);
+          deleteMessage(messageIdToDelete); // 使用 action 删除
         }
       }
       return;
@@ -577,75 +695,92 @@ export const regenerateMessageAtom = atom(
       targetMessage.role,
     );
 
-    // --- Execute Deletion and Generation ---
+    // --- 执行删除和生成 ---
 
-    // 1. Delete the appropriate message (if identified) *before* calling the API
+    // 1. 删除消息 (如果需要)
     if (messageIdToDelete) {
-      // Check if message still exists before deleting (important due to potential async nature)
-      const currentChatState = get(activeChatAtom); // Get fresh state
+      // ! 优化: 再次获取最新状态检查消息是否存在，防止重复删除或删除不存在的消息
+      const currentChatState = get(activeChatAtom); // 获取最新聊天状态
       if (currentChatState?.messages.some((m) => m.id === messageIdToDelete)) {
         console.log('Deleting message before regeneration:', messageIdToDelete);
-        set(deleteMessageFromActiveChatAtom, messageIdToDelete);
+        deleteMessage(messageIdToDelete); // 使用 action 删除
       } else {
-        console.warn('Message to delete was already gone:', messageIdToDelete);
+        console.warn(
+          'Message to delete was already gone or chat changed:',
+          messageIdToDelete,
+        );
+        // 考虑是否还要继续？取决于业务逻辑，这里假设继续
       }
     }
 
-    // 2. Call the OpenAI stream function to generate and append/upsert the new response
+    // 2. 调用 OpenAI 流式 API (与原代码一致)
     callOpenAIStreamLogic(
       apiKey,
       apiBaseUrl,
       activeChat.model,
       relevantHistory,
       setIsLoading,
-      upsertMessage, // Adds the new message placeholder
-      appendContent, // Appends content to the new message
-      finalizeStream, // Finalizes the new message
-      setAbortCtrl, // Sets the abort controller for the new message
+      upsertMessage,
+      appendContent,
+      finalizeStream,
+      setAbortCtrl,
     );
   },
 );
 
-// --- End of NEW REGENERATION ATOM ---
-
-// Deprecated: Only regenerates the *last* response
+// (基本不变，现在内部调用优化后的 regenerateMessageAtom)
 export const regenerateLastResponseAtom = atom(null, (get, set) => {
-  const activeChat = get(activeChatAtom);
+  const activeChat = get(activeChatAtom); // Use the derived atom
   if (!activeChat) return;
 
-  let lastAssistantIndex = -1;
+  let lastAssistantMessageId: string | null = null;
+  // Iterate backwards through the messages of the active chat
   for (let i = activeChat.messages.length - 1; i >= 0; i--) {
     if (activeChat.messages[i].role === 'assistant') {
-      lastAssistantIndex = i;
+      lastAssistantMessageId = activeChat.messages[i].id;
       break;
     }
   }
 
-  if (lastAssistantIndex !== -1) {
-    console.log('Using NEW regenerateMessageAtom for last response.');
-    set(regenerateMessageAtom, activeChat.messages[lastAssistantIndex].id);
+  if (lastAssistantMessageId) {
+    console.log('Using regenerateMessageAtom for last response.');
+    set(regenerateMessageAtom, lastAssistantMessageId); // Trigger the main regeneration atom
   } else {
-    console.warn('No assistant message found to regenerate.');
+    console.warn(
+      'No assistant message found in the active chat to regenerate.',
+    );
   }
 });
 
+// ! 优化: 遍历 Record 的 values
 export const resetStreamingStatesAtom = atom(null, (get, set) => {
-  // Reset global loading state
   set(isAssistantLoadingAtom, false);
-
-  // Clear any active abort controller
   set(abortControllerAtom, null);
 
-  // Reset streaming flags in all messages across all chats
-  set(chatsAtom, (prevChats) =>
-    prevChats.map((chat) => ({
-      ...chat,
-      messages: chat.messages.map((msg) => ({
-        ...msg,
-        isStreaming: false,
-      })),
-    })),
-  );
+  set(chatsAtom, (prevChats) => {
+    const newChats: ChatsRecord = {};
+    // 遍历对象的值 (Chat 对象)
+    for (const chatId in prevChats) {
+      const chat = prevChats[chatId];
+      let messagesUpdated = false;
+      const updatedMessages = chat.messages.map((msg) => {
+        if (msg.isStreaming) {
+          messagesUpdated = true;
+          return { ...msg, isStreaming: false };
+        }
+        return msg;
+      });
+      // 只有当消息确实被更新时才创建新聊天对象
+      newChats[chatId] = messagesUpdated
+        ? { ...chat, messages: updatedMessages }
+        : chat;
+    }
+    // 检查是否有任何聊天对象被修改，避免不必要的更新
+    // （简单的实现是直接返回 newChats，但更精细的检查可以避免触发衍生态的计算）
+    // const hasChanges = Object.keys(prevChats).some(id => prevChats[id] !== newChats[id]);
+    // return hasChanges ? newChats : prevChats;
+    return newChats; // 简化处理，直接返回新对象
+  });
 });
 
 // --- Helper Functions (used by actions) ---
