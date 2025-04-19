@@ -17,6 +17,7 @@ import {
   DialogDescription,
   DialogHeader,
   DialogTitle,
+  DialogTrigger,
 } from '@/components/ui/Dialog.tsx';
 import {
   DropdownMenu,
@@ -102,7 +103,6 @@ export const CharacterEditor: React.FC = () => {
   const isAutoFilling = useAtomValue(isCharacterAutoFillingAtom);
   const apiKey = useAtomValue(apiKeyAtom);
   const triggerAutoFill = useSetAtom(autoFillCharacterAtom);
-  // TODO: Add setters for move, duplicate, import, autofill later
 
   // --- State ---
   const [selectedCharacterId, setSelectedCharacterId] = useState<string | null>(
@@ -334,14 +334,7 @@ export const CharacterEditor: React.FC = () => {
 
   return (
     <Dialog open={isOpen} onOpenChange={setIsOpen}>
-      {/* Hidden File Input for Character Import */}
-      <input
-        type="file"
-        ref={importCharFileInputRef}
-        accept=".json"
-        style={{ display: 'none' }}
-        onChange={handleFileImport}
-      />
+      <DialogTrigger className="hidden">Open</DialogTrigger>
       <DialogContent className="data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 flex h-[80vh] flex-col gap-0 p-0 sm:max-w-4xl">
         <DialogHeader className="flex-shrink-0 border-b p-4 pb-4">
           {' '}
@@ -351,6 +344,15 @@ export const CharacterEditor: React.FC = () => {
             Create, edit, and manage reusable character profiles.
           </DialogDescription>
         </DialogHeader>
+
+        {/* Hidden File Input for Character Import */}
+        <input
+          type="file"
+          ref={importCharFileInputRef}
+          accept=".json"
+          style={{ display: 'none' }}
+          onChange={handleFileImport}
+        />
 
         <div className="flex flex-1 overflow-hidden">
           {/* Left: Character List */}
@@ -423,7 +425,7 @@ export const CharacterEditor: React.FC = () => {
                   {' '}
                   <LuChevronDown />{' '}
                 </Button>{' '}
-                <DropdownMenu>
+                <DropdownMenu modal={false}>
                   <DropdownMenuTrigger asChild>
                     <Button
                       variant="ghost"
@@ -491,10 +493,17 @@ export const CharacterEditor: React.FC = () => {
                     <DropdownMenuSub>
                       <DropdownMenuSubTrigger
                         disabled={characters.length === 0}
+                        onSelect={() => {
+                          console.log('select');
+                        }}
+                        onMouseMove={(e) => {
+                          console.log('mouseMove');
+                        }}
                       >
                         <LuDownload className="mr-2 h-4 w-4" />
                         Export to JSON...
                       </DropdownMenuSubTrigger>
+
                       <DropdownMenuSubContent>
                         <DropdownMenuItem
                           onClick={handleExportCurrent}
@@ -512,6 +521,7 @@ export const CharacterEditor: React.FC = () => {
                     </DropdownMenuSub>
                   </DropdownMenuContent>
                 </DropdownMenu>
+                <div className="h-2 w-2" />
               </div>
             </div>
             <div className="flex-1 space-y-1 overflow-y-auto p-2">
