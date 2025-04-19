@@ -193,70 +193,79 @@ export const MessageInput: React.FC = () => {
   return (
     <div
       className={cn(
-        'flex flex-shrink-0 items-end space-x-2 border-t border-neutral-200 bg-neutral-50 p-3 md:p-4 dark:border-neutral-700 dark:bg-neutral-900/50',
+        // Changed to flex-col for vertical layout
+        'flex flex-shrink-0 flex-col border-t border-neutral-200 bg-neutral-50 px-4 pt-2 pb-4 dark:border-neutral-700 dark:bg-neutral-900/50',
+        // Removed items-end and space-x-2 from the main container
       )}
     >
-      {/* Regenerate Button */}
-      <Button
-        aria-label="Regenerate last response"
-        className={cn(
-          'flex-shrink-0 self-end',
-          (!canRegenerate || isLoading) && 'cursor-not-allowed opacity-50',
-        )}
-        disabled={!canRegenerate || isLoading} // Also disable if loading
-        onClick={regenerateAction}
-        size="icon"
-        title="Regenerate last response"
-        variant="outline"
-      >
-        {/* Optional: Show loader on regenerate button if regenerate itself takes time? Not implemented here. */}
-        <LuRefreshCw className={cn('h-5 w-5')} />
-      </Button>
+      {/* Top Toolbar Area */}
+      <div className="flex items-center space-x-2 pb-2">
+        {' '}
+        {/* Added padding-bottom */}
+        {/* Regenerate Button - Moved to Toolbar */}
+        <Button
+          aria-label="Regenerate last response"
+          className={cn(
+            'flex-shrink-0', // Removed self-end
+            (!canRegenerate || isLoading) && 'cursor-not-allowed opacity-50',
+          )}
+          disabled={!canRegenerate || isLoading}
+          onClick={regenerateAction}
+          size="xs"
+          variant="ghost"
+          title="Regenerate last response"
+        >
+          {/* Made icon slightly smaller for toolbar */}
+          <LuRefreshCw className={cn('h-4 w-4')} />
+        </Button>
+        {/* Add other toolbar buttons here later, e.g.: */}
+        {/* <Button size="icon" variant="ghost"><LuPaperclip className="h-4 w-4" /></Button> */}
+        {/* <Button size="icon" variant="ghost"><LuMic className="h-4 w-4" /></Button> */}
+      </div>
 
-      {/* Message Input Area */}
-      <Textarea
-        aria-label="Chat message input"
-        className={cn(
-          'max-h-[200px] min-h-[40px] flex-1 resize-none overflow-y-auto',
-        )}
-        disabled={!activeChat || isLoading} // Disable input while loading
-        onChange={(e) => setInput(e.target.value)}
-        onKeyDown={handleKeyDown}
-        placeholder={
-          isLoading
-            ? 'Assistant is thinking...'
-            : activeChat
-              ? "Type message or '---' to clear context..."
-              : 'Select or create a chat first'
-        }
-        ref={textareaRef}
-        rows={1}
-        value={input}
-        variant="flat"
-      />
-
-      {/* Send / Stop Button */}
-      <Button
-        aria-label={isLoading ? 'Stop generation' : 'Send message'}
-        className="flex-shrink-0 self-end"
-        size="icon"
-        title={isLoading ? 'Stop generation' : 'Send message'}
-        variant={isLoading ? 'destructive' : 'default'} // Style Stop button differently
-        onClick={isLoading ? cancelGeneration : handleSend} // Click action depends on loading state
-        // Disable Send if no input/chat OR if loading AND no abort controller yet (brief moment)
-        // Disable Stop if not loading
-        disabled={
-          isLoading
-            ? !abortInfo // Disable Stop briefly until controller is ready
-            : !input.trim() || !activeChat // Disable Send if no input/chat
-        }
-      >
-        {isLoading ? (
-          <LuSquare className="h-5 w-5" />
-        ) : (
-          <LuSend className="h-5 w-5" />
-        )}
-      </Button>
+      {/* Bottom Section: Input Area + Send Button */}
+      <div className="flex items-end space-x-2">
+        {' '}
+        {/* Wrapper for Textarea + Send */}
+        {/* Message Input Area */}
+        <Textarea
+          aria-label="Chat message input"
+          className={cn(
+            'flex-1 resize-none overflow-y-auto', // flex-1 makes it take available space
+          )}
+          disabled={!activeChat || isLoading}
+          onChange={(e) => setInput(e.target.value)}
+          onKeyDown={handleKeyDown}
+          placeholder={
+            isLoading
+              ? 'Assistant is thinking...'
+              : activeChat
+                ? "Type message or '---' to clear context..."
+                : 'Select or create a chat first'
+          }
+          ref={textareaRef}
+          rows={4}
+          value={input}
+          variant="flat" // Assuming this variant exists and is desired
+        />
+        {/* Send / Stop Button - Stays on the right */}
+        <Button
+          aria-label={isLoading ? 'Stop generation' : 'Send message'}
+          className="flex-shrink-0 self-end" // Aligns button to bottom if textarea grows
+          size="icon"
+          title={isLoading ? 'Stop generation' : 'Send message'}
+          variant={isLoading ? 'destructive' : 'default'}
+          onClick={isLoading ? cancelGeneration : handleSend}
+          disabled={isLoading ? !abortInfo : !input.trim() || !activeChat}
+        >
+          {/* Icon size kept same as original for send button */}
+          {isLoading ? (
+            <LuSquare className="h-5 w-5" />
+          ) : (
+            <LuSend className="h-5 w-5" />
+          )}
+        </Button>
+      </div>
     </div>
   );
 };
