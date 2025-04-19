@@ -34,12 +34,35 @@ const formatTimestamp = (timestamp: number): string => {
 };
 
 const msgPostProcess = (content: string) => {
-  return content
-    .replace(
-      /<think>/g,
-      '<div class="thought text-neutral-500 dark:text-neutral-400 font-serif italic">',
-    )
-    .replace(/<\/think>/g, '</div>');
+  let tmp = content;
+
+  let isThinking = tmp.search(/<\/think>/) === -1;
+  let iconThoughts = `<div class="relative w-5 h-5 flex items-center justify-center rounded-full bg-green-200 dark:bg-green-600">
+  <svg class="w-4 h-4 text-green-500 dark:text-green-200" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+  </svg>
+</div>`;
+
+  let iconThinking = `<div class="relative w-5 h-5">
+            <div class="animate-spin rounded-full h-5 w-5 border-t-2 border-b-2 border-purple-500"></div>
+          </div>`;
+
+  tmp = tmp.replace(
+    /<think>/g,
+    '<div class="thought">' +
+      `<div class="flex gap-2 items-center my-1">
+          ${isThinking ? iconThinking : iconThoughts}
+          <span class="font-bold text-neutral-500 dark:text-neutral-400">${isThinking ? 'Thinking' : 'Thoughts'}</span>
+        </div>`,
+  );
+
+  if (isThinking) {
+    tmp += '</div>';
+  } else {
+    tmp = tmp.replace(/<\/think>/g, '</div>');
+  }
+
+  return tmp;
 };
 
 export const ChatHistory: React.FC<ChatHistoryProps> = ({ className }) => {
