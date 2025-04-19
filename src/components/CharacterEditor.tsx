@@ -543,7 +543,7 @@ export const CharacterEditor: React.FC = () => {
               </div>
             ) : (
               <>
-                <div className="flex-1 space-y-4 overflow-y-auto pr-2">
+                <div className="flex-1 space-y-4 overflow-y-auto px-2">
                   {/* Name */}
                   <div className="space-y-2">
                     <Label htmlFor="char-name">Name</Label>
