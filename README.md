@@ -1,15 +1,25 @@
 <center>
 <div>
-<h1>DAAN</h1><p> A Lightweight Language Model Client</p>
+<h1 align="center">DAAN</h1><p align="center"> A Lightweight Language Model Client</p>
 </div>
-<img src="cover.png" width="200" />
+<img align="center" src="assets/cover.png" width="200" />
 </center>
 
 English | [中文](使用说明.md)
 
 Daan (答案，"Answer" in Chinese) is a concise and lightweight LLM client designed to provide you with a smooth and efficient AI experience. It is compatible with OpenAI's GPT series.
 
-![screenshot](screenshot.png)
+## Screenshots
+
+View Demo at [Here](https://daan.xyzw.space)
+
+Dark mode:
+
+![screenshot-dark](assets/screenshot-dark.png)
+
+Light mode:
+
+![screenshot-light](assets/screenshot-light.png)
 
 ## Features
 
@@ -21,6 +31,7 @@ Daan (答案，"Answer" in Chinese) is a concise and lightweight LLM client desi
 - **Theme Switching:** Supports night mode to protect your eyes.
 - **Timestamp Display:** Convenient for tracking conversation history.
 - **Chat Summary:** Chat summary feature to help you quickly review conversation content.
+- **Token Estimation:** Estimate the number of tokens used in a message.
 
 ## Quick Start
 
