@@ -334,19 +334,9 @@ export const LeftSidebar: React.FC = () => {
                   role="button"
                   tabIndex={0}
                 >
-                  {/* Pin Indicator */}
-                  {chat.isPinned && (
-                    <LuPin
-                      aria-label="Pinned"
-                      className="mr-2 h-3.5 w-3.5 flex-shrink-0 text-blue-500 dark:text-blue-400"
-                    />
-                  )}
-                  {!chat.isPinned && (
-                    <div className="mr-2 w-3.5 flex-shrink-0"></div> // Placeholder for alignment
-                  )}
                   {/* Icon and Name */}
                   <div className="mr-1 flex flex-1 items-center overflow-hidden text-ellipsis whitespace-nowrap">
-                    <span className="mr-2 flex-shrink-0 text-lg">
+                    <span className="text-md mr-2 w-4">
                       {chat.icon || (
                         <LuMessageSquare className="h-4 w-4 text-neutral-500" />
                       )}
