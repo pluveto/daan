@@ -11,6 +11,7 @@ import {
   defaultSummaryModelAtom,
   deleteMessageFromActiveChatAtom,
   finalizeStreamingMessageAtom,
+  focusInputAtom,
   generateChatTitle,
   generateSummaryAtom,
   getHistoryForApi,
@@ -23,7 +24,7 @@ import {
 import type { Message } from '@/types.ts';
 import { useAtom, useAtomValue, useSetAtom } from 'jotai';
 import _ from 'lodash'; // Import lodash debounce
-import { LucideBarChart } from 'lucide-react';
+
 import React, {
   useCallback,
   useEffect,
@@ -31,7 +32,7 @@ import React, {
   useRef,
   useState,
 } from 'react';
-import { LuRefreshCw, LuSend, LuSquare } from 'react-icons/lu';
+import { LuChartBar, LuRefreshCw, LuSend, LuSquare } from 'react-icons/lu';
 import { approximateTokenSize } from 'tokenx';
 import { v4 as uuidv4 } from 'uuid';
 import { Button } from './ui/Button.tsx';
@@ -60,11 +61,13 @@ export const MessageInput: React.FC = () => {
   const summaryModel = useAtomValue(defaultSummaryModelAtom);
   const showEstimatedTokens = useAtomValue(showEstimatedTokensAtom);
   const globalDefaultMaxHistory = useAtomValue(defaultMaxHistoryAtom);
+  const triggerFocus = useAtomValue(focusInputAtom); // Get focus trigger value
 
   // --- Local State ---
   // Local state for the textarea, updated immediately on change
   const [input, setInputRaw] = useState<string>('');
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const [isComposing, setIsComposing] = useState(false); // State for IME composition
 
   // --- State Synchronization ---
   // Effect to sync local state when activeChat changes (e.g., switching chats)
@@ -99,6 +102,17 @@ export const MessageInput: React.FC = () => {
       debouncedUpdateGlobalInput.cancel();
     };
   }, [debouncedUpdateGlobalInput]);
+
+  // --- Effect for focusing input ---
+  useEffect(() => {
+    // Check triggerFocus > 0 to avoid focus on initial load if atom default is 0
+    if (triggerFocus > 0 && textareaRef.current) {
+      console.log('Focusing input triggered');
+      // Small delay might sometimes help ensure element is fully ready after state updates
+      // setTimeout(() => textareaRef.current?.focus(), 0);
+      textareaRef.current?.focus();
+    }
+  }, [triggerFocus]); // Depend only on the trigger value
 
   // --- Input Change Handler ---
   // Updates local state instantly and triggers the debounced global update
@@ -220,13 +234,19 @@ export const MessageInput: React.FC = () => {
   // --- Keyboard Handler ---
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-      // Check if Enter is pressed without Shift, and not loading
-      if (e.key === 'Enter' && !e.shiftKey && !isLoading && input.trim()) {
+      // Check if Enter is pressed without Shift, not loading, AND not composing
+      if (
+        e.key === 'Enter' &&
+        !e.shiftKey &&
+        !isLoading &&
+        !isComposing &&
+        input.trim()
+      ) {
         e.preventDefault(); // Prevent newline
         handleSend();
       }
     },
-    [isLoading, handleSend, input],
+    [isLoading, handleSend, input, isComposing], // Add isComposing dependency
   ); // Depends on loading state and handleSend callback, and input for the trim check
 
   // --- Derived State & Memos ---
@@ -273,7 +293,7 @@ export const MessageInput: React.FC = () => {
         {/* Token Counter */}
         {showEstimatedTokens && (
           <span className="flex items-center gap-1 text-xs text-neutral-500 dark:text-neutral-400">
-            <LucideBarChart className="h-3 w-3" />
+            <LuChartBar className="h-3 w-3" />
             {numTokens} token{numTokens === 1 ? '' : 's'}
           </span>
         )}
@@ -289,6 +309,8 @@ export const MessageInput: React.FC = () => {
           disabled={!activeChat || isLoading}
           value={input} // Controlled by local state
           onChange={handleInputChange} // Use the combined handler
+          onCompositionStart={() => setIsComposing(true)}
+          onCompositionEnd={() => setIsComposing(false)}
           onKeyDown={handleKeyDown}
           placeholder={
             isLoading

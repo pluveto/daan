@@ -1,14 +1,6 @@
 // src/components/ChatMessageItem.tsx (Optimized)
 import { cn } from '@/lib/utils.ts';
 import type { Message } from '@/types.ts';
-// Use specific imports if LucideBarChart is the only one needed from lucide-react
-import {
-  Bot,
-  Clock,
-  Loader,
-  BarChart as LucideBarChart,
-  User,
-} from 'lucide-react';
 // Use specific icons from lucide-react directly
 import React, {
   useCallback,
@@ -17,6 +9,8 @@ import React, {
   useRef,
   useState,
 } from 'react';
+// Use specific imports if LucideBarChart is the only one needed from lucide-react
+import { LuBot, LuChartBar, LuClock, LuLoader, LuUser } from 'react-icons/lu';
 import ReactMarkdown from 'react-markdown';
 import rehypeKatex from 'rehype-katex';
 import rehypeRaw from 'rehype-raw';
@@ -160,9 +154,9 @@ const _ChatMessageItem: React.FC<ChatMessageItemProps> = ({
   const getSenderIcon = (role: Message['role']) => {
     switch (role) {
       case 'user':
-        return <User className="h-4 w-4" />;
+        return <LuUser className="h-4 w-4" />;
       case 'assistant':
-        return <Bot className="h-4 w-4" />;
+        return <LuBot className="h-4 w-4" />;
       default:
         return null;
     }
@@ -181,14 +175,14 @@ const _ChatMessageItem: React.FC<ChatMessageItemProps> = ({
       )}
     >
       {/* Sender Info and Timestamp (Common for both views) */}
-      <div className="mb-1.5 flex items-center space-x-2 text-sm font-medium text-neutral-900 dark:text-neutral-200">
-        <span className="flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full">
+      <div className="mb-1.5 flex items-end space-x-2 text-sm font-medium text-neutral-900 dark:text-neutral-200">
+        <span className="flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-full">
           {getSenderIcon(message.role)}
         </span>
         <span className="font-semibold">{getSenderName(message.role)}</span>
         {showTimestamps && (
           <span className="flex items-center gap-1 text-xs text-neutral-500 dark:text-neutral-400">
-            <Clock className="h-3 w-3" />
+            <LuClock className="h-3 w-3" />
             {formatTimestamp(message.timestamp)}
           </span>
         )}
@@ -198,7 +192,7 @@ const _ChatMessageItem: React.FC<ChatMessageItemProps> = ({
           message.content &&
           numTokens > 0 && (
             <span className="flex items-center gap-1 text-xs text-neutral-500 dark:text-neutral-400">
-              <LucideBarChart className="h-3 w-3" />
+              <LuChartBar className="h-3 w-3" />
               {numTokens} token{numTokens === 1 ? '' : 's'}
             </span>
           )}
@@ -228,7 +222,7 @@ const _ChatMessageItem: React.FC<ChatMessageItemProps> = ({
             </div>
             {/* Streaming indicator */}
             {message.isStreaming && (
-              <Loader className="ml-1 inline-block h-4 w-4 animate-spin text-neutral-500 dark:text-neutral-400" />
+              <LuLoader className="ml-1 inline-block h-4 w-4 animate-spin text-neutral-500 dark:text-neutral-400" />
             )}
           </>
         ) : (

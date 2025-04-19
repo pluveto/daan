@@ -87,3 +87,16 @@ export const commonEmojis = [
   '📌',
   '📎',
 ];
+
+export interface CustomCharacter {
+  id: string;
+  sort: number;
+  name: string;
+  description?: string;
+  icon: string;
+  prompt: string;
+  model: string;
+  maxHistory: number | null;
+  createdAt: number;
+  updatedAt: number;
+}

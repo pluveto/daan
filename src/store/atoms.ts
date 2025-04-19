@@ -1,5 +1,6 @@
 import { atomWithSafeStorage } from '@/lib/utils.ts';
 import {
+  CustomCharacter,
   exampleModels,
   type Chat,
   type Message,
@@ -7,6 +8,7 @@ import {
 } from '@/types.ts';
 import { atom } from 'jotai';
 import OpenAI from 'openai';
+import { toast } from 'sonner';
 import { v4 as uuidv4 } from 'uuid';
 
 // --- 类型定义 ---
@@ -22,18 +24,19 @@ export const isRightSidebarOpenAtom = atomWithSafeStorage(
   true,
 );
 export const isChatSettingsModalOpenAtom = atom(false);
+export const isCharacterEditorOpenAtom = atom(false);
 export const isAssistantLoadingAtom = atom(false);
 export const editingMessageIdAtom = atom<string | null>(null);
-
+export const isConversationSearchOpenAtom = atom(false);
+export const focusInputAtom = atom(0);
 // --- Request State Atom ---
-// (与原代码相同)
+
 export const abortControllerAtom = atom<{
   controller: AbortController;
   messageId: string;
 } | null>(null);
 
 // --- Global Settings Atoms ---
-// (与原代码相同, 注意: 每个 atomWithSafeStorage 都会有存储开销)
 export const apiKeyAtom = atomWithSafeStorage<string>(
   'globalSettings_apiKey',
   '',
@@ -78,6 +81,10 @@ export const customModelsAtom = atomWithSafeStorage<string[]>(
   'globalSettings_customModels',
   [],
 );
+export const customCharactersAtom = atomWithSafeStorage<CustomCharacter[]>(
+  'globalSettings_customCharacters',
+  [],
+);
 
 // --- Chat Data Atoms ---
 // ! 主要优化点：使用 Record<string, Chat> 替代 Chat[]
@@ -97,7 +104,6 @@ export const activeChatAtom = atom<Chat | null>((get) => {
   return activeId ? (chats[activeId] ?? null) : null;
 });
 
-// (与原代码相同)
 export const availableModelsAtom = atom<SupportedModels[]>((get) => {
   const custom = get(customModelsAtom);
   // 使用 Set 去重
@@ -120,37 +126,62 @@ export const sortedChatsAtom = atom<Chat[]>((get) => {
 });
 
 // --- Action Atoms (Write-only atoms) ---
+type NewChatOptions = Partial<
+  Omit<
+    Chat,
+    'id' | 'messages' | 'createdAt' | 'updatedAt' | 'isPinned' | 'input'
+  >
+>;
 
-export const createNewChatAtom = atom(null, (get, set) => {
-  const newId = uuidv4();
-  const now = Date.now();
-  const newChat: Chat = {
-    createdAt: now,
-    icon: '💬',
-    id: newId,
-    isPinned: false,
-    input: '',
-    maxHistory: null, // 使用全局默认值
-    messages: [],
-    model: get(defaultModelAtom), // 使用全局默认模型
-    name: `Chat ${new Date(now).toLocaleTimeString()}`, // 初始名称
-    systemPrompt: get(defaultPromptAtom), // 使用全局默认提示
-    updatedAt: now,
-  };
+export const createNewChatAtom = atom(
+  null,
+  (get, set, options?: NewChatOptions) => {
+    const newId = uuidv4();
+    const now = Date.now();
+    const globalDefaults = {
+      icon: '💬',
+      name: `Chat ${new Date(now).toLocaleTimeString()}`, // Default initial name
+      model: get(defaultModelAtom),
+      systemPrompt: get(defaultPromptAtom),
+      maxHistory: null, // Default uses global setting implicitly
+    };
 
-  // ! 优化: O(1) 添加
-  set(chatsAtom, (prevChats) => ({
-    ...prevChats,
-    [newId]: newChat, // 直接添加新条目
-  }));
+    const newChat: Chat = {
+      // Start with internal properties
+      id: newId,
+      messages: [],
+      createdAt: now,
+      updatedAt: now,
+      isPinned: false,
+      input: '', // Always start with empty input draft
+      // Merge global defaults and specific options
+      icon: options?.icon ?? globalDefaults.icon,
+      name: options?.name ?? globalDefaults.name,
+      model: options?.model ?? globalDefaults.model,
+      systemPrompt: options?.systemPrompt ?? globalDefaults.systemPrompt,
+      maxHistory:
+        options?.maxHistory !== undefined
+          ? options?.maxHistory
+          : globalDefaults.maxHistory, // Allow explicit null from options
+    };
 
-  // 设置新创建的聊天为活动聊天
-  set(activeChatIdAtom, newId);
-  // 重置编辑状态和加载状态
-  set(editingMessageIdAtom, null);
-  set(isAssistantLoadingAtom, false);
-  set(abortControllerAtom, null);
-});
+    // ! 优化: O(1) 添加
+    set(chatsAtom, (prevChats) => ({
+      ...prevChats,
+      [newId]: newChat, // 直接添加新条目
+    }));
+
+    // 设置新创建的聊天为活动聊天
+    set(activeChatIdAtom, newId);
+    set(focusInputAtom, (c) => c + 1);
+    // 重置编辑状态和加载状态
+    set(editingMessageIdAtom, null);
+    set(isAssistantLoadingAtom, false);
+    set(abortControllerAtom, null);
+
+    toast.success(`Chat "${newChat.name}" created.`);
+  },
+);
 
 export const updateChatAtom = atom(
   null,
@@ -297,6 +328,276 @@ export const clearUnpinnedChatsAtom = atom(null, (get, set) => {
     set(editingMessageIdAtom, null); // 重置编辑状态
   }
 });
+
+export const forkChatAtom = atom(null, (get, set, chatId: string) => {
+  const chats = get(chatsAtom);
+  const chatToFork = chats[chatId];
+
+  if (!chatToFork) {
+    console.warn(`Chat with ID ${chatId} not found for forking.`);
+    toast.error('Could not find the chat to fork.');
+    return;
+  }
+
+  try {
+    // Simple deep clone using JSON methods (sufficient for Chat structure)
+    // Alternatively use _.cloneDeep(chatToFork) if lodash is preferred
+    const forkedChat: Chat = JSON.parse(JSON.stringify(chatToFork));
+    const newId = uuidv4();
+    const now = Date.now();
+
+    // Update properties for the new forked chat
+    forkedChat.id = newId;
+    forkedChat.name = `${chatToFork.name} (forked)`;
+    forkedChat.isPinned = false; // Forks are not pinned by default
+    forkedChat.createdAt = now;
+    forkedChat.updatedAt = now;
+    // Reset input draft if desired
+    // forkedChat.input = '';
+
+    set(chatsAtom, (prevChats) => ({
+      ...prevChats,
+      [newId]: forkedChat,
+    }));
+
+    set(activeChatIdAtom, newId); // Make the forked chat active
+
+    // Reset potentially interfering states
+    set(editingMessageIdAtom, null);
+    set(isAssistantLoadingAtom, false);
+    set(abortControllerAtom, null);
+
+    toast.success('Conversation forked successfully.');
+  } catch (error) {
+    console.error('Forking failed:', error);
+    toast.error(
+      `Forking failed: ${error instanceof Error ? error.message : 'Unknown error'}`,
+    );
+  }
+});
+
+export const deleteChatsOlderThanAtom = atom(
+  null,
+  (get, set, referenceChatId: string) => {
+    const currentChats = get(chatsAtom);
+    const currentActiveId = get(activeChatIdAtom);
+    const referenceChat = currentChats[referenceChatId];
+
+    if (!referenceChat) {
+      console.warn(
+        `Reference chat with ID ${referenceChatId} not found for deleting older chats.`,
+      );
+      toast.error('Reference chat not found.');
+      return;
+    }
+
+    const refTimestamp = referenceChat.createdAt;
+    const chatsToKeep: ChatsRecord = {};
+    let activeChatDeleted = false;
+
+    for (const chatId in currentChats) {
+      const chat = currentChats[chatId];
+      // Keep if: Pinned OR Reference Chat OR Newer than or equal to reference
+      if (
+        chat.isPinned ||
+        chat.id === referenceChatId ||
+        chat.createdAt >= refTimestamp
+      ) {
+        chatsToKeep[chatId] = chat;
+      } else if (chatId === currentActiveId) {
+        // Mark if the active chat is among those to be deleted
+        activeChatDeleted = true;
+      }
+    }
+
+    // If the active chat was deleted and loading, cancel generation
+    if (activeChatDeleted && get(isAssistantLoadingAtom)) {
+      const abortInfo = get(abortControllerAtom);
+      if (abortInfo) {
+        abortInfo.controller.abort();
+        set(abortControllerAtom, null);
+        set(isAssistantLoadingAtom, false);
+      }
+    }
+
+    set(chatsAtom, chatsToKeep);
+
+    // If the active chat was deleted, select a new active chat
+    if (activeChatDeleted) {
+      // Try to select the reference chat first, then the newest remaining, then null
+      const remainingChats = Object.values(chatsToKeep).sort(
+        (a, b) => b.updatedAt - a.updatedAt,
+      );
+      const newActiveId = chatsToKeep[referenceChatId]
+        ? referenceChatId
+        : (remainingChats[0]?.id ?? null);
+      set(activeChatIdAtom, newActiveId);
+      set(editingMessageIdAtom, null); // Reset editing state
+    }
+
+    toast.success('Older conversations deleted.');
+  },
+);
+
+export const deleteChatsNewerThanAtom = atom(
+  null,
+  (get, set, referenceChatId: string) => {
+    const currentChats = get(chatsAtom);
+    const currentActiveId = get(activeChatIdAtom);
+    const referenceChat = currentChats[referenceChatId];
+
+    if (!referenceChat) {
+      console.warn(
+        `Reference chat with ID ${referenceChatId} not found for deleting newer chats.`,
+      );
+      toast.error('Reference chat not found.');
+      return;
+    }
+
+    const refTimestamp = referenceChat.createdAt;
+    const chatsToKeep: ChatsRecord = {};
+    let activeChatDeleted = false;
+
+    for (const chatId in currentChats) {
+      const chat = currentChats[chatId];
+      // Keep if: Pinned OR Reference Chat OR Older than or equal to reference
+      if (
+        chat.isPinned ||
+        chat.id === referenceChatId ||
+        chat.createdAt <= refTimestamp
+      ) {
+        chatsToKeep[chatId] = chat;
+      } else if (chatId === currentActiveId) {
+        // Mark if the active chat is among those to be deleted
+        activeChatDeleted = true;
+      }
+    }
+
+    // If the active chat was deleted and loading, cancel generation
+    if (activeChatDeleted && get(isAssistantLoadingAtom)) {
+      const abortInfo = get(abortControllerAtom);
+      if (abortInfo) {
+        abortInfo.controller.abort();
+        set(abortControllerAtom, null);
+        set(isAssistantLoadingAtom, false);
+      }
+    }
+
+    set(chatsAtom, chatsToKeep);
+
+    // If the active chat was deleted, select a new active chat
+    if (activeChatDeleted) {
+      // Try to select the reference chat first, then the newest remaining, then null
+      const remainingChats = Object.values(chatsToKeep).sort(
+        (a, b) => b.updatedAt - a.updatedAt,
+      );
+      const newActiveId = chatsToKeep[referenceChatId]
+        ? referenceChatId
+        : (remainingChats[0]?.id ?? null);
+      set(activeChatIdAtom, newActiveId);
+      set(editingMessageIdAtom, null); // Reset editing state
+    }
+
+    toast.success('Newer conversations deleted.');
+  },
+);
+
+// Basic Chat structure validation helper
+const isValidChat = (obj: any): obj is Chat => {
+  return (
+    typeof obj === 'object' &&
+    obj !== null &&
+    typeof obj.id === 'string' &&
+    typeof obj.name === 'string' &&
+    typeof obj.createdAt === 'number' &&
+    typeof obj.updatedAt === 'number' &&
+    typeof obj.model === 'string' &&
+    typeof obj.systemPrompt === 'string' &&
+    Array.isArray(obj.messages) &&
+    // Optionally add more checks for message structure, icon, pinned, maxHistory, input etc.
+    obj.messages.every(
+      (msg: any) =>
+        typeof msg.id === 'string' &&
+        typeof msg.role === 'string' &&
+        typeof msg.content === 'string' &&
+        typeof msg.timestamp === 'number',
+    )
+  );
+};
+
+const isValidCharacter = (obj: any): obj is CustomCharacter => {
+  return (
+    typeof obj === 'object' &&
+    obj !== null &&
+    typeof obj.id === 'string' &&
+    typeof obj.name === 'string' &&
+    typeof obj.icon === 'string' && // Added icon check
+    typeof obj.prompt === 'string' &&
+    typeof obj.model === 'string' &&
+    (typeof obj.maxHistory === 'number' || obj.maxHistory === null) &&
+    typeof obj.sort === 'number' && // Require sort
+    typeof obj.createdAt === 'number' &&
+    typeof obj.updatedAt === 'number' // Require updatedAt
+    // description is optional, no strict check needed unless required format
+  );
+};
+
+export const importChatsAtom = atom(
+  null,
+  (get, set, importedChats: unknown[]) => {
+    if (!Array.isArray(importedChats)) {
+      toast.error('Import failed: Invalid data format. Expected an array.');
+      return;
+    }
+
+    let importedCount = 0;
+    let skippedCount = 0;
+
+    set(chatsAtom, (prevChats) => {
+      const mergedChats = { ...prevChats }; // Start with existing chats
+
+      importedChats.forEach((importedObj: unknown, index) => {
+        // Validate the structure of the imported chat object
+        if (isValidChat(importedObj)) {
+          const importedChat = importedObj as Chat; // Type assertion after validation
+          // Overwrite existing chat if ID conflicts
+          if (mergedChats[importedChat.id]) {
+            console.warn(
+              `Overwriting existing chat with imported chat (ID: ${importedChat.id})`,
+            );
+          }
+          mergedChats[importedChat.id] = importedChat;
+          importedCount++;
+        } else {
+          console.warn(
+            `Skipping invalid chat object at index ${index}:`,
+            importedObj,
+          );
+          skippedCount++;
+        }
+      });
+      return mergedChats; // Return the merged result
+    });
+
+    if (importedCount > 0) {
+      toast.success(`${importedCount} conversation(s) imported successfully.`);
+      // Optional: Set the first *newly* imported chat as active if nothing was active before?
+      // const currentActiveId = get(activeChatIdAtom);
+      // if (!currentActiveId && importedCount > 0) {
+      //    const firstValidImported = importedChats.find(isValidChat);
+      //    if(firstValidImported) set(activeChatIdAtom, (firstValidImported as Chat).id);
+      // }
+    }
+    if (skippedCount > 0) {
+      toast.warning(
+        `${skippedCount} invalid conversation record(s) skipped during import.`,
+      );
+    }
+    if (importedCount === 0 && skippedCount === 0) {
+      toast.info('No conversations found in the imported file.');
+    }
+  },
+);
 
 // --- Message Specific Actions ---
 
@@ -534,7 +835,6 @@ export const cancelGenerationAtom = atom(null, (get, set) => {
   }
 });
 
-// (与原代码相同)
 export const setEditingMessageIdAtom = atom(
   null,
   (_get, set, messageId: string | null) => {
@@ -783,8 +1083,273 @@ export const resetStreamingStatesAtom = atom(null, (get, set) => {
   });
 });
 
-// --- Helper Functions (used by actions) ---
+export const addCharacterAtom = atom(null, (get, set): string => {
+  const currentCharacters = get(customCharactersAtom);
+  const now = Date.now();
+  const newId = uuidv4();
 
+  const newCharacter: CustomCharacter = {
+    id: newId,
+    name: 'New Character',
+    icon: '👤',
+    description: '',
+    prompt: get(defaultPromptAtom), // Use global default prompt
+    model: get(defaultModelAtom), // Use global default model
+    maxHistory: null, // Use global default maxHistory implicitly
+    sort: getNextCharacterSortValue(currentCharacters),
+    createdAt: now,
+    updatedAt: now,
+  };
+
+  set(customCharactersAtom, [...currentCharacters, newCharacter]);
+  toast.success(`Character "${newCharacter.name}" created.`);
+  return newId; // Return the ID of the newly created character
+});
+
+export const updateCharacterAtom = atom(
+  null,
+  (
+    get,
+    set,
+    updatedCharacterData: Partial<Omit<CustomCharacter, 'id' | 'createdAt'>> & {
+      id: string;
+    },
+  ) => {
+    const { id, ...updates } = updatedCharacterData;
+    let characterUpdated = false;
+
+    set(customCharactersAtom, (prevCharacters) =>
+      prevCharacters.map((char) => {
+        if (char.id === id) {
+          characterUpdated = true;
+          return {
+            ...char,
+            ...updates, // Apply updates
+            updatedAt: Date.now(), // Update timestamp
+          };
+        }
+        return char;
+      }),
+    );
+
+    if (characterUpdated) {
+      // Find the updated name for the toast message, default if somehow not found
+      const finalName =
+        get(customCharactersAtom).find((c) => c.id === id)?.name ?? 'Character';
+      toast.success(`Character "${finalName}" saved.`);
+    } else {
+      console.warn(`Character with ID ${id} not found for update.`);
+      toast.error('Failed to save: Character not found.');
+    }
+  },
+);
+
+export const deleteCharacterAtom = atom(
+  null,
+  (get, set, idToDelete: string): boolean => {
+    // Return true if deletion happened
+    const currentCharacters = get(customCharactersAtom);
+    const characterExists = currentCharacters.some((c) => c.id === idToDelete);
+
+    if (!characterExists) {
+      console.warn(`Character with ID ${idToDelete} not found for deletion.`);
+      return false;
+    }
+
+    const characterName =
+      currentCharacters.find((c) => c.id === idToDelete)?.name ?? 'Character';
+
+    set(customCharactersAtom, (prev) =>
+      prev.filter((char) => char.id !== idToDelete),
+    );
+
+    toast.success(`Character "${characterName}" deleted.`);
+    return true;
+  },
+);
+
+export const moveCharacterAtom = atom(
+  null,
+  (get, set, { id, direction }: { id: string; direction: 'up' | 'down' }) => {
+    const characters = get(customCharactersAtom);
+    // Create a sorted list based on current sort values to find indices correctly
+    const sorted = [...characters].sort(
+      (a, b) => (a.sort ?? 0) - (b.sort ?? 0),
+    );
+    const currentIndex = sorted.findIndex((c) => c.id === id);
+
+    if (currentIndex === -1) return; // Not found
+
+    const targetIndex =
+      direction === 'up' ? currentIndex - 1 : currentIndex + 1;
+
+    // Check boundaries
+    if (targetIndex < 0 || targetIndex >= sorted.length) return;
+
+    // Get the characters to swap from the *sorted* array
+    const charToMove = sorted[currentIndex];
+    const charToSwapWith = sorted[targetIndex];
+
+    // Get their original sort values
+    const sortToMove = charToMove.sort;
+    const sortToSwap = charToSwapWith.sort;
+
+    // Create the updated list by mapping the *original* unsorted list
+    const updatedCharacters = characters.map((char) => {
+      if (char.id === charToMove.id) {
+        return { ...char, sort: sortToSwap, updatedAt: Date.now() }; // Assign the other's sort value
+      }
+      if (char.id === charToSwapWith.id) {
+        return { ...char, sort: sortToMove, updatedAt: Date.now() }; // Assign the other's sort value
+      }
+      return char;
+    });
+
+    set(customCharactersAtom, updatedCharacters);
+  },
+);
+
+export const duplicateCharacterAtom = atom(
+  null,
+  (get, set, idToDuplicate: string): string | null => {
+    // Return new ID or null
+    const characters = get(customCharactersAtom);
+    const charToDuplicate = characters.find((c) => c.id === idToDuplicate);
+
+    if (!charToDuplicate) {
+      toast.error('Character to duplicate not found.');
+      return null;
+    }
+
+    try {
+      const duplicatedChar: CustomCharacter = JSON.parse(
+        JSON.stringify(charToDuplicate),
+      );
+      const newId = uuidv4();
+      const now = Date.now();
+
+      duplicatedChar.id = newId;
+      duplicatedChar.name = `${charToDuplicate.name} (copy)`;
+      // Place the duplicate right after the original by adjusting sort values
+      // Or simpler: just put at the end using getNextCharacterSortValue
+      duplicatedChar.sort = getNextCharacterSortValue(characters);
+      duplicatedChar.createdAt = now;
+      duplicatedChar.updatedAt = now;
+
+      set(customCharactersAtom, [...characters, duplicatedChar]);
+      toast.success(`Character "${duplicatedChar.name}" duplicated.`);
+      return newId;
+    } catch (error) {
+      console.error('Duplication failed:', error);
+      toast.error('Failed to duplicate character.');
+      return null;
+    }
+  },
+);
+
+// Helper to re-sort/normalize sort values after potential changes like import
+const normalizeCharacterSort = (
+  characters: CustomCharacter[],
+): CustomCharacter[] => {
+  // Sort by existing sort, then maybe name/id as tie-breaker
+  const sorted = [...characters].sort((a, b) => {
+    const sortDiff = (a.sort ?? 0) - (b.sort ?? 0);
+    if (sortDiff !== 0) return sortDiff;
+    return a.name.localeCompare(b.name); // Fallback sort
+  });
+  // Assign sequential sort values
+  return sorted.map((char, index) => ({ ...char, sort: index }));
+};
+
+export const importCharactersAtom = atom(
+  null,
+  (get, set, importedCharacters: unknown[]) => {
+    if (!Array.isArray(importedCharacters)) {
+      toast.error('Import failed: Invalid data format. Expected an array.');
+      return;
+    }
+
+    let importedCount = 0;
+    let skippedCount = 0;
+    const currentCharacters = get(customCharactersAtom);
+    const mergedCharsMap = new Map<string, CustomCharacter>(
+      currentCharacters.map((c) => [c.id, c]),
+    );
+
+    importedCharacters.forEach((importedObj: unknown, index) => {
+      // Basic validation first
+      if (typeof importedObj !== 'object' || importedObj === null) {
+        console.warn(`Skipping non-object at index ${index}:`, importedObj);
+        skippedCount++;
+        return;
+      }
+      // Add default sort if missing before full validation
+      if (
+        !('sort' in importedObj) ||
+        typeof (importedObj as any).sort !== 'number'
+      ) {
+        (importedObj as any).sort = Infinity; // Assign temporary high sort value
+      }
+      // Add default timestamps if missing
+      const now = Date.now();
+      if (
+        !('createdAt' in importedObj) ||
+        typeof (importedObj as any).createdAt !== 'number'
+      ) {
+        (importedObj as any).createdAt = now;
+      }
+      if (
+        !('updatedAt' in importedObj) ||
+        typeof (importedObj as any).updatedAt !== 'number'
+      ) {
+        (importedObj as any).updatedAt = now;
+      }
+
+      if (isValidCharacter(importedObj)) {
+        const importedChar = importedObj as CustomCharacter;
+        if (mergedCharsMap.has(importedChar.id)) {
+          console.warn(
+            `Overwriting existing character with imported ID: ${importedChar.id}`,
+          );
+        }
+        mergedCharsMap.set(importedChar.id, importedChar); // Add/overwrite
+        importedCount++;
+      } else {
+        console.warn(
+          `Skipping invalid character structure at index ${index}:`,
+          importedObj,
+        );
+        skippedCount++;
+      }
+    });
+
+    // Convert map back to array and normalize sort values
+    const finalCharacterList = normalizeCharacterSort(
+      Array.from(mergedCharsMap.values()),
+    );
+
+    set(customCharactersAtom, finalCharacterList);
+
+    // Feedback
+    if (importedCount > 0) {
+      toast.success(`${importedCount} character(s) imported successfully.`);
+    }
+    if (skippedCount > 0) {
+      toast.warning(`${skippedCount} invalid character record(s) skipped.`);
+    }
+    if (importedCount === 0 && skippedCount === 0) {
+      toast.info('No valid characters found in the imported file.');
+    }
+  },
+);
+// --- Helper Functions (used by actions) ---
+const getNextCharacterSortValue = (characters: CustomCharacter[]): number => {
+  if (characters.length === 0) {
+    return 0;
+  }
+  const maxSort = Math.max(...characters.map((c) => c.sort), -1);
+  return maxSort + 1;
+};
 async function callOpenAIStreamLogic(
   apiKey: string,
   apiBaseUrl: string | null,
@@ -800,6 +1365,7 @@ async function callOpenAIStreamLogic(
 ) {
   if (!apiKey) {
     alert('Please set your OpenAI API Key in the Global Settings.');
+    toast.error('APIKey not set. Open right sidebar and set it.');
     // No need to set loading false here, as it wasn't set true yet
     return;
   }
@@ -879,6 +1445,7 @@ async function callOpenAIStreamLogic(
         error.message.includes('signal'));
 
     console.error(`OpenAI API Error/Abort (${assistantMessageId}):`, error);
+    toast.error('Error: Failed to get response. Please try again later.');
 
     if (!isAbortError) {
       // Update the new placeholder message with an error state

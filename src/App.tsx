@@ -1,5 +1,7 @@
+import { CharacterEditor } from '@/components/CharacterEditor.tsx';
 import { ChatInterface } from '@/components/ChatInterface.tsx';
 import { ChatSettingsModal } from '@/components/ChatSettingsModal.tsx';
+import { ConversationSearchDialog } from '@/components/ConversationSearchDialog.tsx';
 import { LeftSidebar } from '@/components/LeftSidebar.tsx';
 import { RightSidebar } from '@/components/RightSidebar.tsx';
 import {
@@ -9,8 +11,6 @@ import {
   DrawerHeader,
   DrawerTitle,
 } from '@/components/ui/Drawer.tsx';
-// Import Shadcn Drawer
-
 import { useMediaQuery } from '@/hooks/use-media-query.ts';
 import { cn } from '@/lib/utils.ts';
 import {
@@ -23,6 +23,8 @@ import {
 import { useAtom, useAtomValue } from 'jotai';
 import { VisuallyHidden } from 'radix-ui';
 import { useEffect } from 'react';
+import FastImport from './components/FastImport.tsx';
+import { Toaster } from './components/ui/Toaster.tsx';
 
 const appName = import.meta.env.VITE_APP_NAME || 'Daan';
 const defaultTitle = `${appName}`;
@@ -65,6 +67,10 @@ function App() {
       )}
     >
       <ChatSettingsModal />
+      <ConversationSearchDialog />
+      <CharacterEditor />
+      <Toaster />
+      <FastImport />
 
       {/* Left Sidebar - Conditional rendering based on screen size */}
       {isDesktop ? (
@@ -73,7 +79,7 @@ function App() {
           className={cn(
             'h-full flex-shrink-0 transition-all duration-300 ease-in-out',
             // Use Tailwind prefix for default desktop state
-            isLeftOpen ? 'w-64' : 'w-0', // Toggle width based on state
+            isLeftOpen ? 'w-72' : 'w-0', // Toggle width based on state
           )}
         >
           {/* Render only when open to potentially save resources, or always render and use w-0/hidden */}
