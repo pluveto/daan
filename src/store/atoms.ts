@@ -1406,8 +1406,9 @@ export const autoFillCharacterAtom = atom(
       const prompt = `
 You are an assistant that helps create character profiles for a chatbot UI.
 Based on the partial information provided below, complete the character profile.
+Ensure name is consise (several words) and fits the character's persona.
 Ensure the 'description' is a concise summary (1-2 sentences) and the 'prompt' defines the character's persona and instructions for the chatbot.
-Use the provided values where available, otherwise generate suitable content. Choose an appropriate emoji for the 'icon' if not provided or if unsuitable.
+Use the provided values where available, otherwise generate suitable content. Choose the most appropriate emoji for the 'icon' if not provided or if unsuitable.
 Respond ONLY with a single, valid JSON object containing the following keys: "name", "icon", "description", "prompt", "model", "maxHistory".
 'maxHistory' should be a number or null.
 

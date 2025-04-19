@@ -237,6 +237,7 @@ export const CharacterEditor: React.FC = () => {
       // sort, createdAt, updatedAt are handled by the atom or not changed here
     });
     // No need to manually repopulate, updateCharacter atom changes characters, which triggers useEffect
+    toast.success('Character saved.');
   };
 
   // Filter custom models for the "Custom" group
@@ -303,6 +304,9 @@ export const CharacterEditor: React.FC = () => {
 
   // TODO: Implement autofill handler later
   const handleAutoFill = () => {
+    // Save first
+    handleSave();
+    // Then trigger autofill
     if (selectedCharacterId && apiKey) {
       triggerAutoFill(selectedCharacterId);
     } else if (!apiKey) {
