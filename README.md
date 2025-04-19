@@ -20,7 +20,7 @@ Daan (答案，"Answer" in Chinese) is a concise and lightweight LLM client desi
 - **Personalized Settings:** Customize system prompts, the number of historical messages, etc., to create your own AI assistant.
 - **Theme Switching:** Supports night mode to protect your eyes.
 - **Timestamp Display:** Convenient for tracking conversation history.
-- **Chat Summary (WIP):** (Work In Progress) Chat summary feature to help you quickly review conversation content.
+- **Chat Summary:** Chat summary feature to help you quickly review conversation content.
 
 ## Quick Start
 

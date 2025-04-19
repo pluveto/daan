@@ -8,10 +8,14 @@ import {
   callOpenAIStreamLogic,
   cancelGenerationAtom, // Import cancel action
   defaultMaxHistoryAtom,
+  defaultSummaryModelAtom,
   finalizeStreamingMessageAtom,
+  generateChatTitle,
+  generateSummaryAtom,
   getHistoryForApi,
   isAssistantLoadingAtom,
   regenerateLastResponseAtom,
+  updateChatAtom,
   upsertMessageInActiveChatAtom,
 } from '@/store/atoms.ts';
 import type { Message } from '@/types.ts';
@@ -28,8 +32,11 @@ export const MessageInput: React.FC = () => {
   const upsertMessage = useSetAtom(upsertMessageInActiveChatAtom);
   const [isLoading, setIsLoading] = useAtom(isAssistantLoadingAtom); // Global loading state
   const activeChat = useAtomValue(activeChatAtom);
+  const generateSummary = useAtomValue(generateSummaryAtom);
+
   const apiKey = useAtomValue(apiKeyAtom);
   const apiBaseUrl = useAtomValue(apiBaseUrlAtom);
+  const summaryModel = useAtomValue(defaultSummaryModelAtom);
   const globalDefaultMaxHistory = useAtomValue(defaultMaxHistoryAtom);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -39,6 +46,7 @@ export const MessageInput: React.FC = () => {
   const setAbortController = useSetAtom(abortControllerAtom);
   const cancelGeneration = useSetAtom(cancelGenerationAtom);
   const regenerateAction = useSetAtom(regenerateLastResponseAtom);
+  const updateChat = useSetAtom(updateChatAtom);
 
   // Get abort controller state to manage button state correctly
   const abortInfo = useAtomValue(abortControllerAtom);
@@ -80,8 +88,27 @@ export const MessageInput: React.FC = () => {
     const messagesToSend = getHistoryForApi(
       [...activeChat.messages, userMessage],
       maxHistory,
-      activeChat.systemPrompt,
+      activeChat.systemPrompt.trim(),
     );
+
+    if (
+      generateSummary &&
+      messagesToSend.filter((msg) => msg.role != 'system').length === 1
+    ) {
+      let lastMessageToSend = messagesToSend.at(-1);
+      if (lastMessageToSend && lastMessageToSend.content) {
+        generateChatTitle(
+          apiKey,
+          apiBaseUrl,
+          summaryModel,
+          lastMessageToSend.content.toString(),
+          activeChat.id,
+          updateChat,
+        ).then(() => {
+          console.log('Generated chat title:', activeChat.name);
+        });
+      }
+    }
 
     // Call API logic, passing all required setters/functions
     callOpenAIStreamLogic(

@@ -260,13 +260,12 @@ export const RightSidebar: React.FC = () => {
             />
           </div>
 
-          <div className="flex items-center justify-between opacity-50">
+          <div className="flex items-center justify-between">
             <Label className="cursor-not-allowed" htmlFor="generateSummary">
-              Generate Chat Summary (WIP)
+              Summary Chat Title
             </Label>
             <Switch
               checked={generateSummary}
-              disabled // Feature not fully implemented yet
               id="generateSummary"
               onCheckedChange={setGenerateSummary}
               title="Summary generation not implemented"

@@ -54,7 +54,7 @@ export const nightModeAtom = atomWithSafeStorage<boolean>(
 );
 export const generateSummaryAtom = atomWithSafeStorage<boolean>(
   'globalSettings_generateSummary',
-  false,
+  true,
 );
 export const showTimestampsAtom = atomWithSafeStorage<boolean>(
   'globalSettings_showTimestamps',
@@ -816,5 +816,67 @@ function getHistoryForApi(
   return messagesToSend;
 }
 
+async function generateChatTitle(
+  apiKey: string,
+  apiBaseUrl: string | null,
+  summaryModel: SupportedModels,
+  userMessageContent: string,
+  chatId: string,
+  updateChat: (update: Partial<Chat> & { id: string }) => void, // Pass the update function
+): Promise<void> {
+  if (!apiKey) {
+    console.warn('Cannot generate title: API Key not set.');
+    return;
+  }
+  if (!userMessageContent?.trim()) {
+    console.warn('Cannot generate title: User message is empty.');
+    return;
+  }
+
+  if (userMessageContent.length > 1000) {
+    userMessageContent =
+      userMessageContent.slice(0, 500) +
+      '...(truncated due to large length)...' +
+      userMessageContent.slice(-500);
+  }
+
+  const prompt = `Based *only* on the following user message, generate a concise, one-line chat title (no quotes, code blocks, only return plain text title like "Automatic Chat Title Generation"):\n\nUser Message: "${userMessageContent}"`;
+
+  try {
+    const openai = new OpenAI({
+      apiKey,
+      baseURL: apiBaseUrl || undefined,
+      dangerouslyAllowBrowser: true,
+    });
+
+    console.log('Generating chat title with model:', summaryModel);
+    const response = await openai.chat.completions.create({
+      model: summaryModel,
+      messages: [{ role: 'user', content: prompt }],
+      max_tokens: 20, // Limit tokens for a short title
+      temperature: 0.5, // Lower temperature for more predictable titles
+      stream: false, // We want a single response, not streaming
+    });
+
+    const generatedTitle = response.choices[0]?.message?.content
+      ?.trim()
+      .replace(/(\r\n|\n|\r)/gm, '') // Remove line breaks
+      .replace(/["']/g, '')
+      .replace(/```/g, '')
+      .replace(/`/g, ''); // Remove quotes and code blocks
+
+    if (generatedTitle) {
+      console.log(`Generated title for chat ${chatId}: "${generatedTitle}"`);
+      // Update the chat name using the passed function
+      updateChat({ id: chatId, name: generatedTitle });
+    } else {
+      console.warn('Title generation resulted in empty content.');
+    }
+  } catch (error) {
+    console.error('Error generating chat title:', error);
+    // Don't update the title on error, keep the default
+  }
+}
+
 // Export helpers needed by components
-export { callOpenAIStreamLogic, getHistoryForApi };
+export { callOpenAIStreamLogic, getHistoryForApi, generateChatTitle };

@@ -48,12 +48,14 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({ chat }) => {
             <span className="flex-shrink-0 text-xl">
               {chat.icon || <LuMessageSquare className="text-neutral-500" />}
             </span>
-            <h1 className="truncate text-base font-semibold text-neutral-950 sm:text-lg dark:text-neutral-100">
-              {chat.name}
-            </h1>
-            <small className="text-neutral-500 dark:text-neutral-400">
-              {chat.model}
-            </small>
+            <div className="flex flex-col">
+              <h1 className="truncate font-semibold text-neutral-950 sm:text-lg dark:text-neutral-100">
+                {chat.name}
+              </h1>
+              <small className="truncate text-xs text-neutral-500 dark:text-neutral-400">
+                {chat.model}
+              </small>
+            </div>
           </>
         ) : (
           <div className="flex h-full flex-1 items-center justify-center">

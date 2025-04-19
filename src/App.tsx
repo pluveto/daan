@@ -23,7 +23,7 @@ function App() {
   const [isLeftOpen] = useAtom(isLeftSidebarOpenAtom);
   const [isRightOpen] = useAtom(isRightSidebarOpenAtom);
   const [isNightMode] = useAtom(nightModeAtom);
-  const activeChat = useAtomValue(activeChatAtom); // Get active chat
+  const activeChat = useAtomValue(activeChatAtom);
   const [, resetStreamingStates] = useAtom(resetStreamingStatesAtom);
 
   useEffect(() => {
