@@ -9,6 +9,7 @@ import {
   cancelGenerationAtom, // Import cancel action
   defaultMaxHistoryAtom,
   defaultSummaryModelAtom,
+  deleteMessageFromActiveChatAtom,
   finalizeStreamingMessageAtom,
   generateChatTitle,
   generateSummaryAtom,
@@ -28,10 +29,12 @@ import { Button } from './ui/Button.tsx';
 import { Textarea } from './ui/Textarea.tsx';
 
 export const MessageInput: React.FC = () => {
-  const [input, setInput] = useState('');
   const upsertMessage = useSetAtom(upsertMessageInActiveChatAtom);
+  const deleteMessage = useSetAtom(deleteMessageFromActiveChatAtom);
   const [isLoading, setIsLoading] = useAtom(isAssistantLoadingAtom); // Global loading state
   const activeChat = useAtomValue(activeChatAtom);
+  const [input, setInputRaw] = useState(activeChat?.input);
+
   const generateSummary = useAtomValue(generateSummaryAtom);
 
   const apiKey = useAtomValue(apiKeyAtom);
@@ -48,6 +51,17 @@ export const MessageInput: React.FC = () => {
   const regenerateAction = useSetAtom(regenerateLastResponseAtom);
   const updateChat = useSetAtom(updateChatAtom);
 
+  const setInput = useCallback(
+    (value: string) => {
+      if (!activeChat) {
+        return;
+      }
+      setInputRaw(value);
+      updateChat({ id: activeChat.id, input: value });
+    },
+    [activeChat],
+  );
+
   // Get abort controller state to manage button state correctly
   const abortInfo = useAtomValue(abortControllerAtom);
 
@@ -62,13 +76,20 @@ export const MessageInput: React.FC = () => {
 
     // Context Clearing
     if (trimmedInput === '---') {
-      const dividerMessage: Message = {
-        content: '---',
-        id: uuidv4(),
-        role: 'divider',
-        timestamp: Date.now(),
-      };
-      upsertMessage(dividerMessage);
+      const lastMessage = activeChat.messages.at(-1);
+      if (lastMessage?.content === '---') {
+        // revoke last message if it's a divider
+        deleteMessage(lastMessage.id);
+      } else {
+        // add new divider message if there's no divider yet
+        const dividerMessage: Message = {
+          content: '---',
+          id: uuidv4(),
+          role: 'divider',
+          timestamp: Date.now(),
+        };
+        upsertMessage(dividerMessage);
+      }
       setInput('');
       textareaRef.current?.focus();
       if (textareaRef.current) {

@@ -112,6 +112,7 @@ export const createNewChatAtom = atom(null, (get, set) => {
     icon: '💬',
     id: newId,
     isPinned: false,
+    input: '',
     maxHistory: null,
     messages: [],
     model: get(defaultModelAtom),

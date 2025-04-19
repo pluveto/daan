@@ -24,6 +24,7 @@ export interface Chat {
   model: string;
   name: string;
   systemPrompt: string;
+  input: string; // active input message
   updatedAt: number; // Added for per-chat history limit (null = use global)
   // Optional: Add summary later if needed
   // summary?: string;
