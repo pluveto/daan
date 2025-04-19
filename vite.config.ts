@@ -21,6 +21,7 @@ function getGitTag() {
 }
 
 export default defineConfig({
+  base: process.env.WEBSITE_URL || '/',
   define: {
     'import.meta.env.VITE_APP_COMMIT_HASH': JSON.stringify(getGitCommitHash()),
     'import.meta.env.VITE_APP_TAG': JSON.stringify(getGitTag()),
