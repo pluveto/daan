@@ -325,7 +325,7 @@ export const CharacterEditor: React.FC = () => {
         style={{ display: 'none' }}
         onChange={handleFileImport}
       />
-      <DialogContent className="data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 flex h-[80vh] flex-col p-0 sm:max-w-4xl">
+      <DialogContent className="data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 flex h-[80vh] flex-col gap-0 p-0 sm:max-w-4xl">
         <DialogHeader className="flex-shrink-0 border-b p-4 pb-4">
           {' '}
           {/* Reduced padding */}
