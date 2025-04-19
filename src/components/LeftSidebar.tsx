@@ -220,17 +220,6 @@ export const LeftSidebar: React.FC = () => {
           <LuEllipsis className="h-4 w-4" />
         </Button>
       </div>
-      {/* Search Trigger Button */}
-      <div className="px-2 py-1">
-        <Button
-          variant="outline"
-          className="text-muted-foreground hover:text-foreground h-8 w-full cursor-pointer justify-start px-3 text-sm font-normal"
-          onClick={() => setConversationSearchOpen(true)}
-        >
-          <LuSearch className="mr-2 h-4 w-4 flex-shrink-0" />
-          Search in conversations...
-        </Button>
-      </div>
       {/* Character List */}
       <div className="mb-2 flex max-h-24 flex-wrap gap-1 overflow-y-auto rounded border-b p-2 dark:border-neutral-700">
         {' '}
@@ -271,7 +260,18 @@ export const LeftSidebar: React.FC = () => {
         </div>
       </div>
 
-      {/* Chat List */}
+      {/* Search Trigger Button */}
+      <div className="px-2 py-1">
+        <Button
+          variant="outline"
+          className="text-muted-foreground hover:text-foreground h-8 w-full cursor-pointer justify-start px-3 text-sm font-normal"
+          onClick={() => setConversationSearchOpen(true)}
+        >
+          <LuSearch className="mr-2 h-4 w-4 flex-shrink-0" />
+          Search in conversations...
+        </Button>
+      </div>
+      {/* Conversations List */}
       <div className="flex-1 overflow-y-auto p-2">
         {groupedChats.length === 0 && (
           <p className="px-4 py-6 text-center text-sm text-neutral-500 dark:text-neutral-400">
