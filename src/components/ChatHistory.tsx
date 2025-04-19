@@ -226,6 +226,7 @@ export const ChatHistory: React.FC<ChatHistoryProps> = ({ className }) => {
         }
 
         const isEditing = message.id === editingId;
+        const numTokens = approximateTokenSize(message.content);
 
         return (
           <div
@@ -252,7 +253,7 @@ export const ChatHistory: React.FC<ChatHistoryProps> = ({ className }) => {
               {showEstimatedTokens && message.content && (
                 <span className="flex items-center gap-1 text-xs text-neutral-500 dark:text-neutral-400">
                   <LucideBarChart className="h-3 w-3" />
-                  {approximateTokenSize(message.content)} token(s)
+                  {numTokens} token{numTokens === 1 ? '' : 's'}
                 </span>
               )}
             </div>
