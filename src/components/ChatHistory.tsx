@@ -226,7 +226,11 @@ export const ChatHistory: React.FC<ChatHistoryProps> = ({ className }) => {
         }
 
         const isEditing = message.id === editingId;
-        const numTokens = approximateTokenSize(message.content);
+        const numTokens = React.useMemo(
+          () =>
+            showEstimatedTokens ? approximateTokenSize(message.content) : 0,
+          [showEstimatedTokens, message.content],
+        );
 
         return (
           <div

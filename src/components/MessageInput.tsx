@@ -16,14 +16,17 @@ import {
   getHistoryForApi,
   isAssistantLoadingAtom,
   regenerateLastResponseAtom,
+  showEstimatedTokensAtom,
   updateChatAtom,
   upsertMessageInActiveChatAtom,
 } from '@/store/atoms.ts';
 import type { Message } from '@/types.ts';
 import { useAtom, useAtomValue, useSetAtom } from 'jotai';
+import { LucideBarChart, LucideChartBar } from 'lucide-react';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 // Use a different icon for Stop, e.g., LuSquare or LuX
 import { LuRefreshCw, LuSend, LuSquare } from 'react-icons/lu';
+import { approximateTokenSize } from 'tokenx';
 import { v4 as uuidv4 } from 'uuid';
 import { Button } from './ui/Button.tsx';
 import { Textarea } from './ui/Textarea.tsx';
@@ -36,6 +39,7 @@ export const MessageInput: React.FC = () => {
   const [input, setInputRaw] = useState(activeChat?.input ?? '');
 
   const generateSummary = useAtomValue(generateSummaryAtom);
+  const showEstimatedTokens = useAtomValue(showEstimatedTokensAtom);
 
   const apiKey = useAtomValue(apiKeyAtom);
   const apiBaseUrl = useAtomValue(apiBaseUrlAtom);
@@ -190,6 +194,11 @@ export const MessageInput: React.FC = () => {
     activeChat.messages.at(-1)?.role === 'assistant' &&
     !activeChat.messages.at(-1)?.isStreaming; // Don't allow regenerate if last message is still streaming
 
+  const numTokens = React.useMemo(
+    () => (showEstimatedTokens ? approximateTokenSize(input) : 0),
+    [showEstimatedTokens, input],
+  );
+
   return (
     <div
       className={cn(
@@ -221,6 +230,14 @@ export const MessageInput: React.FC = () => {
         {/* Add other toolbar buttons here later, e.g.: */}
         {/* <Button size="icon" variant="ghost"><LuPaperclip className="h-4 w-4" /></Button> */}
         {/* <Button size="icon" variant="ghost"><LuMic className="h-4 w-4" /></Button> */}
+        {/* Spacer */}
+        <div className="flex-1" />
+        {showEstimatedTokens && (
+          <span className="flex items-center gap-1 text-xs text-neutral-500 dark:text-neutral-400">
+            <LucideBarChart className="h-3 w-3" />
+            {numTokens} token{numTokens === 1 ? '' : 's'}
+          </span>
+        )}
       </div>
 
       {/* Bottom Section: Input Area + Send Button */}
