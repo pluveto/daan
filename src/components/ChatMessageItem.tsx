@@ -181,8 +181,8 @@ const _ChatMessageItem: React.FC<ChatMessageItemProps> = ({
       )}
     >
       {/* Sender Info and Timestamp (Common for both views) */}
-      <div className="mb-1.5 flex items-center space-x-2 text-sm font-medium text-neutral-900 dark:text-neutral-200">
-        <span className="flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full">
+      <div className="mb-1.5 flex items-end space-x-2 text-sm font-medium text-neutral-900 dark:text-neutral-200">
+        <span className="flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-full">
           {getSenderIcon(message.role)}
         </span>
         <span className="font-semibold">{getSenderName(message.role)}</span>

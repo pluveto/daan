@@ -73,7 +73,7 @@ function App() {
           className={cn(
             'h-full flex-shrink-0 transition-all duration-300 ease-in-out',
             // Use Tailwind prefix for default desktop state
-            isLeftOpen ? 'w-64' : 'w-0', // Toggle width based on state
+            isLeftOpen ? 'w-72' : 'w-0', // Toggle width based on state
           )}
         >
           {/* Render only when open to potentially save resources, or always render and use w-0/hidden */}
