@@ -79,8 +79,9 @@ const formatDateLabel = (timestamp: number): string => {
 };
 
 interface GroupedChats {
-  dateLabel: string;
+  label: string;
   chats: Chat[];
+  isPinnedGroup: boolean;
 }
 
 export const LeftSidebar: React.FC = () => {
@@ -150,20 +151,47 @@ export const LeftSidebar: React.FC = () => {
       return groups;
     }
 
+    const pinnedChats: Chat[] = [];
+    const unpinnedChats: Chat[] = [];
+
+    // Separate pinned and unpinned chats
+    for (const chat of sortedChats) {
+      if (chat.isPinned) {
+        pinnedChats.push(chat);
+      } else {
+        unpinnedChats.push(chat);
+      }
+    }
+
+    // Add pinned chats group first if any exist
+    if (pinnedChats.length > 0) {
+      groups.push({ label: 'Pinned', chats: pinnedChats, isPinnedGroup: true });
+    }
+
+    // Group unpinned chats by date
     let currentGroup: GroupedChats | null = null;
 
-    for (const chat of sortedChats) {
+    for (const chat of unpinnedChats) {
       const dateLabel = formatDateLabel(chat.updatedAt); // Group by update time for recency
 
-      if (!currentGroup || currentGroup.dateLabel !== dateLabel) {
-        // Start a new group
-        currentGroup = { dateLabel, chats: [chat] };
+      if (
+        !currentGroup ||
+        currentGroup.label !== dateLabel ||
+        currentGroup.isPinnedGroup
+      ) {
+        // Start a new group for date grouping
+        currentGroup = {
+          label: dateLabel,
+          chats: [chat],
+          isPinnedGroup: false,
+        };
         groups.push(currentGroup);
       } else {
-        // Add to the current group
+        // Add to the current date group
         currentGroup.chats.push(chat);
       }
     }
+
     return groups;
   }, [sortedChats]);
 
@@ -278,13 +306,13 @@ export const LeftSidebar: React.FC = () => {
           </p>
         )}
         {groupedChats.map((group, groupIndex) => (
-          <div key={group.dateLabel} className={groupIndex > 0 ? 'mt-3' : ''}>
+          <div key={group.label} className={groupIndex > 0 ? 'mt-3' : ''}>
             {' '}
             {/* Add margin between groups */}
             <div className="sticky top-0 z-10 bg-neutral-100/90 px-3 py-1 text-xs font-semibold text-neutral-600 backdrop-blur-sm dark:bg-neutral-900/90 dark:text-neutral-400">
               {' '}
               {/* Sticky Header */}
-              {group.dateLabel}
+              {group.label}
             </div>
             <div className="mt-1 space-y-1">
               {' '}
