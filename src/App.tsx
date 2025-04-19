@@ -23,6 +23,7 @@ import {
 import { useAtom, useAtomValue } from 'jotai';
 import { VisuallyHidden } from 'radix-ui';
 import { useEffect } from 'react';
+import FastImport from './components/FastImport.tsx';
 import { Toaster } from './components/ui/Toaster.tsx';
 
 const appName = import.meta.env.VITE_APP_NAME || 'Daan';
@@ -67,6 +68,7 @@ function App() {
     >
       <ChatSettingsModal />
       <Toaster />
+      <FastImport />
 
       {/* Left Sidebar - Conditional rendering based on screen size */}
       {isDesktop ? (
