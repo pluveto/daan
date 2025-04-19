@@ -8,7 +8,8 @@ import {
   Loader,
   BarChart as LucideBarChart,
   User,
-} from 'lucide-react'; // Use specific icons from lucide-react directly
+} from 'lucide-react';
+// Use specific icons from lucide-react directly
 import React, {
   useCallback,
   useEffect,
@@ -174,7 +175,7 @@ const _ChatMessageItem: React.FC<ChatMessageItemProps> = ({
         'group message-item relative flex flex-col',
         // Add specific styling for editing mode if needed
         {
-          'message-editing -m-2 rounded-md bg-blue-50 p-2 dark:bg-blue-900/20':
+          'message-editing -m-2 rounded-md bg-blue-50 p-2 dark:bg-slate-700/20':
             isEditing,
         },
       )}
@@ -204,7 +205,7 @@ const _ChatMessageItem: React.FC<ChatMessageItemProps> = ({
       </div>
 
       {/* Message Content / Editor */}
-      <div className={cn('flex-1', !isEditing && 'ml-8')}>
+      <div className={cn('mx-4 mb-2 flex-1', !isEditing && 'ml-8')}>
         {' '}
         {/* Indent only if not editing */}
         {!isEditing ? (
@@ -243,7 +244,7 @@ const _ChatMessageItem: React.FC<ChatMessageItemProps> = ({
               // Consider adding rows prop or using react-textarea-autosize
               rows={3} // Start with a reasonable number of rows
             />
-            <div className="flex justify-end space-x-2">
+            <div className="mt-4 flex justify-end space-x-2">
               <Button onClick={onCancelEdit} size="sm" variant="ghost">
                 {' '}
                 {/* Use prop */}
