@@ -26,7 +26,8 @@ export const isRightSidebarOpenAtom = atomWithSafeStorage(
 export const isChatSettingsModalOpenAtom = atom(false);
 export const isAssistantLoadingAtom = atom(false);
 export const editingMessageIdAtom = atom<string | null>(null);
-
+export const isConversationSearchOpenAtom = atom(false);
+export const focusInputAtom = atom(0);
 // --- Request State Atom ---
 
 export const abortControllerAtom = atom<{
@@ -150,6 +151,7 @@ export const createNewChatAtom = atom(null, (get, set) => {
 
   // 设置新创建的聊天为活动聊天
   set(activeChatIdAtom, newId);
+  set(focusInputAtom, (c) => c + 1);
   // 重置编辑状态和加载状态
   set(editingMessageIdAtom, null);
   set(isAssistantLoadingAtom, false);
@@ -301,6 +303,259 @@ export const clearUnpinnedChatsAtom = atom(null, (get, set) => {
     set(editingMessageIdAtom, null); // 重置编辑状态
   }
 });
+
+export const forkChatAtom = atom(null, (get, set, chatId: string) => {
+  const chats = get(chatsAtom);
+  const chatToFork = chats[chatId];
+
+  if (!chatToFork) {
+    console.warn(`Chat with ID ${chatId} not found for forking.`);
+    toast.error('Could not find the chat to fork.');
+    return;
+  }
+
+  try {
+    // Simple deep clone using JSON methods (sufficient for Chat structure)
+    // Alternatively use _.cloneDeep(chatToFork) if lodash is preferred
+    const forkedChat: Chat = JSON.parse(JSON.stringify(chatToFork));
+    const newId = uuidv4();
+    const now = Date.now();
+
+    // Update properties for the new forked chat
+    forkedChat.id = newId;
+    forkedChat.name = `${chatToFork.name} (forked)`;
+    forkedChat.isPinned = false; // Forks are not pinned by default
+    forkedChat.createdAt = now;
+    forkedChat.updatedAt = now;
+    // Reset input draft if desired
+    // forkedChat.input = '';
+
+    set(chatsAtom, (prevChats) => ({
+      ...prevChats,
+      [newId]: forkedChat,
+    }));
+
+    set(activeChatIdAtom, newId); // Make the forked chat active
+
+    // Reset potentially interfering states
+    set(editingMessageIdAtom, null);
+    set(isAssistantLoadingAtom, false);
+    set(abortControllerAtom, null);
+
+    toast.success('Conversation forked successfully.');
+  } catch (error) {
+    console.error('Forking failed:', error);
+    toast.error(
+      `Forking failed: ${error instanceof Error ? error.message : 'Unknown error'}`,
+    );
+  }
+});
+
+export const deleteChatsOlderThanAtom = atom(
+  null,
+  (get, set, referenceChatId: string) => {
+    const currentChats = get(chatsAtom);
+    const currentActiveId = get(activeChatIdAtom);
+    const referenceChat = currentChats[referenceChatId];
+
+    if (!referenceChat) {
+      console.warn(
+        `Reference chat with ID ${referenceChatId} not found for deleting older chats.`,
+      );
+      toast.error('Reference chat not found.');
+      return;
+    }
+
+    const refTimestamp = referenceChat.createdAt;
+    const chatsToKeep: ChatsRecord = {};
+    let activeChatDeleted = false;
+
+    for (const chatId in currentChats) {
+      const chat = currentChats[chatId];
+      // Keep if: Pinned OR Reference Chat OR Newer than or equal to reference
+      if (
+        chat.isPinned ||
+        chat.id === referenceChatId ||
+        chat.createdAt >= refTimestamp
+      ) {
+        chatsToKeep[chatId] = chat;
+      } else if (chatId === currentActiveId) {
+        // Mark if the active chat is among those to be deleted
+        activeChatDeleted = true;
+      }
+    }
+
+    // If the active chat was deleted and loading, cancel generation
+    if (activeChatDeleted && get(isAssistantLoadingAtom)) {
+      const abortInfo = get(abortControllerAtom);
+      if (abortInfo) {
+        abortInfo.controller.abort();
+        set(abortControllerAtom, null);
+        set(isAssistantLoadingAtom, false);
+      }
+    }
+
+    set(chatsAtom, chatsToKeep);
+
+    // If the active chat was deleted, select a new active chat
+    if (activeChatDeleted) {
+      // Try to select the reference chat first, then the newest remaining, then null
+      const remainingChats = Object.values(chatsToKeep).sort(
+        (a, b) => b.updatedAt - a.updatedAt,
+      );
+      const newActiveId = chatsToKeep[referenceChatId]
+        ? referenceChatId
+        : (remainingChats[0]?.id ?? null);
+      set(activeChatIdAtom, newActiveId);
+      set(editingMessageIdAtom, null); // Reset editing state
+    }
+
+    toast.success('Older conversations deleted.');
+  },
+);
+
+export const deleteChatsNewerThanAtom = atom(
+  null,
+  (get, set, referenceChatId: string) => {
+    const currentChats = get(chatsAtom);
+    const currentActiveId = get(activeChatIdAtom);
+    const referenceChat = currentChats[referenceChatId];
+
+    if (!referenceChat) {
+      console.warn(
+        `Reference chat with ID ${referenceChatId} not found for deleting newer chats.`,
+      );
+      toast.error('Reference chat not found.');
+      return;
+    }
+
+    const refTimestamp = referenceChat.createdAt;
+    const chatsToKeep: ChatsRecord = {};
+    let activeChatDeleted = false;
+
+    for (const chatId in currentChats) {
+      const chat = currentChats[chatId];
+      // Keep if: Pinned OR Reference Chat OR Older than or equal to reference
+      if (
+        chat.isPinned ||
+        chat.id === referenceChatId ||
+        chat.createdAt <= refTimestamp
+      ) {
+        chatsToKeep[chatId] = chat;
+      } else if (chatId === currentActiveId) {
+        // Mark if the active chat is among those to be deleted
+        activeChatDeleted = true;
+      }
+    }
+
+    // If the active chat was deleted and loading, cancel generation
+    if (activeChatDeleted && get(isAssistantLoadingAtom)) {
+      const abortInfo = get(abortControllerAtom);
+      if (abortInfo) {
+        abortInfo.controller.abort();
+        set(abortControllerAtom, null);
+        set(isAssistantLoadingAtom, false);
+      }
+    }
+
+    set(chatsAtom, chatsToKeep);
+
+    // If the active chat was deleted, select a new active chat
+    if (activeChatDeleted) {
+      // Try to select the reference chat first, then the newest remaining, then null
+      const remainingChats = Object.values(chatsToKeep).sort(
+        (a, b) => b.updatedAt - a.updatedAt,
+      );
+      const newActiveId = chatsToKeep[referenceChatId]
+        ? referenceChatId
+        : (remainingChats[0]?.id ?? null);
+      set(activeChatIdAtom, newActiveId);
+      set(editingMessageIdAtom, null); // Reset editing state
+    }
+
+    toast.success('Newer conversations deleted.');
+  },
+);
+
+// Basic Chat structure validation helper
+const isValidChat = (obj: any): obj is Chat => {
+  return (
+    typeof obj === 'object' &&
+    obj !== null &&
+    typeof obj.id === 'string' &&
+    typeof obj.name === 'string' &&
+    typeof obj.createdAt === 'number' &&
+    typeof obj.updatedAt === 'number' &&
+    typeof obj.model === 'string' &&
+    typeof obj.systemPrompt === 'string' &&
+    Array.isArray(obj.messages) &&
+    // Optionally add more checks for message structure, icon, pinned, maxHistory, input etc.
+    obj.messages.every(
+      (msg: any) =>
+        typeof msg.id === 'string' &&
+        typeof msg.role === 'string' &&
+        typeof msg.content === 'string' &&
+        typeof msg.timestamp === 'number',
+    )
+  );
+};
+
+export const importChatsAtom = atom(
+  null,
+  (get, set, importedChats: unknown[]) => {
+    if (!Array.isArray(importedChats)) {
+      toast.error('Import failed: Invalid data format. Expected an array.');
+      return;
+    }
+
+    let importedCount = 0;
+    let skippedCount = 0;
+
+    set(chatsAtom, (prevChats) => {
+      const mergedChats = { ...prevChats }; // Start with existing chats
+
+      importedChats.forEach((importedObj: unknown, index) => {
+        // Validate the structure of the imported chat object
+        if (isValidChat(importedObj)) {
+          const importedChat = importedObj as Chat; // Type assertion after validation
+          // Overwrite existing chat if ID conflicts
+          if (mergedChats[importedChat.id]) {
+            console.warn(
+              `Overwriting existing chat with imported chat (ID: ${importedChat.id})`,
+            );
+          }
+          mergedChats[importedChat.id] = importedChat;
+          importedCount++;
+        } else {
+          console.warn(
+            `Skipping invalid chat object at index ${index}:`,
+            importedObj,
+          );
+          skippedCount++;
+        }
+      });
+      return mergedChats; // Return the merged result
+    });
+
+    if (importedCount > 0) {
+      toast.success(`${importedCount} conversation(s) imported successfully.`);
+      // Optional: Set the first *newly* imported chat as active if nothing was active before?
+      // const currentActiveId = get(activeChatIdAtom);
+      // if (!currentActiveId && importedCount > 0) {
+      //    const firstValidImported = importedChats.find(isValidChat);
+      //    if(firstValidImported) set(activeChatIdAtom, (firstValidImported as Chat).id);
+      // }
+    }
+    if (skippedCount > 0) {
+      toast.warning(
+        `${skippedCount} invalid conversation record(s) skipped during import.`,
+      );
+    }
+    if (importedCount === 0 && skippedCount === 0) {
+      toast.info('No conversations found in the imported file.');
+    }
+  },
+);
 
 // --- Message Specific Actions ---
 

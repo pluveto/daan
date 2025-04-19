@@ -20,6 +20,7 @@ import {
   LuPlus,
   LuTrash2,
 } from 'react-icons/lu';
+import { ConversationActionsMenu } from './ConversationActionsMenu.tsx'; // Import the new component
 // Added Pin icons
 import { Button } from './ui/Button.tsx';
 
@@ -115,9 +116,7 @@ export const LeftSidebar: React.FC = () => {
       <div className="flex items-center px-3 pt-2 pb-1 text-xs font-medium tracking-wider text-neutral-500 uppercase dark:text-neutral-400">
         <div className="flex-1">Characters</div>
         <div>
-          <Button variant="ghost" size="xs">
-            <LuEllipsis className="h-4 w-4" />
-          </Button>
+          <ConversationActionsMenu />
         </div>
       </div>
 
