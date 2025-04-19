@@ -1,12 +1,12 @@
 import { cn } from '@/lib/utils.ts';
 import {
-  abortControllerAtom, // Import abort controller state
+  abortControllerAtom,
   activeChatAtom,
   apiBaseUrlAtom,
   apiKeyAtom,
-  appendContentToMessageAtom, // Import setters used by callOpenAIStreamLogic
+  appendContentToMessageAtom,
   callOpenAIStreamLogic,
-  cancelGenerationAtom, // Import cancel action
+  cancelGenerationAtom,
   defaultMaxHistoryAtom,
   defaultSummaryModelAtom,
   deleteMessageFromActiveChatAtom,
@@ -22,70 +22,114 @@ import {
 } from '@/store/atoms.ts';
 import type { Message } from '@/types.ts';
 import { useAtom, useAtomValue, useSetAtom } from 'jotai';
-import { LucideBarChart, LucideChartBar } from 'lucide-react';
-import React, { useCallback, useEffect, useRef, useState } from 'react';
-// Use a different icon for Stop, e.g., LuSquare or LuX
+import _ from 'lodash'; // Import lodash debounce
+import { LucideBarChart } from 'lucide-react';
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import { LuRefreshCw, LuSend, LuSquare } from 'react-icons/lu';
 import { approximateTokenSize } from 'tokenx';
 import { v4 as uuidv4 } from 'uuid';
 import { Button } from './ui/Button.tsx';
 import { Textarea } from './ui/Textarea.tsx';
 
+const debounce = _.debounce;
+
+const DEBOUNCE_DELAY = 400; // Delay in milliseconds for debouncing global state update
+
 export const MessageInput: React.FC = () => {
+  // --- Hooks for Jotai Atoms ---
+  const [isLoading, setIsLoading] = useAtom(isAssistantLoadingAtom);
+  const [activeChat] = useAtom(activeChatAtom); // Get the whole chat object to access id and input
+  const updateChat = useSetAtom(updateChatAtom);
   const upsertMessage = useSetAtom(upsertMessageInActiveChatAtom);
   const deleteMessage = useSetAtom(deleteMessageFromActiveChatAtom);
-  const [isLoading, setIsLoading] = useAtom(isAssistantLoadingAtom); // Global loading state
-  const activeChat = useAtomValue(activeChatAtom);
-  const [input, setInputRaw] = useState(activeChat?.input ?? '');
-
-  const generateSummary = useAtomValue(generateSummaryAtom);
-  const showEstimatedTokens = useAtomValue(showEstimatedTokensAtom);
-
-  const apiKey = useAtomValue(apiKeyAtom);
-  const apiBaseUrl = useAtomValue(apiBaseUrlAtom);
-  const summaryModel = useAtomValue(defaultSummaryModelAtom);
-  const globalDefaultMaxHistory = useAtomValue(defaultMaxHistoryAtom);
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
-
-  // Get setters/actions needed for API call and cancellation
   const appendContent = useSetAtom(appendContentToMessageAtom);
   const finalizeStream = useSetAtom(finalizeStreamingMessageAtom);
   const setAbortController = useSetAtom(abortControllerAtom);
   const cancelGeneration = useSetAtom(cancelGenerationAtom);
   const regenerateAction = useSetAtom(regenerateLastResponseAtom);
-  const updateChat = useSetAtom(updateChatAtom);
+  const abortInfo = useAtomValue(abortControllerAtom);
+  const apiKey = useAtomValue(apiKeyAtom);
+  const apiBaseUrl = useAtomValue(apiBaseUrlAtom);
+  const generateSummary = useAtomValue(generateSummaryAtom);
+  const summaryModel = useAtomValue(defaultSummaryModelAtom);
+  const showEstimatedTokens = useAtomValue(showEstimatedTokensAtom);
+  const globalDefaultMaxHistory = useAtomValue(defaultMaxHistoryAtom);
 
-  const setInput = useCallback(
-    (value: string) => {
-      if (!activeChat) {
-        return;
+  // --- Local State ---
+  // Local state for the textarea, updated immediately on change
+  const [input, setInputRaw] = useState<string>('');
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  // --- State Synchronization ---
+  // Effect to sync local state when activeChat changes (e.g., switching chats)
+  useEffect(() => {
+    // Set the local input to the value stored in the newly selected chat
+    setInputRaw(activeChat?.input ?? '');
+
+    // When the chat changes, we assume any previously typed input for the *old* chat
+    // shouldn't be saved anymore. We can cancel any pending debounced updates.
+    // Note: `debouncedUpdateGlobalInput` is recreated by useCallback when activeChat.id changes,
+    // effectively cancelling for the old ID, but explicit cancellation is safer.
+    // We need to ensure the debounced function reference is stable or managed correctly.
+    // The useCallback below handles recreation, so explicit cancel might not be strictly necessary
+    // unless the component unmounts. Let's rely on useCallback recreation for simplicity here.
+  }, [activeChat]); // Re-run when the activeChat object reference changes
+
+  // --- Debounced Global State Update ---
+  // Create a debounced function to update the global Jotai state
+  const debouncedUpdateGlobalInput = useCallback(
+    debounce((value: string) => {
+      if (activeChat) {
+        console.log('Debounced: Updating global input state');
+        updateChat({ id: activeChat.id, input: value });
       }
-      setInputRaw(value);
-      updateChat({ id: activeChat.id, input: value });
-    },
-    [activeChat],
+    }, DEBOUNCE_DELAY),
+    [activeChat?.id, updateChat], // Dependencies: Recreate debounce if chat ID or update function changes
   );
 
-  // Get abort controller state to manage button state correctly
-  const abortInfo = useAtomValue(abortControllerAtom);
+  // Cleanup debounce on unmount
+  useEffect(() => {
+    return () => {
+      debouncedUpdateGlobalInput.cancel();
+    };
+  }, [debouncedUpdateGlobalInput]);
 
+  // --- Input Change Handler ---
+  // Updates local state instantly and triggers the debounced global update
+  const handleInputChange = useCallback(
+    (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+      const newValue = e.target.value;
+      setInputRaw(newValue); // Update local state immediately for responsive typing
+      debouncedUpdateGlobalInput(newValue); // Schedule global state update
+    },
+    [debouncedUpdateGlobalInput], // Dependency on the debounced function
+  );
+
+  // --- Send Message Logic ---
   const maxHistory = activeChat?.maxHistory ?? globalDefaultMaxHistory;
-
   const handleSend = useCallback(() => {
-    const trimmedInput = input.trim();
-    // Prevent sending if already loading, no input, or no active chat
+    const trimmedInput = input.trim(); // Read from local state
     if (!trimmedInput || !activeChat || isLoading) {
       return;
     }
 
-    // Context Clearing
+    // Immediately clear the debounced global update since we are sending
+    debouncedUpdateGlobalInput.cancel();
+    // Optionally update global state to empty string immediately on send
+    // updateChat({ id: activeChat.id, input: '' }); // Uncomment if you want draft cleared instantly
+
+    // Context Clearing ('---')
     if (trimmedInput === '---') {
       const lastMessage = activeChat.messages.at(-1);
       if (lastMessage?.content === '---') {
-        // revoke last message if it's a divider
         deleteMessage(lastMessage.id);
       } else {
-        // add new divider message if there's no divider yet
         const dividerMessage: Message = {
           content: '---',
           id: uuidv4(),
@@ -94,14 +138,13 @@ export const MessageInput: React.FC = () => {
         };
         upsertMessage(dividerMessage);
       }
-      setInput('');
+      setInputRaw(''); // Clear local input
+      if (textareaRef.current) textareaRef.current.style.height = 'auto';
       textareaRef.current?.focus();
-      if (textareaRef.current) {
-        textareaRef.current.style.height = 'auto';
-      }
       return;
     }
 
+    // Standard Message Sending
     const userMessage: Message = {
       content: trimmedInput,
       id: uuidv4(),
@@ -111,127 +154,121 @@ export const MessageInput: React.FC = () => {
     upsertMessage(userMessage);
 
     const messagesToSend = getHistoryForApi(
-      [...activeChat.messages, userMessage],
+      [...activeChat.messages, userMessage], // Use updated messages list
       maxHistory,
-      activeChat.systemPrompt.trim(),
+      activeChat.systemPrompt?.trim(), // Use optional chaining for safety
     );
 
+    // Generate Title (Async)
     if (
       generateSummary &&
-      messagesToSend.filter((msg) => msg.role != 'system').length === 1
+      messagesToSend.filter((msg) => msg.role !== 'system').length === 1
     ) {
-      let lastMessageToSend = messagesToSend.at(-1);
-      if (lastMessageToSend && lastMessageToSend.content) {
+      const lastMsgContent = messagesToSend.at(-1)?.content;
+      if (lastMsgContent) {
         generateChatTitle(
           apiKey,
           apiBaseUrl,
           summaryModel,
-          lastMessageToSend.content.toString(),
+          lastMsgContent.toString(),
           activeChat.id,
           updateChat,
-        ).then(() => {
-          console.log('Generated chat title:', activeChat.name);
-        });
+        ).catch((err) => console.error('Failed to generate title:', err)); // Add error handling
       }
     }
 
-    // Call API logic, passing all required setters/functions
+    // Call API Stream Logic
     callOpenAIStreamLogic(
       apiKey,
       apiBaseUrl,
       activeChat.model,
       messagesToSend,
-      setIsLoading, // Sets the global loading flag
-      upsertMessage, // Adds/updates messages
-      appendContent, // Appends streaming content
-      finalizeStream, // Finalizes message state (isStreaming=false, sets loading false)
-      setAbortController, // Stores the AbortController instance
+      setIsLoading,
+      upsertMessage,
+      appendContent,
+      finalizeStream,
+      setAbortController,
     );
 
-    setInput('');
-    if (textareaRef.current) {
-      textareaRef.current.style.height = 'auto';
-    }
+    // Clear Input & Reset Height & Focus
+    setInputRaw(''); // Clear local input state
+    if (textareaRef.current) textareaRef.current.style.height = 'auto';
     setTimeout(() => textareaRef.current?.focus(), 50);
   }, [
-    input,
+    input, // Depends on local input state
     activeChat,
-    isLoading, // Dependency: Prevent sending while loading
+    isLoading,
     maxHistory,
     apiKey,
     apiBaseUrl,
+    summaryModel,
+    generateSummary,
     upsertMessage,
+    deleteMessage,
     setIsLoading,
     appendContent,
     finalizeStream,
-    setAbortController, // Include setters passed to callOpenAIStreamLogic
+    setAbortController,
+    updateChat,
+    debouncedUpdateGlobalInput, // Include debounced function to cancel it
+    // getHistoryForApi and generateChatTitle are stable functions if imported correctly
   ]);
 
-  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    if (e.key === 'Enter' && !e.shiftKey && !isLoading) {
-      // Prevent Enter send while loading
-      e.preventDefault();
-      handleSend();
-    }
-  };
+  // --- Keyboard Handler ---
+  const handleKeyDown = useCallback(
+    (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+      // Check if Enter is pressed without Shift, and not loading
+      if (e.key === 'Enter' && !e.shiftKey && !isLoading && input.trim()) {
+        e.preventDefault(); // Prevent newline
+        handleSend();
+      }
+    },
+    [isLoading, handleSend, input],
+  ); // Depends on loading state and handleSend callback, and input for the trim check
 
-  useEffect(() => {
-    const textarea = textareaRef.current;
-    if (textarea) {
-      textarea.style.height = 'auto';
-      const scrollHeight = textarea.scrollHeight;
-      const maxHeight = 200;
-      const borderAndPadding = textarea.offsetHeight - textarea.clientHeight;
-      textarea.style.height = `${Math.min(scrollHeight + borderAndPadding, maxHeight)}px`;
-    }
-  }, [input]);
-
-  // Can regenerate if not loading AND the last message exists and is from the assistant
-  const canRegenerate =
-    !isLoading &&
-    activeChat &&
-    activeChat.messages.length > 0 &&
-    activeChat.messages.at(-1)?.role === 'assistant' &&
-    !activeChat.messages.at(-1)?.isStreaming; // Don't allow regenerate if last message is still streaming
-
-  const numTokens = React.useMemo(
-    () => (showEstimatedTokens ? approximateTokenSize(input) : 0),
-    [showEstimatedTokens, input],
+  // --- Derived State & Memos ---
+  const canRegenerate = useMemo(
+    () =>
+      !isLoading &&
+      activeChat &&
+      activeChat.messages.length > 0 &&
+      activeChat.messages.at(-1)?.role === 'assistant' &&
+      !activeChat.messages.at(-1)?.isStreaming,
+    [isLoading, activeChat],
   );
 
+  const numTokens = useMemo(
+    () =>
+      showEstimatedTokens ? approximateTokenSize(input) : 0, // Calculate based on local input
+    [showEstimatedTokens, input],
+  ); // Depends on local input
+
+  // --- Render ---
   return (
     <div
       className={cn(
-        // Changed to flex-col for vertical layout
         'flex flex-shrink-0 flex-col border-t border-neutral-200 bg-neutral-50 px-4 pt-2 pb-4 dark:border-neutral-700 dark:bg-neutral-900/50',
-        // Removed items-end and space-x-2 from the main container
       )}
     >
       {/* Top Toolbar Area */}
       <div className="flex items-center space-x-2 pb-2">
-        {' '}
-        {/* Added padding-bottom */}
-        {/* Regenerate Button - Moved to Toolbar */}
         <Button
           aria-label="Regenerate last response"
           className={cn(
-            'flex-shrink-0', // Removed self-end
+            'flex-shrink-0',
             (!canRegenerate || isLoading) && 'cursor-not-allowed opacity-50',
           )}
           disabled={!canRegenerate || isLoading}
-          onClick={regenerateAction}
+          onClick={regenerateAction} // regenerateAction is a stable atom setter
           size="xs"
           variant="ghost"
           title="Regenerate last response"
         >
-          {/* Made icon slightly smaller for toolbar */}
-          <LuRefreshCw className={cn('h-4 w-4')} />
+          <LuRefreshCw className="h-4 w-4" />
         </Button>
-        {/* Add other toolbar buttons here later, e.g.: */}
-        {/* <Button size="icon" variant="ghost"><LuPaperclip className="h-4 w-4" /></Button> */}
-        {/* <Button size="icon" variant="ghost"><LuMic className="h-4 w-4" /></Button> */}
         {/* Spacer */}
         <div className="flex-1" />
+        {/* Token Counter */}
         {showEstimatedTokens && (
           <span className="flex items-center gap-1 text-xs text-neutral-500 dark:text-neutral-400">
             <LucideBarChart className="h-3 w-3" />
@@ -242,16 +279,14 @@ export const MessageInput: React.FC = () => {
 
       {/* Bottom Section: Input Area + Send Button */}
       <div className="flex items-end space-x-2">
-        {' '}
-        {/* Wrapper for Textarea + Send */}
-        {/* Message Input Area */}
         <Textarea
+          ref={textareaRef}
           aria-label="Chat message input"
-          className={cn(
-            'flex-1 resize-none overflow-y-auto', // flex-1 makes it take available space
-          )}
+          className="flex-1 resize-none overflow-y-auto" // Removed min-h-[calc(theme(spacing.12))] if height adjusted by JS
+          rows={1} // Start with 1 row, let JS handle expansion
           disabled={!activeChat || isLoading}
-          onChange={(e) => setInput(e.target.value)}
+          value={input} // Controlled by local state
+          onChange={handleInputChange} // Use the combined handler
           onKeyDown={handleKeyDown}
           placeholder={
             isLoading
@@ -260,26 +295,22 @@ export const MessageInput: React.FC = () => {
                 ? "Type message or '---' to clear context..."
                 : 'Select or create a chat first'
           }
-          ref={textareaRef}
-          rows={4}
-          value={input}
-          variant="flat" // Assuming this variant exists and is desired
+          // variant="flat" // Assuming this is a valid prop for your Textarea
         />
-        {/* Send / Stop Button - Stays on the right */}
         <Button
           aria-label={isLoading ? 'Stop generation' : 'Send message'}
-          className="flex-shrink-0 self-end" // Aligns button to bottom if textarea grows
+          className="flex-shrink-0 self-end"
           size="icon"
           title={isLoading ? 'Stop generation' : 'Send message'}
           variant={isLoading ? 'destructive' : 'default'}
-          onClick={isLoading ? cancelGeneration : handleSend}
+          onClick={isLoading ? cancelGeneration : handleSend} // cancelGeneration is stable setter
+          // Disable send if no input, no active chat, OR if loading (unless it's the stop button)
           disabled={isLoading ? !abortInfo : !input.trim() || !activeChat}
         >
-          {/* Icon size kept same as original for send button */}
           {isLoading ? (
-            <LuSquare className="h-5 w-5" />
+            <LuSquare className="h-5 w-5" /> // Stop Icon
           ) : (
-            <LuSend className="h-5 w-5" />
+            <LuSend className="h-5 w-5" /> // Send Icon
           )}
         </Button>
       </div>
