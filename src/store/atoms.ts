@@ -844,7 +844,7 @@ async function generateChatTitle(
       userMessageContent.slice(-500);
   }
 
-  const prompt = `Based *only* on the following user message, generate a concise, one-line chat title (no quotes, code blocks, only return plain text title like "Automatic Chat Title Generation"):\n\nUser Message: "${userMessageContent}"`;
+  const prompt = `You are a helpful assistant that generates concise chat titles. Based *only* on the following user message, generate a one-line chat title (no quotes, code blocks, only return plain text title like "💡 My Awesome Chat") that starts with a relevant emoji:\n\nUser Message: "${userMessageContent}"`; // Modified prompt
 
   try {
     const openai = new OpenAI({
@@ -857,12 +857,12 @@ async function generateChatTitle(
     const response = await openai.chat.completions.create({
       model: summaryModel,
       messages: [{ role: 'user', content: prompt }],
-      max_tokens: 20, // Limit tokens for a short title
-      temperature: 0.5, // Lower temperature for more predictable titles
+      max_tokens: 30, // Increased tokens to allow for emoji and title
+      temperature: 0.7, // Increased temperature slightly for more varied emoji selection
       stream: false, // We want a single response, not streaming
     });
 
-    const generatedTitle = response.choices[0]?.message?.content
+    let generatedTitle = response.choices[0]?.message?.content
       ?.trim()
       .replace(/(\r\n|\n|\r)/gm, '') // Remove line breaks
       .replace(/["']/g, '')
@@ -870,9 +870,21 @@ async function generateChatTitle(
       .replace(/`/g, ''); // Remove quotes and code blocks
 
     if (generatedTitle) {
+      const emojiRegex =
+        /([\u{1F600}-\u{1F64F}\u{1F300}-\u{1F5FF}\u{1F680}-\u{1F6FF}\u{1F700}-\u{1F77F}\u{1F780}-\u{1F7FF}\u{1F800}-\u{1F8FF}\u{1F900}-\u{1F9FF}\u{1FA00}-\u{1FA6F}\u{1FA70}-\u{1FAFF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}\u{FE0F}])/u;
+      const emojiMatch = generatedTitle.match(emojiRegex);
+
+      let icon = '';
+      if (emojiMatch) {
+        icon = emojiMatch[0]; // Extract the emoji
+        generatedTitle = generatedTitle.replace(emojiRegex, '').trim(); // Remove emoji from title
+      }
+
       console.log(`Generated title for chat ${chatId}: "${generatedTitle}"`);
-      // Update the chat name using the passed function
-      updateChat({ id: chatId, name: generatedTitle });
+      console.log(`Generated icon for chat ${chatId}: "${icon}"`);
+
+      // Update the chat name and icon using the passed function
+      updateChat({ id: chatId, name: generatedTitle, icon: icon });
     } else {
       console.warn('Title generation resulted in empty content.');
     }
