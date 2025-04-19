@@ -98,4 +98,5 @@ export interface CustomCharacter {
   model: string;
   maxHistory: number | null;
   createdAt: number;
+  updatedAt: number;
 }

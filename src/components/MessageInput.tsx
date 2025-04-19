@@ -24,7 +24,7 @@ import {
 import type { Message } from '@/types.ts';
 import { useAtom, useAtomValue, useSetAtom } from 'jotai';
 import _ from 'lodash'; // Import lodash debounce
-import { LucideBarChart } from 'lucide-react';
+
 import React, {
   useCallback,
   useEffect,
@@ -32,7 +32,7 @@ import React, {
   useRef,
   useState,
 } from 'react';
-import { LuRefreshCw, LuSend, LuSquare } from 'react-icons/lu';
+import { LuChartBar, LuRefreshCw, LuSend, LuSquare } from 'react-icons/lu';
 import { approximateTokenSize } from 'tokenx';
 import { v4 as uuidv4 } from 'uuid';
 import { Button } from './ui/Button.tsx';
@@ -293,7 +293,7 @@ export const MessageInput: React.FC = () => {
         {/* Token Counter */}
         {showEstimatedTokens && (
           <span className="flex items-center gap-1 text-xs text-neutral-500 dark:text-neutral-400">
-            <LucideBarChart className="h-3 w-3" />
+            <LuChartBar className="h-3 w-3" />
             {numTokens} token{numTokens === 1 ? '' : 's'}
           </span>
         )}

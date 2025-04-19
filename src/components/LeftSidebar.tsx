@@ -1,3 +1,12 @@
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from '@/components/ui/AlertDialog.tsx';
 import { cn } from '@/lib/utils.ts';
 import {
   activeChatIdAtom,
@@ -5,22 +14,15 @@ import {
   createNewChatAtom,
   customCharactersAtom,
   deleteChatAtom,
+  isCharacterEditorOpenAtom,
   isConversationSearchOpenAtom,
   sortedChatsAtom, // Use sorted chats
   togglePinChatAtom, // Import toggle pin action
 } from '@/store/atoms.ts';
-import { Chat } from '@/types.ts';
-import {
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogTitle,
-  AlertDialogTrigger,
-} from '@radix-ui/react-alert-dialog';
+import { Chat, CustomCharacter } from '@/types.ts';
 import { format, isToday, isYesterday, startOfDay } from 'date-fns'; // Import date-fns functions
+
 import { Provider, useAtom, useAtomValue, useSetAtom } from 'jotai';
-import { AlertDialog } from 'radix-ui';
 import React, { useMemo } from 'react';
 import {
   LuArchiveRestore,
@@ -82,7 +84,9 @@ interface GroupedChats {
 }
 
 export const LeftSidebar: React.FC = () => {
-  const chats = useAtomValue(sortedChatsAtom); // Use the derived sorted atom
+  const sortedChats = useAtomValue(sortedChatsAtom); // Use the derived sorted atom
+  const setIsCharacterEditorOpen = useSetAtom(isCharacterEditorOpenAtom); // Setter for editor
+
   const characters = useAtomValue(customCharactersAtom);
   const [activeChatId, setActiveChatId] = useAtom(activeChatIdAtom);
   const createNewChat = useSetAtom(createNewChatAtom);
@@ -121,6 +125,23 @@ export const LeftSidebar: React.FC = () => {
       e.preventDefault();
       setActiveChatId(chatId);
     }
+  };
+
+  const handleCreateCharacter = () => {
+    setIsCharacterEditorOpen(true);
+    // Optional: Could trigger an action to add a new default character
+    // and select it within the editor component itself upon opening.
+  };
+  const handleInstantiateCharacter = (character: CustomCharacter) => {
+    console.log('Instantiating character:', character.name);
+    createNewChat({
+      // Call the modified action atom
+      name: character.name,
+      icon: character.icon,
+      systemPrompt: character.prompt,
+      model: character.model,
+      maxHistory: character.maxHistory,
+    });
   };
 
   // Group chats by date using useMemo
@@ -171,7 +192,7 @@ export const LeftSidebar: React.FC = () => {
       {/* Controls */}
       {/* Stack vertically on small screens, row on sm and up */}
       <div className="flex flex-col gap-2 p-3 sm:flex-row">
-        <Button className="flex-1" onClick={createNewChat}>
+        <Button className="flex-1" onClick={() => createNewChat()}>
           <LuPlus className="mr-2 h-4 w-4" /> New Chat
         </Button>
         <Button
@@ -189,9 +210,15 @@ export const LeftSidebar: React.FC = () => {
       {/* Characters Header */}
       <div className="flex items-center px-3 pt-2 pb-1 text-xs font-medium tracking-wider text-neutral-500 uppercase dark:text-neutral-400">
         <div className="flex-1">Characters</div>
-        <div>
-          <ConversationActionsMenu />
-        </div>
+        {/* Trigger for Character Editor */}
+        <Button
+          variant="ghost"
+          size="xs"
+          onClick={() => setIsCharacterEditorOpen(true)} // Open editor on click
+          aria-label="Open Character Editor"
+        >
+          <LuEllipsis className="h-4 w-4" />
+        </Button>
       </div>
       {/* Search Trigger Button */}
       <div className="px-2 py-1">
@@ -204,40 +231,43 @@ export const LeftSidebar: React.FC = () => {
           Search in conversations...
         </Button>
       </div>
-      <div className="flex max-h-20 flex-wrap gap-1 overflow-y-auto rounded p-2">
+      {/* Character List */}
+      <div className="mb-2 flex max-h-24 flex-wrap gap-1 overflow-y-auto rounded border-b p-2 dark:border-neutral-700">
+        {' '}
+        {/* Slightly taller, add bottom border */}
+        {/* Add New Character Button */}
+        <Button
+          aria-label="Create New Character"
+          className="flex h-8 w-8 items-center justify-center rounded border border-dashed bg-neutral-100 p-1 text-neutral-600 hover:bg-neutral-200 dark:border-neutral-700 dark:bg-neutral-800/30 dark:text-neutral-400 dark:hover:bg-neutral-800/50"
+          key="add-character"
+          onClick={handleCreateCharacter} // Use handler to open editor
+          title="Create New Character"
+          size="icon"
+          variant="ghost"
+        >
+          <LuPlus className="h-4 w-4" />
+        </Button>
+        {/* Map actual characters */}
         {characters.map((item) => (
           <Button
             aria-label={`Select ${item.name}`}
-            className="rounded bg-neutral-200 p-1 text-xl text-neutral-800 hover:bg-neutral-300 dark:bg-neutral-800 dark:text-neutral-200"
-            key={item.name}
-            onClick={() => {}}
+            className="flex h-8 w-8 items-center justify-center rounded bg-neutral-200 p-1 text-xl text-neutral-800 hover:bg-neutral-300 dark:bg-neutral-800 dark:text-neutral-200"
+            key={item.id} // Use ID for key
+            onClick={() => handleInstantiateCharacter(item)} // Instantiate on click
             title={`Instantiate ${item.name}`}
-            size="xs"
+            size="icon"
             variant="ghost"
           >
             {item.icon}
           </Button>
         ))}
-        <Button
-          aria-label="Create Custom Character"
-          className="rounded bg-neutral-200 p-1 text-xl text-neutral-800 hover:bg-neutral-300 dark:bg-neutral-800 dark:text-neutral-200"
-          key="custom"
-          onClick={() => {}}
-          title="Create Custom Character"
-          size="xs"
-          variant="ghost"
-        >
-          <LuPlus className="h-4 w-4" />
-        </Button>
       </div>
 
       {/* Conversations Header */}
       <div className="flex items-center px-3 pt-2 pb-1 text-xs font-medium tracking-wider text-neutral-500 uppercase dark:text-neutral-400">
         <div className="flex-1">Conversations</div>
         <div>
-          <Button variant="ghost" size="xs">
-            <LuEllipsis className="h-4 w-4" />
-          </Button>
+          <ConversationActionsMenu />
         </div>
       </div>
 

@@ -11,12 +11,14 @@ import {
   activeChatIdAtom,
   chatsAtom,
   isConversationSearchOpenAtom,
-} from '@/store/atoms';
-import { Chat, Message } from '@/types';
+} from '@/store/atoms.ts';
+import { Chat, Message } from '@/types.ts';
 import { useAtom, useAtomValue, useSetAtom } from 'jotai';
 import _ from 'lodash'; // For debouncing
-import { LuSearch, LuX } from 'lucide-react';
+
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { LuSearch, LuX } from 'react-icons/lu';
+import { Button } from './ui/Button.tsx';
 
 interface SearchResult {
   chatId: string;

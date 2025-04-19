@@ -1,6 +1,7 @@
+import { CharacterEditor } from '@/components/CharacterEditor.tsx';
 import { ChatInterface } from '@/components/ChatInterface.tsx';
 import { ChatSettingsModal } from '@/components/ChatSettingsModal.tsx';
-import { ConversationSearchDialog } from '@/components/ConversationSearchDialog'; // Import the search dialog
+import { ConversationSearchDialog } from '@/components/ConversationSearchDialog.tsx';
 import { LeftSidebar } from '@/components/LeftSidebar.tsx';
 import { RightSidebar } from '@/components/RightSidebar.tsx';
 import {
@@ -10,8 +11,6 @@ import {
   DrawerHeader,
   DrawerTitle,
 } from '@/components/ui/Drawer.tsx';
-// Import Shadcn Drawer
-
 import { useMediaQuery } from '@/hooks/use-media-query.ts';
 import { cn } from '@/lib/utils.ts';
 import {
@@ -69,6 +68,7 @@ function App() {
     >
       <ChatSettingsModal />
       <ConversationSearchDialog />
+      <CharacterEditor />
       <Toaster />
       <FastImport />
 
