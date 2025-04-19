@@ -330,9 +330,9 @@ export const CharacterEditor: React.FC = () => {
           {' '}
           {/* Reduced padding */}
           <DialogTitle>Character Editor</DialogTitle>
-          {/* <DialogDescription>
-              Create, edit, and manage reusable character profiles.
-            </DialogDescription> */}
+          <DialogDescription>
+            Create, edit, and manage reusable character profiles.
+          </DialogDescription>
         </DialogHeader>
 
         <div className="flex flex-1 overflow-hidden">
@@ -405,8 +405,7 @@ export const CharacterEditor: React.FC = () => {
                 >
                   {' '}
                   <LuChevronDown />{' '}
-                </Button>
-                +{' '}
+                </Button>{' '}
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
                     <Button
@@ -420,14 +419,15 @@ export const CharacterEditor: React.FC = () => {
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end">
                     <DropdownMenuItem onClick={handleAdd}>
-                      <LuCirclePlus className="mr-2 h-4 w-4" /> Create New
-                      Character
+                      <LuCirclePlus className="mr-2 h-4 w-4" />
+                      Create New Character
                     </DropdownMenuItem>
                     <DropdownMenuItem
                       onClick={handleDuplicate}
                       disabled={!selectedCharacterId}
                     >
-                      <LuCopy className="mr-2 h-4 w-4" /> Duplicate Current
+                      <LuCopy className="mr-2 h-4 w-4" />
+                      Duplicate Current
                     </DropdownMenuItem>
                     <DropdownMenuSeparator />
                     {/* Delete needs AlertDialog trigger inside */}
@@ -436,13 +436,14 @@ export const CharacterEditor: React.FC = () => {
                         <DropdownMenuItem
                           variant="destructive"
                           disabled={!selectedCharacterId}
-                          onSelect={(e) => e.preventDefault()} // Prevent closing menu
                           aria-disabled={!selectedCharacterId}
                           className={
                             !selectedCharacterId
                               ? '!text-muted-foreground/50 !hover:bg-transparent cursor-not-allowed'
                               : ''
                           }
+                          // 阻止 DropdownMenuItem 自身的默认行为
+                          onSelect={(e) => e.preventDefault()}
                         >
                           <LuTrash2 className="mr-2 h-4 w-4" /> Delete Current
                         </DropdownMenuItem>
@@ -544,7 +545,7 @@ export const CharacterEditor: React.FC = () => {
               <>
                 <div className="flex-1 space-y-4 overflow-y-auto pr-2">
                   {/* Name */}
-                  <div>
+                  <div className="space-y-2">
                     <Label htmlFor="char-name">Name</Label>
                     <Input
                       id="char-name"
@@ -554,7 +555,7 @@ export const CharacterEditor: React.FC = () => {
                     />
                   </div>
                   {/* Icon */}
-                  <div>
+                  <div className="space-y-2">
                     <Label htmlFor="char-icon">Icon (Emoji)</Label>
                     <Input
                       id="char-icon"
@@ -566,7 +567,7 @@ export const CharacterEditor: React.FC = () => {
                     {/* TODO: Add emoji picker here */}
                   </div>
                   {/* Description */}
-                  <div>
+                  <div className="space-y-2">
                     <Label htmlFor="char-desc">
                       Description{' '}
                       <span className="text-muted-foreground text-xs">
@@ -582,7 +583,7 @@ export const CharacterEditor: React.FC = () => {
                     />
                   </div>
                   {/* Prompt */}
-                  <div>
+                  <div className="space-y-2">
                     <Label htmlFor="char-prompt">System Prompt</Label>
                     <Textarea
                       id="char-prompt"
@@ -593,7 +594,7 @@ export const CharacterEditor: React.FC = () => {
                     />
                   </div>
                   {/* Model */}
-                  <div>
+                  <div className="space-y-2">
                     <Label htmlFor="char-model">Model</Label>
                     <Select value={model} onValueChange={setModel}>
                       <SelectTrigger id="char-model" className="w-full">
@@ -631,7 +632,7 @@ export const CharacterEditor: React.FC = () => {
                     </Select>
                   </div>
                   {/* Max History */}
-                  <div>
+                  <div className="space-y-2">
                     <Label htmlFor="char-history">Max History (Messages)</Label>
                     <Input
                       id="char-history"

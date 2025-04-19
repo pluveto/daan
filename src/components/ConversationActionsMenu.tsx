@@ -280,7 +280,9 @@ export const ConversationActionsMenu: React.FC = () => {
             <AlertDialogTrigger asChild>
               <DropdownMenuItem
                 // Prevent default dropdown closing
-                onSelect={(e) => e.preventDefault()}
+                onSelect={(e) => {
+                  e.preventDefault();
+                }}
                 disabled={!isChatActive || !canDeleteBelow}
                 variant="destructive"
                 // Add aria-disabled for accessibility
@@ -357,7 +359,9 @@ export const ConversationActionsMenu: React.FC = () => {
           <AlertDialog>
             <AlertDialogTrigger asChild>
               <DropdownMenuItem
-                onSelect={(e) => e.preventDefault()}
+                onSelect={(e) => {
+                  e.preventDefault();
+                }}
                 disabled={!hasUnpinned}
                 variant="destructive"
                 aria-disabled={!hasUnpinned}
