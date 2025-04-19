@@ -196,6 +196,8 @@ export const ChatHistory: React.FC<ChatHistoryProps> = ({ className }) => {
       {messages.map((message) => {
         const isSystem = message.role === 'system';
         const isDivider = message.role === 'divider'; // Check for divider role
+        const isEditing = message.id === editingId;
+        const numTokens = approximateTokenSize(message.content);
 
         // Optionally hide system messages
         if (isSystem) {
@@ -224,14 +226,6 @@ export const ChatHistory: React.FC<ChatHistoryProps> = ({ className }) => {
             </div>
           );
         }
-
-        const isEditing = message.id === editingId;
-        const numTokens = React.useMemo(
-          () =>
-            showEstimatedTokens ? approximateTokenSize(message.content) : 0,
-          [showEstimatedTokens, message.content],
-        );
-
         return (
           <div
             className={cn(
