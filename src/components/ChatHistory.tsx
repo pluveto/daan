@@ -4,11 +4,13 @@ import {
   activeChatAtom,
   editingMessageIdAtom,
   regenerateLastResponseAtom, // Import regenerate action
+  showEstimatedTokensAtom,
   showTimestampsAtom, // Import showTimestampsAtom
   updateMessageContentAtom,
 } from '@/store/atoms.ts';
 import type { Message } from '@/types.ts';
 import { useAtom, useAtomValue, useSetAtom } from 'jotai';
+import { LucideBarChart } from 'lucide-react';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { LuBot, LuClock, LuLoader, LuUser } from 'react-icons/lu'; // Added LuClock
 
@@ -17,6 +19,7 @@ import rehypeKatex from 'rehype-katex';
 import rehypeRaw from 'rehype-raw';
 import remarkGfm from 'remark-gfm';
 import remarkMath from 'remark-math';
+import { approximateTokenSize } from 'tokenx';
 import { MessageToolbar } from './MessageToolbar.tsx';
 import { Button } from './ui/Button.tsx';
 import { CodeBlock } from './ui/CodeBlock.tsx';
@@ -72,6 +75,7 @@ export const ChatHistory: React.FC<ChatHistoryProps> = ({ className }) => {
   const [editContent, setEditContent] = useState('');
   const updateMessageContent = useSetAtom(updateMessageContentAtom);
   const showTimestamps = useAtomValue(showTimestampsAtom); // Get timestamp visibility
+  const showEstimatedTokens = useAtomValue(showEstimatedTokensAtom); // Get timestamp visibility
   const regenerateLastResponse = useSetAtom(regenerateLastResponseAtom); // Get regenerate action
 
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -243,6 +247,12 @@ export const ChatHistory: React.FC<ChatHistoryProps> = ({ className }) => {
                 <span className="flex items-center gap-1 text-xs text-neutral-500 dark:text-neutral-400">
                   <LuClock className="h-3 w-3" />
                   {formatTimestamp(message.timestamp)}
+                </span>
+              )}
+              {showEstimatedTokens && message.content && (
+                <span className="flex items-center gap-1 text-xs text-neutral-500 dark:text-neutral-400">
+                  <LucideBarChart className="h-3 w-3" />
+                  {approximateTokenSize(message.content)} token(s)
                 </span>
               )}
             </div>

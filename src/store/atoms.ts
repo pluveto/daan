@@ -60,6 +60,10 @@ export const showTimestampsAtom = atomWithSafeStorage<boolean>(
   'globalSettings_showTimestamps',
   true,
 );
+export const showEstimatedTokensAtom = atomWithSafeStorage<boolean>(
+  'globalSettings_showEstimatedTokens',
+  true,
+);
 export const customModelsAtom = atomWithSafeStorage<string[]>(
   'globalSettings_customModels',
   [],

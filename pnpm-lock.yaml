@@ -86,6 +86,9 @@ importers:
       tailwind-merge:
         specifier: ^3.2.0
         version: 3.2.0
+      tokenx:
+        specifier: ^0.4.1
+        version: 0.4.1
       tw-animate-css:
         specifier: ^1.2.5
         version: 1.2.5
@@ -2531,6 +2534,9 @@ packages:
 
   toggle-selection@1.0.6:
     resolution: {integrity: sha512-BiZS+C1OS8g/q2RRbJmy59xpyghNBqrr6k5L/uKBGRsTfxmu3ffiRnd8mlGPUVayg8pvfi5urfnu8TU7DVOkLQ==}
+
+  tokenx@0.4.1:
+    resolution: {integrity: sha512-LCMniis0WsHel07xh3K9OIt5c9Xla1awtOoWBmUHZBQR7pvTvgGFuYpLiCZWohXPC1YuZORnN0+fCVYI/ie8Jg==}
 
   tr46@0.0.3:
     resolution: {integrity: sha512-N3WMsuqV66lT30CrXNbEjx4GEwlow3v6rr4mCcv6prnfwhS01rkgyFdjPNBYd9br7LpXV1+Emh01fHnq2Gdgrw==}
@@ -5351,6 +5357,8 @@ snapshots:
   tinyspy@3.0.2: {}
 
   toggle-selection@1.0.6: {}
+
+  tokenx@0.4.1: {}
 
   tr46@0.0.3: {}
 

@@ -10,6 +10,7 @@ import {
   defaultSummaryModelAtom,
   generateSummaryAtom,
   nightModeAtom,
+  showEstimatedTokensAtom,
   showTimestampsAtom, // Added
 } from '@/store/atoms.ts';
 import { exampleModels } from '@/types.ts'; // Import example models for grouping
@@ -43,8 +44,11 @@ export const RightSidebar: React.FC = () => {
   );
   const [nightMode, setNightMode] = useAtom(nightModeAtom);
   const [generateSummary, setGenerateSummary] = useAtom(generateSummaryAtom);
-  const [showTimestamps, setShowTimestamps] = useAtom(showTimestampsAtom); // Added
-  const [customModels, setCustomModels] = useAtom(customModelsAtom); // Added
+  const [showTimestamps, setShowTimestamps] = useAtom(showTimestampsAtom);
+  const [showEstimatedTokens, setShowEstimatedTokens] = useAtom(
+    showEstimatedTokensAtom,
+  );
+  const [customModels, setCustomModels] = useAtom(customModelsAtom);
   const availableModels = useAtomValue(availableModelsAtom); // Use derived atom
 
   // Local state for the custom models input field
@@ -257,6 +261,17 @@ export const RightSidebar: React.FC = () => {
               checked={showTimestamps}
               id="showTimestamps"
               onCheckedChange={setShowTimestamps} // Use setter directly
+            />
+          </div>
+
+          <div className="flex items-center justify-between">
+            <Label className="cursor-pointer" htmlFor="showEstimatedTokens">
+              Show Estimated Tokens
+            </Label>
+            <Switch
+              checked={showEstimatedTokens}
+              id="showEstimatedTokens"
+              onCheckedChange={setShowEstimatedTokens} // Use setter directly
             />
           </div>
 
