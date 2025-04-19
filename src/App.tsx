@@ -8,10 +8,10 @@ import {
   DrawerDescription,
   DrawerHeader,
   DrawerTitle,
-  DrawerTrigger,
-} from '@/components/ui/Drawer.tsx'; // Import Shadcn Drawer
+} from '@/components/ui/Drawer.tsx';
+// Import Shadcn Drawer
 
-import { useMediaQuery } from '@/hooks/use-media-query.ts'; // Assume you create this hook (see below)
+import { useMediaQuery } from '@/hooks/use-media-query.ts';
 import { cn } from '@/lib/utils.ts';
 import {
   activeChatAtom,
@@ -23,8 +23,6 @@ import {
 import { useAtom, useAtomValue } from 'jotai';
 import { VisuallyHidden } from 'radix-ui';
 import { useEffect } from 'react';
-import { LuPanelLeft, LuPanelRight } from 'react-icons/lu'; // Icons for mobile toggles if needed outside header
-import { Button } from './components/ui/Button.tsx'; // Need Button for DrawerTrigger if not using default
 
 const appName = import.meta.env.VITE_APP_NAME || 'Daan';
 const defaultTitle = `${appName}`;

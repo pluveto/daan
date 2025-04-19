@@ -33,7 +33,7 @@ export const MessageInput: React.FC = () => {
   const deleteMessage = useSetAtom(deleteMessageFromActiveChatAtom);
   const [isLoading, setIsLoading] = useAtom(isAssistantLoadingAtom); // Global loading state
   const activeChat = useAtomValue(activeChatAtom);
-  const [input, setInputRaw] = useState(activeChat?.input);
+  const [input, setInputRaw] = useState(activeChat?.input ?? '');
 
   const generateSummary = useAtomValue(generateSummaryAtom);
 
