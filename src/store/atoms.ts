@@ -25,6 +25,7 @@ export const isRightSidebarOpenAtom = atomWithSafeStorage(
 );
 export const isChatSettingsModalOpenAtom = atom(false);
 export const isCharacterEditorOpenAtom = atom(false);
+export const isCharacterAutoFillingAtom = atom(false);
 export const isAssistantLoadingAtom = atom(false);
 export const editingMessageIdAtom = atom<string | null>(null);
 export const isConversationSearchOpenAtom = atom(false);
@@ -1342,6 +1343,178 @@ export const importCharactersAtom = atom(
     }
   },
 );
+
+export const autoFillCharacterAtom = atom(
+  null,
+  async (get, set, characterId: string) => {
+    // Make atom async
+    const apiKey = get(apiKeyAtom);
+    if (!apiKey) {
+      toast.error('Auto-fill failed: OpenAI API Key not set.');
+      return;
+    }
+
+    const characters = get(customCharactersAtom);
+    const characterToFill = characters.find((c) => c.id === characterId);
+
+    if (!characterToFill) {
+      toast.error('Auto-fill failed: Character not found.');
+      return;
+    }
+
+    // Prevent concurrent auto-fills (optional, but good practice)
+    if (get(isCharacterAutoFillingAtom)) {
+      toast.warning('Auto-fill already in progress.');
+      return;
+    }
+
+    set(isCharacterAutoFillingAtom, true);
+    toast.info('🤖 Attempting to auto-fill character...');
+
+    try {
+      // 1. Prepare partial data (only non-empty/non-default fields user might have provided)
+      const partialData: Partial<CustomCharacter> = {};
+      if (characterToFill.name && characterToFill.name !== 'New Character')
+        partialData.name = characterToFill.name;
+      if (characterToFill.icon && characterToFill.icon !== '👤')
+        partialData.icon = characterToFill.icon;
+      if (characterToFill.description)
+        partialData.description = characterToFill.description;
+      // Include prompt only if it's non-empty and differs from global default? Or always include if non-empty? Let's include if non-empty.
+      if (
+        characterToFill.prompt /* && characterToFill.prompt !== get(defaultPromptAtom) */
+      )
+        partialData.prompt = characterToFill.prompt;
+      // Include model only if it differs from global default?
+      if (
+        characterToFill.model /* && characterToFill.model !== get(defaultModelAtom) */
+      )
+        partialData.model = characterToFill.model;
+      if (characterToFill.maxHistory !== null)
+        partialData.maxHistory = characterToFill.maxHistory;
+
+      if (Object.keys(partialData).length === 0) {
+        toast.error(
+          'Auto-fill failed: Please provide some initial details (like Name) first.',
+        );
+        set(isCharacterAutoFillingAtom, false); // Reset loading state early
+        return;
+      }
+
+      // 2. Construct the prompt for the AI
+      // Strategy: Ask AI to return the *full* JSON, merging it carefully later.
+      const prompt = `
+You are an assistant that helps create character profiles for a chatbot UI.
+Based on the partial information provided below, complete the character profile.
+Ensure the 'description' is a concise summary (1-2 sentences) and the 'prompt' defines the character's persona and instructions for the chatbot.
+Use the provided values where available, otherwise generate suitable content. Choose an appropriate emoji for the 'icon' if not provided or if unsuitable.
+Respond ONLY with a single, valid JSON object containing the following keys: "name", "icon", "description", "prompt", "model", "maxHistory".
+'maxHistory' should be a number or null.
+
+Partial Data:
+\`\`\`json
+${JSON.stringify(partialData, null, 2)}
+\`\`\`
+
+JSON Response format:
+{"name": "...", "icon": "...", "description": "...", "prompt": "...", "model": "...", "maxHistory": ...}
+`;
+
+      // 3. API Call (using a capable model, non-streaming)
+      const openai = new OpenAI({
+        apiKey,
+        baseURL: get(apiBaseUrlAtom) || undefined,
+        dangerouslyAllowBrowser: true,
+      });
+
+      const modelToUse = characterToFill.model || get(defaultModelAtom); // Use character's model or default
+
+      console.log(
+        `Requesting auto-fill for char ${characterId} with model ${modelToUse}...`,
+      );
+
+      const response = await openai.chat.completions.create({
+        model: modelToUse, // Use a reasonably capable model
+        messages: [{ role: 'user', content: prompt }],
+        temperature: 0.7, // Allow some creativity
+        max_tokens: 500, // Adjust as needed for expected prompt/desc length
+        response_format: { type: 'json_object' }, // Request JSON output if model supports it
+        stream: false,
+      });
+
+      const aiResponseContent = response.choices[0]?.message?.content;
+
+      if (!aiResponseContent) {
+        throw new Error('AI returned an empty response.');
+      }
+
+      console.log('AI Auto-fill response:', aiResponseContent);
+
+      // 4. Parse and Validate AI Response
+      let aiJson: Partial<CustomCharacter>;
+      try {
+        aiJson = JSON.parse(aiResponseContent);
+      } catch (parseError) {
+        console.error('Failed to parse AI JSON response:', parseError);
+        throw new Error('AI returned invalid JSON.');
+      }
+
+      // Basic validation of returned object structure (add more checks if needed)
+      if (typeof aiJson !== 'object' || aiJson === null) {
+        throw new Error('AI response was not a valid JSON object.');
+      }
+
+      // 5. Merge Results (Carefully apply AI suggestions)
+      // Strategy: Update fields *only if* the AI provided a non-empty value for them
+      // AND the field was empty/default in the original character before auto-fill.
+      // This prevents overwriting user's specific initial input unless desired.
+      // A simpler strategy for now: just merge the valid fields from AI response.
+      // User can always reset if they don't like it.
+
+      const fieldsToUpdate: Partial<
+        Omit<CustomCharacter, 'id' | 'createdAt' | 'updatedAt' | 'sort'>
+      > = {};
+
+      // Validate and potentially update each field from AI response
+      if (typeof aiJson.name === 'string' && aiJson.name.trim())
+        fieldsToUpdate.name = aiJson.name.trim();
+      if (typeof aiJson.icon === 'string' && /\p{Emoji}/u.test(aiJson.icon))
+        fieldsToUpdate.icon = aiJson.icon; // Basic emoji check
+      if (typeof aiJson.description === 'string' && aiJson.description.trim())
+        fieldsToUpdate.description = aiJson.description.trim();
+      if (typeof aiJson.prompt === 'string' && aiJson.prompt.trim())
+        fieldsToUpdate.prompt = aiJson.prompt.trim();
+      if (typeof aiJson.model === 'string' && aiJson.model.trim())
+        fieldsToUpdate.model = aiJson.model.trim();
+      if (typeof aiJson.maxHistory === 'number' && aiJson.maxHistory >= 0)
+        fieldsToUpdate.maxHistory = Math.floor(aiJson.maxHistory);
+      else if (aiJson.maxHistory === null) fieldsToUpdate.maxHistory = null;
+
+      if (Object.keys(fieldsToUpdate).length === 0) {
+        toast.info("Auto-fill didn't suggest any new values.");
+        set(isCharacterAutoFillingAtom, false); // Still need to reset loading
+        return;
+      }
+
+      console.log('Applying auto-fill updates:', fieldsToUpdate);
+
+      // 6. Update State via updateCharacterAtom
+      set(updateCharacterAtom, { id: characterId, ...fieldsToUpdate });
+      // updateCharacterAtom will show its own success toast
+
+      // Optional: Directly update form state in CharacterEditor?
+      // Might be better to let the atom update flow trigger the form refresh via useEffect.
+    } catch (error) {
+      console.error('Auto-fill API call failed:', error);
+      toast.error(
+        `Auto-fill failed: ${error instanceof Error ? error.message : 'Unknown error'}`,
+      );
+    } finally {
+      set(isCharacterAutoFillingAtom, false); // Ensure loading state is reset
+    }
+  },
+);
+
 // --- Helper Functions (used by actions) ---
 const getNextCharacterSortValue = (characters: CustomCharacter[]): number => {
   if (characters.length === 0) {

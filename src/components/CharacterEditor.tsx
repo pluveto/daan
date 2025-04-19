@@ -46,12 +46,15 @@ import { readFileAsText } from '@/lib/file.ts';
 import { cn } from '@/lib/utils.ts';
 import {
   addCharacterAtom,
+  apiKeyAtom, // Need API key to check if autofill is possible
+  autoFillCharacterAtom, // Import atom
   availableModelsAtom, // Need available models for select
   customCharactersAtom,
   defaultMaxHistoryAtom, // Need global default for placeholder
   deleteCharacterAtom,
   duplicateCharacterAtom, // Import atom
   importCharactersAtom, // Import atom
+  isCharacterAutoFillingAtom, // Import loading state atom
   isCharacterEditorOpenAtom,
   moveCharacterAtom, // Import atom
   updateCharacterAtom,
@@ -75,6 +78,7 @@ import {
   LuDownload, // For export
   LuEllipsis,
   LuFileJson, // For export type
+  LuLoader,
   LuMinus,
   LuPlus,
   LuTrash2, // For delete in menu
@@ -95,7 +99,9 @@ export const CharacterEditor: React.FC = () => {
   const moveCharacter = useSetAtom(moveCharacterAtom);
   const duplicateCharacter = useSetAtom(duplicateCharacterAtom);
   const importCharacters = useSetAtom(importCharactersAtom);
-
+  const isAutoFilling = useAtomValue(isCharacterAutoFillingAtom);
+  const apiKey = useAtomValue(apiKeyAtom);
+  const triggerAutoFill = useSetAtom(autoFillCharacterAtom);
   // TODO: Add setters for move, duplicate, import, autofill later
 
   // --- State ---
@@ -296,8 +302,15 @@ export const CharacterEditor: React.FC = () => {
   };
 
   // TODO: Implement autofill handler later
-  const handleAutoFill = () => console.log('Auto Fill');
-  // ...
+  const handleAutoFill = () => {
+    if (selectedCharacterId && apiKey) {
+      triggerAutoFill(selectedCharacterId);
+    } else if (!apiKey) {
+      toast.error('Cannot Auto-Fill: OpenAI API Key not set in settings.');
+    }
+  };
+  // Determine if auto-fill should be disabled
+  const canAutoFill = !!selectedCharacterId && !!apiKey && !isAutoFilling;
 
   // Determine if move buttons should be disabled
   const canMoveUp = useMemo(() => {
@@ -646,7 +659,14 @@ export const CharacterEditor: React.FC = () => {
                 </div>
                 {/* Footer Buttons */}
                 <div className="mt-auto flex flex-shrink-0 justify-end space-x-2 border-t pt-4">
-                  <Button variant="outline" onClick={handleAutoFill} disabled>
+                  <Button
+                    variant="outline"
+                    onClick={handleAutoFill}
+                    disabled={!canAutoFill || isAutoFilling}
+                  >
+                    {isAutoFilling ? (
+                      <LuLoader className="mr-2 h-4 w-4 animate-spin" />
+                    ) : null}
                     Auto Fill
                   </Button>{' '}
                   {/* Disabled for now */}
