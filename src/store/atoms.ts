@@ -141,7 +141,7 @@ export const createNewChatAtom = atom(
     const now = Date.now();
     const globalDefaults = {
       icon: '💬',
-      name: `Chat ${new Date(now).toLocaleTimeString()}`, // Default initial name
+      name: `New Chat`, // Default initial name
       model: get(defaultModelAtom),
       systemPrompt: get(defaultPromptAtom),
       maxHistory: null, // Default uses global setting implicitly
@@ -150,6 +150,7 @@ export const createNewChatAtom = atom(
     const newChat: Chat = {
       // Start with internal properties
       id: newId,
+      characterId: options?.characterId || null,
       messages: [],
       createdAt: now,
       updatedAt: now,

@@ -16,6 +16,7 @@ export interface Chat {
   createdAt: number;
   icon: string;
   id: string;
+  characterId: string | null;
   isPinned: boolean;
   // Added for pinning
   maxHistory: number | null;

@@ -176,6 +176,7 @@ export const MessageInput: React.FC = () => {
 
     // Generate Title (Async)
     if (
+      !activeChat.characterId &&
       generateSummary &&
       messagesToSend.filter((msg) => msg.role !== 'system').length === 1
     ) {

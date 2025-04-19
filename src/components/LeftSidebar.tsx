@@ -139,6 +139,7 @@ export const LeftSidebar: React.FC = () => {
       systemPrompt: character.prompt,
       model: character.model,
       maxHistory: character.maxHistory,
+      characterId: character.id,
     });
   };
 
