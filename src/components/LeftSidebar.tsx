@@ -303,7 +303,7 @@ export const LeftSidebar: React.FC = () => {
         </Button>
       </div>
       {/* Conversations List */}
-      <div className="flex-1 overflow-y-auto p-2">
+      <div className="flex-1 overflow-y-auto px-2 pb-2">
         {groupedChats.length === 0 && (
           <p className="px-4 py-6 text-center text-sm text-neutral-500 dark:text-neutral-400">
             No chats yet. Start a new one!
