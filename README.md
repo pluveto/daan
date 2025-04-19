@@ -1,9 +1,7 @@
-<center>
-<div>
-<h1 align="center">DAAN</h1><p align="center"> A Lightweight Language Model Client</p>
-</div>
-<img align="center" src="assets/cover.png" width="200" />
-</center>
+<p align="center"><img src="assets/cover.png" width="200" /></p>
+<p align="center"> A Lightweight Language Model Client</p>
+
+# Dáàn
 
 English | [中文](使用说明.md)
 
@@ -32,6 +30,7 @@ Light mode:
 - **Timestamp Display:** Convenient for tracking conversation history.
 - **Chat Summary:** Chat summary feature to help you quickly review conversation content.
 - **Token Estimation:** Estimate the number of tokens used in a message.
+- **Conversation Pinning:** Pin important conversations to the top of the list.
 
 ## Quick Start
 
