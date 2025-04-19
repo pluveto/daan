@@ -1,5 +1,6 @@
 import { ChatInterface } from '@/components/ChatInterface.tsx';
 import { ChatSettingsModal } from '@/components/ChatSettingsModal.tsx';
+import { ConversationSearchDialog } from '@/components/ConversationSearchDialog'; // Import the search dialog
 import { LeftSidebar } from '@/components/LeftSidebar.tsx';
 import { RightSidebar } from '@/components/RightSidebar.tsx';
 import {
@@ -67,6 +68,7 @@ function App() {
       )}
     >
       <ChatSettingsModal />
+      <ConversationSearchDialog />
       <Toaster />
       <FastImport />
 
