@@ -23,6 +23,7 @@ import {
 import { useAtom, useAtomValue } from 'jotai';
 import { VisuallyHidden } from 'radix-ui';
 import { useEffect } from 'react';
+import { Toaster } from './components/ui/Toaster.tsx';
 
 const appName = import.meta.env.VITE_APP_NAME || 'Daan';
 const defaultTitle = `${appName}`;
@@ -65,6 +66,7 @@ function App() {
       )}
     >
       <ChatSettingsModal />
+      <Toaster />
 
       {/* Left Sidebar - Conditional rendering based on screen size */}
       {isDesktop ? (

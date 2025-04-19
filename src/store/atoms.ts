@@ -7,6 +7,7 @@ import {
 } from '@/types.ts';
 import { atom } from 'jotai';
 import OpenAI from 'openai';
+import { toast } from 'sonner';
 import { v4 as uuidv4 } from 'uuid';
 
 // --- 类型定义 ---
@@ -800,6 +801,7 @@ async function callOpenAIStreamLogic(
 ) {
   if (!apiKey) {
     alert('Please set your OpenAI API Key in the Global Settings.');
+    toast.error('APIKey not set. Open right sidebar and set it.');
     // No need to set loading false here, as it wasn't set true yet
     return;
   }
@@ -879,6 +881,7 @@ async function callOpenAIStreamLogic(
         error.message.includes('signal'));
 
     console.error(`OpenAI API Error/Abort (${assistantMessageId}):`, error);
+    toast.error('Error: Failed to get response. Please try again later.');
 
     if (!isAbortError) {
       // Update the new placeholder message with an error state
