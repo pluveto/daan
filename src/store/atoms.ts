@@ -1,5 +1,6 @@
 import { atomWithSafeStorage } from '@/lib/utils.ts';
 import {
+  CustomCharacter,
   exampleModels,
   type Chat,
   type Message,
@@ -27,14 +28,13 @@ export const isAssistantLoadingAtom = atom(false);
 export const editingMessageIdAtom = atom<string | null>(null);
 
 // --- Request State Atom ---
-// (与原代码相同)
+
 export const abortControllerAtom = atom<{
   controller: AbortController;
   messageId: string;
 } | null>(null);
 
 // --- Global Settings Atoms ---
-// (与原代码相同, 注意: 每个 atomWithSafeStorage 都会有存储开销)
 export const apiKeyAtom = atomWithSafeStorage<string>(
   'globalSettings_apiKey',
   '',
@@ -79,6 +79,10 @@ export const customModelsAtom = atomWithSafeStorage<string[]>(
   'globalSettings_customModels',
   [],
 );
+export const customCharactersAtom = atomWithSafeStorage<CustomCharacter[]>(
+  'globalSettings_customCharacters',
+  [],
+);
 
 // --- Chat Data Atoms ---
 // ! 主要优化点：使用 Record<string, Chat> 替代 Chat[]
@@ -98,7 +102,6 @@ export const activeChatAtom = atom<Chat | null>((get) => {
   return activeId ? (chats[activeId] ?? null) : null;
 });
 
-// (与原代码相同)
 export const availableModelsAtom = atom<SupportedModels[]>((get) => {
   const custom = get(customModelsAtom);
   // 使用 Set 去重
@@ -535,7 +538,6 @@ export const cancelGenerationAtom = atom(null, (get, set) => {
   }
 });
 
-// (与原代码相同)
 export const setEditingMessageIdAtom = atom(
   null,
   (_get, set, messageId: string | null) => {

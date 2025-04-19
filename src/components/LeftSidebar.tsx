@@ -3,6 +3,7 @@ import {
   activeChatIdAtom,
   clearUnpinnedChatsAtom, // Import clear action
   createNewChatAtom,
+  customCharactersAtom,
   deleteChatAtom,
   sortedChatsAtom, // Use sorted chats
   togglePinChatAtom, // Import toggle pin action
@@ -11,6 +12,7 @@ import { useAtom, useAtomValue, useSetAtom } from 'jotai';
 import React from 'react';
 import {
   LuArchiveRestore,
+  LuEllipsis,
   LuGithub,
   LuMessageSquare,
   LuPin,
@@ -31,6 +33,7 @@ const commitInfo = import.meta.env.VITE_APP_COMMIT_HASH || 'N/A';
 
 export const LeftSidebar: React.FC = () => {
   const chats = useAtomValue(sortedChatsAtom); // Use the derived sorted atom
+  const characters = useAtomValue(customCharactersAtom);
   const [activeChatId, setActiveChatId] = useAtom(activeChatIdAtom);
   const createNewChat = useSetAtom(createNewChatAtom);
   const deleteChat = useSetAtom(deleteChatAtom);
@@ -108,10 +111,51 @@ export const LeftSidebar: React.FC = () => {
           {/* Optionally add text for smaller screens: <span className="sm:hidden ml-2">Clear</span> */}
         </Button>
       </div>
+      {/* Characters Header */}
+      <div className="flex items-center px-3 pt-2 pb-1 text-xs font-medium tracking-wider text-neutral-500 uppercase dark:text-neutral-400">
+        <div className="flex-1">Characters</div>
+        <div>
+          <Button variant="ghost" size="xs">
+            <LuEllipsis className="h-4 w-4" />
+          </Button>
+        </div>
+      </div>
+
+      <div className="flex max-h-20 flex-wrap gap-1 overflow-y-auto rounded p-2">
+        {characters.map((item) => (
+          <Button
+            aria-label={`Select ${item.name}`}
+            className="rounded bg-neutral-200 p-1 text-xl text-neutral-800 hover:bg-neutral-300 dark:bg-neutral-800 dark:text-neutral-200"
+            key={item.name}
+            onClick={() => {}}
+            title={`Instantiate ${item.name}`}
+            size="xs"
+            variant="ghost"
+          >
+            {item.icon}
+          </Button>
+        ))}
+        <Button
+          aria-label="Create Custom Character"
+          className="rounded bg-neutral-200 p-1 text-xl text-neutral-800 hover:bg-neutral-300 dark:bg-neutral-800 dark:text-neutral-200"
+          key="custom"
+          onClick={() => {}}
+          title="Create Custom Character"
+          size="xs"
+          variant="ghost"
+        >
+          <LuPlus className="h-4 w-4" />
+        </Button>
+      </div>
 
       {/* Conversations Header */}
-      <div className="px-3 pt-2 pb-1 text-xs font-medium tracking-wider text-neutral-500 uppercase dark:text-neutral-400">
-        Conversations
+      <div className="flex items-center px-3 pt-2 pb-1 text-xs font-medium tracking-wider text-neutral-500 uppercase dark:text-neutral-400">
+        <div className="flex-1">Conversations</div>
+        <div>
+          <Button variant="ghost" size="xs">
+            <LuEllipsis className="h-4 w-4" />
+          </Button>
+        </div>
       </div>
 
       {/* Chat List */}
