@@ -2,47 +2,60 @@ import { ChatInterface } from '@/components/ChatInterface.tsx';
 import { ChatSettingsModal } from '@/components/ChatSettingsModal.tsx';
 import { LeftSidebar } from '@/components/LeftSidebar.tsx';
 import { RightSidebar } from '@/components/RightSidebar.tsx';
+import {
+  Drawer,
+  DrawerContent,
+  DrawerDescription,
+  DrawerHeader,
+  DrawerTitle,
+  DrawerTrigger,
+} from '@/components/ui/Drawer.tsx'; // Import Shadcn Drawer
+
+import { useMediaQuery } from '@/hooks/use-media-query.ts'; // Assume you create this hook (see below)
 import { cn } from '@/lib/utils.ts';
 import {
-  activeChatAtom, // Import activeChatAtom
+  activeChatAtom,
   isLeftSidebarOpenAtom,
   isRightSidebarOpenAtom,
   nightModeAtom,
   resetStreamingStatesAtom,
 } from '@/store/atoms.ts';
 import { useAtom, useAtomValue } from 'jotai';
+import { VisuallyHidden } from 'radix-ui';
 import { useEffect } from 'react';
+import { LuPanelLeft, LuPanelRight } from 'react-icons/lu'; // Icons for mobile toggles if needed outside header
+import { Button } from './components/ui/Button.tsx'; // Need Button for DrawerTrigger if not using default
 
-// Removed DialogDemo import if not needed
-
-// Get App Name and Slogan from environment variables or use defaults
 const appName = import.meta.env.VITE_APP_NAME || 'Daan';
-const defaultTitle = `${appName}`; // Default title when no chat is selected
+const defaultTitle = `${appName}`;
 
 function App() {
-  const [isLeftOpen] = useAtom(isLeftSidebarOpenAtom);
-  const [isRightOpen] = useAtom(isRightSidebarOpenAtom);
+  const [isLeftOpen, setIsLeftOpen] = useAtom(isLeftSidebarOpenAtom);
+  const [isRightOpen, setIsRightOpen] = useAtom(isRightSidebarOpenAtom);
   const [isNightMode] = useAtom(nightModeAtom);
   const activeChat = useAtomValue(activeChatAtom);
   const [, resetStreamingStates] = useAtom(resetStreamingStatesAtom);
 
+  // Hook to check screen size (example: true if screen is less than 1024px)
+  const isMobile = useMediaQuery('(max-width: 1023px)'); // lg breakpoint is 1024px
+  const isDesktop = !isMobile;
+
   useEffect(() => {
     resetStreamingStates();
-  }, []);
-
-  // Apply dark class initially based on stored preference
-  useEffect(() => {
     document.documentElement.classList.toggle('dark', isNightMode);
-  }, [isNightMode]);
+  }, [isNightMode, resetStreamingStates]);
 
-  // Update window title based on active chat
   useEffect(() => {
     document.title = activeChat
       ? `${activeChat.name} - ${appName}`
       : defaultTitle;
-    // Cleanup function to reset title if component unmounts (optional)
-    // return () => { document.title = defaultTitle; };
-  }, [activeChat]); // Re-run effect when activeChat changes
+  }, [activeChat]);
+
+  // Close sidebars when switching between mobile/desktop view
+  useEffect(() => {
+    setIsLeftOpen(false);
+    setIsRightOpen(false);
+  }, [isMobile, setIsLeftOpen, setIsRightOpen]);
 
   return (
     <div
@@ -51,36 +64,77 @@ function App() {
         isNightMode ? 'dark' : '',
       )}
     >
-      {/* Modals */}
       <ChatSettingsModal />
 
-      {/* Left Sidebar */}
-      <div
-        className={cn(
-          'h-full flex-shrink-0 transition-all duration-300 ease-in-out',
-          isLeftOpen ? 'w-64' : 'w-0',
-        )}
-      >
-        {isLeftOpen && <LeftSidebar />}
-      </div>
+      {/* Left Sidebar - Conditional rendering based on screen size */}
+      {isDesktop ? (
+        // Desktop: Inline Sidebar (conditionally shown by state)
+        <div
+          className={cn(
+            'h-full flex-shrink-0 transition-all duration-300 ease-in-out',
+            // Use Tailwind prefix for default desktop state
+            isLeftOpen ? 'w-64' : 'w-0', // Toggle width based on state
+          )}
+        >
+          {/* Render only when open to potentially save resources, or always render and use w-0/hidden */}
+          {isLeftOpen && <LeftSidebar />}
+        </div>
+      ) : (
+        // Mobile: Drawer
+        <Drawer direction="left" open={isLeftOpen} onOpenChange={setIsLeftOpen}>
+          {/* DrawerTrigger is typically placed in the header, see ChatHeader adjustments */}
+          <DrawerContent className="mt-0 h-full w-4/5 max-w-sm rounded-none">
+            {' '}
+            {/* Adjust width/styling as needed */}
+            <VisuallyHidden.Root>
+              <DrawerHeader>
+                <DrawerTitle>Left Sidebar</DrawerTitle>
+                <DrawerDescription>This is the left sidebar.</DrawerDescription>
+              </DrawerHeader>
+            </VisuallyHidden.Root>
+            <LeftSidebar />
+            {/* Add a close button inside if needed */}
+          </DrawerContent>
+        </Drawer>
+      )}
 
       {/* Main Content Area */}
       <div className="relative flex flex-1 flex-col overflow-hidden">
-        {/* Chat Interface */}
-        <div className="flex-1 overflow-hidden">
-          <ChatInterface />
-        </div>
+        <ChatInterface />
       </div>
 
-      {/* Right Sidebar */}
-      <div
-        className={cn(
-          'h-full flex-shrink-0 transition-all duration-300 ease-in-out',
-          isRightOpen ? 'w-72' : 'w-0',
-        )}
-      >
-        {isRightOpen && <RightSidebar />}
-      </div>
+      {/* Right Sidebar - Conditional rendering based on screen size */}
+      {isDesktop ? (
+        // Desktop: Inline Sidebar
+        <div
+          className={cn(
+            'h-full flex-shrink-0 transition-all duration-300 ease-in-out',
+            isRightOpen ? 'w-72' : 'w-0',
+          )}
+        >
+          {isRightOpen && <RightSidebar />}
+        </div>
+      ) : (
+        // Mobile: Drawer
+        <Drawer
+          direction="right"
+          open={isRightOpen}
+          onOpenChange={setIsRightOpen}
+        >
+          {/* DrawerTrigger is typically placed in the header */}
+          <DrawerContent className="mt-0 h-full w-4/5 max-w-sm rounded-none">
+            <VisuallyHidden.Root>
+              <DrawerHeader>
+                <DrawerTitle>Right Sidebar</DrawerTitle>
+                <DrawerDescription>
+                  This is the right sidebar.
+                </DrawerDescription>
+              </DrawerHeader>
+            </VisuallyHidden.Root>
+            <RightSidebar />
+          </DrawerContent>
+        </Drawer>
+      )}
     </div>
   );
 }

@@ -90,18 +90,21 @@ export const LeftSidebar: React.FC = () => {
       </div>
 
       {/* Controls */}
-      <div className="flex gap-2 p-3">
+      {/* Stack vertically on small screens, row on sm and up */}
+      <div className="flex flex-col gap-2 p-3 sm:flex-row">
         <Button className="flex-1" onClick={createNewChat}>
           <LuPlus className="mr-2 h-4 w-4" /> New Chat
         </Button>
         <Button
           aria-label="Clear Unpinned Chats"
           onClick={handleClearUnpinned}
-          size="icon"
+          size="icon" // Consider making full width on mobile? or keep icon
           title="Clear Unpinned Chats"
           variant="outline"
+          // Example: className="w-full sm:w-auto" if making it full width below sm
         >
           <LuArchiveRestore className="h-4 w-4" />
+          {/* Optionally add text for smaller screens: <span className="sm:hidden ml-2">Clear</span> */}
         </Button>
       </div>
 
