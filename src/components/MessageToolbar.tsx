@@ -47,7 +47,7 @@ export const MessageToolbar: React.FC<MessageToolbarProps> = ({
 
   return (
     // Position slightly adjusted, ensure z-index is high enough
-    <div className="absolute top-0 right-1 z-10 flex items-center space-x-0.5 rounded-md border border-neutral-200 bg-white p-0.5 opacity-0 shadow-sm transition-opacity duration-150 group-hover:opacity-100 focus-within:opacity-100 md:right-2 dark:border-neutral-700 dark:bg-neutral-800">
+    <div className="absolute top-0 right-1 z-10 flex items-center space-x-0.5 rounded-md border border-neutral-200 bg-white p-0.5 opacity-0 shadow-sm transition-opacity duration-150 group-hover:opacity-100 focus-within:opacity-100 md:right-2 dark:border-neutral-700 dark:bg-neutral-900">
       {/* Copy Button */}
       <Button
         aria-label="Copy message"
@@ -76,8 +76,8 @@ export const MessageToolbar: React.FC<MessageToolbarProps> = ({
         </Button>
       )}
 
-      {/* Edit Button (Only for User messages) */}
-      {message.role === 'user' && (
+      {/* Edit Button*/}
+      {
         <Button
           aria-label="Edit message"
           onClick={handleEdit}
@@ -87,7 +87,7 @@ export const MessageToolbar: React.FC<MessageToolbarProps> = ({
         >
           <LuPencil className="h-3.5 w-3.5" />
         </Button>
-      )}
+      }
 
       {/* Delete Button */}
       <Button
