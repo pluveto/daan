@@ -354,9 +354,9 @@ export const CharacterEditor: React.FC = () => {
           onChange={handleFileImport}
         />
 
-        <div className="flex flex-1 overflow-hidden">
+        <div className="flex flex-1 flex-col overflow-hidden sm:flex-row">
           {/* Left: Character List */}
-          <div className="flex w-1/3 flex-col overflow-hidden border-r bg-neutral-50 dark:bg-neutral-950/30">
+          <div className="flex w-full flex-col overflow-hidden bg-neutral-50 sm:w-1/3 sm:border-r dark:bg-neutral-950/30">
             <div className="flex flex-shrink-0 items-center justify-between border-b p-2">
               <span className="px-2 text-sm font-medium">Characters</span>
               <div className="flex items-center space-x-1">
@@ -557,7 +557,7 @@ export const CharacterEditor: React.FC = () => {
           </div>
 
           {/* Right: Editor Form */}
-          <div className="flex w-2/3 flex-1 flex-col overflow-hidden p-4">
+          <div className="flex w-full flex-1 flex-col overflow-hidden p-4 sm:w-2/3">
             {/* Show form only if a character is selected */}
             {!selectedCharacterId ? (
               <div className="text-muted-foreground flex h-full items-center justify-center">
