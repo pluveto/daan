@@ -1,4 +1,4 @@
-import { CharacterEditor } from '@/components/CharacterEditor.tsx';
+import { CharacterEditor } from '@/components/CharacterEditor/index.tsx';
 import { ChatInterface } from '@/components/ChatInterface.tsx';
 import { ChatSettingsModal } from '@/components/ChatSettingsModal.tsx';
 import { ConversationSearchDialog } from '@/components/ConversationSearchDialog.tsx';

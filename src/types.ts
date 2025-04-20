@@ -101,3 +101,5 @@ export interface CustomCharacter {
   createdAt: number;
   updatedAt: number;
 }
+
+export type PartialCharacter = Partial<CustomCharacter>;
