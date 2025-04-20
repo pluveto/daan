@@ -4,7 +4,7 @@ import {
   deleteMessageFromActiveChatAtom,
   isAssistantLoadingAtom, // Check loading state
   setEditingMessageIdAtom,
-} from '@/store/atoms.ts';
+} from '@/store/index.ts';
 import type { Message } from '@/types.ts';
 import copy from 'copy-to-clipboard';
 import { useAtomValue, useSetAtom } from 'jotai'; // Added useAtomValue

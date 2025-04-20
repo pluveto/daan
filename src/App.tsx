@@ -19,7 +19,7 @@ import {
   isRightSidebarOpenAtom,
   nightModeAtom,
   resetStreamingStatesAtom,
-} from '@/store/atoms.ts';
+} from '@/store/index.ts';
 import { useAtom, useAtomValue } from 'jotai';
 import { VisuallyHidden } from 'radix-ui';
 import { useEffect } from 'react';

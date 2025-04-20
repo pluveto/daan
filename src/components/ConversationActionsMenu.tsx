@@ -35,7 +35,7 @@ import {
   importChatsAtom, // Import new atom
   sortedChatsAtom, // Need sorted chats for above/below logic
   togglePinChatAtom,
-} from '@/store/atoms.ts';
+} from '@/store/index.ts';
 import { Chat } from '@/types.ts';
 // Import necessary atoms
 import { useAtomValue, useSetAtom } from 'jotai'; // Import jotai hooks

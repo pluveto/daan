@@ -1,5 +1,5 @@
 // src/components/CodeBlock.tsx
-import { nightModeAtom } from '@/store/atoms.ts';
+import { nightModeAtom } from '@/store/index.ts';
 import copy from 'copy-to-clipboard';
 import { useAtomValue } from 'jotai';
 import React, { useState } from 'react';

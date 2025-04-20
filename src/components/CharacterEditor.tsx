@@ -59,7 +59,7 @@ import {
   isCharacterEditorOpenAtom,
   moveCharacterAtom, // Import atom
   updateCharacterAtom,
-} from '@/store/atoms.ts';
+} from '@/store/index.ts';
 import { CustomCharacter, exampleModels } from '@/types.ts'; // Import types
 import { useAtom, useAtomValue, useSetAtom } from 'jotai';
 import React, {

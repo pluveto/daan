@@ -1,4 +1,4 @@
-import { activeChatAtom } from '@/store/atoms.ts';
+import { activeChatAtom } from '@/store/index.ts';
 import { useAtomValue } from 'jotai';
 import React from 'react';
 import { ChatHeader } from './ChatHeader.tsx';

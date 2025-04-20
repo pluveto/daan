@@ -18,7 +18,7 @@ import {
   isConversationSearchOpenAtom,
   sortedChatsAtom, // Use sorted chats
   togglePinChatAtom, // Import toggle pin action
-} from '@/store/atoms.ts';
+} from '@/store/index.ts';
 import { Chat, CustomCharacter } from '@/types.ts';
 import { format, isToday, isYesterday, startOfDay } from 'date-fns'; // Import date-fns functions
 

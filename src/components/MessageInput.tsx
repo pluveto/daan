@@ -20,7 +20,7 @@ import {
   showEstimatedTokensAtom,
   updateChatAtom,
   upsertMessageInActiveChatAtom,
-} from '@/store/atoms.ts';
+} from '@/store/index.ts';
 import type { Message } from '@/types.ts';
 import { useAtom, useAtomValue, useSetAtom } from 'jotai';
 import _ from 'lodash'; // Import lodash debounce

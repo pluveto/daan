@@ -2,7 +2,7 @@ import {
   isChatSettingsModalOpenAtom,
   isLeftSidebarOpenAtom,
   isRightSidebarOpenAtom,
-} from '@/store/atoms.ts';
+} from '@/store/index.ts';
 import type { Chat } from '@/types.ts';
 import { useAtom, useSetAtom } from 'jotai';
 import React from 'react';

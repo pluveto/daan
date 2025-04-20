@@ -7,7 +7,7 @@ import {
   showEstimatedTokensAtom,
   showTimestampsAtom,
   updateMessageContentAtom,
-} from '@/store/atoms.ts';
+} from '@/store/index.ts';
 import { useAtom, useAtomValue, useSetAtom } from 'jotai';
 import React, { useCallback, useEffect, useRef } from 'react';
 // Import the memoized ChatMessageItem

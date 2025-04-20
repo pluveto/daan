@@ -11,7 +11,7 @@ import {
   activeChatIdAtom,
   chatsAtom,
   isConversationSearchOpenAtom,
-} from '@/store/atoms.ts';
+} from '@/store/index.ts';
 import { Chat, Message } from '@/types.ts';
 import { useAtom, useAtomValue, useSetAtom } from 'jotai';
 import _ from 'lodash'; // For debouncing

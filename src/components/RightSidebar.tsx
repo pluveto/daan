@@ -12,7 +12,7 @@ import {
   nightModeAtom,
   showEstimatedTokensAtom,
   showTimestampsAtom, // Added
-} from '@/store/atoms.ts';
+} from '@/store/index.ts';
 import { exampleModels } from '@/types.ts'; // Import example models for grouping
 import { useAtom, useAtomValue } from 'jotai';
 import React, { useState } from 'react';

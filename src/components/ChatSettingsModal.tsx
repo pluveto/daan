@@ -5,7 +5,7 @@ import {
   defaultMaxHistoryAtom, // To show default value
   isChatSettingsModalOpenAtom,
   updateChatAtom,
-} from '@/store/atoms.ts';
+} from '@/store/index.ts';
 import { commonEmojis, exampleModels } from '@/types.ts'; // Import emojis and example models
 import { useAtom, useAtomValue, useSetAtom } from 'jotai';
 import React, { useEffect, useState } from 'react';
