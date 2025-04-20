@@ -13,6 +13,7 @@
   },
   "dependencies": {
     "@hookform/resolvers": "^5.0.1",
+    "@moinfra/mcp-client-sdk": "1.10.1-dev",
     "@radix-ui/react-alert-dialog": "^1.1.10",
     "@radix-ui/react-dialog": "^1.1.7",
     "@radix-ui/react-dropdown-menu": "^2.1.10",
