@@ -13,6 +13,6 @@ export * from './apiState';
 export * from './apiActions';
 export * from './regeneration';
 export * from './chatFlowActions';
-
+export * from './mcp';
 // Optionally re-export specific helpers if they are needed directly by UI components
 // export { getHistoryForApi } from './regeneration'; // Example

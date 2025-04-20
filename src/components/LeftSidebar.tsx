@@ -16,7 +16,8 @@ import {
   deleteChatAtom,
   isCharacterEditorOpenAtom,
   isConversationSearchOpenAtom,
-  sortedChatsAtom, // Use sorted chats
+  isSystemSettingsDialogOpenAtom,
+  sortedChatsAtom,
   togglePinChatAtom, // Import toggle pin action
 } from '@/store/index';
 import { Chat, CustomCharacter } from '@/types';
@@ -33,6 +34,7 @@ import {
   LuPinOff,
   LuPlus,
   LuSearch,
+  LuSettings,
   LuTrash2,
 } from 'react-icons/lu';
 import { ConversationActionsMenu } from './ConversationActionsMenu'; // Import the new component
@@ -87,6 +89,7 @@ interface GroupedChats {
 export const LeftSidebar: React.FC = () => {
   const sortedChats = useAtomValue(sortedChatsAtom); // Use the derived sorted atom
   const setIsCharacterEditorOpen = useSetAtom(isCharacterEditorOpenAtom); // Setter for editor
+  const setIsSystemSettingsOpen = useSetAtom(isSystemSettingsDialogOpenAtom); // <--- New setter
 
   const characters = useAtomValue(customCharactersAtom);
   const [activeChatId, setActiveChatId] = useAtom(activeChatIdAtom);
@@ -213,6 +216,16 @@ export const LeftSidebar: React.FC = () => {
               {slogan}
             </p>
           </div>
+          {/* System Settings Button */}
+          <Button
+            aria-label="System Settings"
+            className="ml-auto flex-shrink-0" // Push to the right
+            onClick={() => setIsSystemSettingsOpen(true)} // Open dialog
+            size="icon"
+            variant="ghost"
+          >
+            <LuSettings className="h-5 w-5" />
+          </Button>
         </div>
       </div>
 

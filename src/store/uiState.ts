@@ -27,5 +27,8 @@ export const editingMessageIdAtom = atom<string | null>(null);
 /** Controls the visibility of the conversation search input/modal. */
 export const isConversationSearchOpenAtom = atom(false);
 
+/** Controls the visibility of the System Settings dialog. */
+export const isSystemSettingsDialogOpenAtom = atom(false); // <--- New atom
+
 /** Atom to trigger focus on the main chat input. Increment the value to trigger focus. */
 export const focusInputAtom = atom(0);

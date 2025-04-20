@@ -23,8 +23,10 @@ import {
 import { useAtom, useAtomValue } from 'jotai';
 import { VisuallyHidden } from 'radix-ui';
 import { useEffect } from 'react';
+import { Demo } from './components/Demo';
 import FastImport from './components/FastImport';
 import { Toaster } from './components/ui/Toaster';
+import { SystemSettingsDialog } from './SystemSettingsDialog';
 
 const appName = import.meta.env.VITE_APP_NAME || 'Daan';
 const defaultTitle = `${appName}`;
@@ -71,6 +73,7 @@ function App() {
       <CharacterEditor />
       <Toaster />
       <FastImport />
+      <SystemSettingsDialog />
 
       {/* Left Sidebar - Conditional rendering based on screen size */}
       {isDesktop ? (

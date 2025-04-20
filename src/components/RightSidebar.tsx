@@ -8,10 +8,6 @@ import {
   defaultModelAtom,
   defaultPromptAtom,
   defaultSummaryModelAtom,
-  generateSummaryAtom,
-  nightModeAtom,
-  showEstimatedTokensAtom,
-  showTimestampsAtom, // Added
 } from '@/store/index';
 import { exampleModels } from '@/types'; // Import example models for grouping
 import { useAtom, useAtomValue } from 'jotai';
@@ -42,12 +38,7 @@ export const RightSidebar: React.FC = () => {
   const [defaultMaxHistory, setDefaultMaxHistory] = useAtom(
     defaultMaxHistoryAtom,
   );
-  const [nightMode, setNightMode] = useAtom(nightModeAtom);
-  const [generateSummary, setGenerateSummary] = useAtom(generateSummaryAtom);
-  const [showTimestamps, setShowTimestamps] = useAtom(showTimestampsAtom);
-  const [showEstimatedTokens, setShowEstimatedTokens] = useAtom(
-    showEstimatedTokensAtom,
-  );
+
   const [customModels, setCustomModels] = useAtom(customModelsAtom);
   const availableModels = useAtomValue(availableModelsAtom); // Use derived atom
 
@@ -64,12 +55,6 @@ export const RightSidebar: React.FC = () => {
       .filter((m) => m.length > 0); // Split, trim, and remove empty strings
     setCustomModels(models);
   };
-
-  // Apply dark mode class to HTML element
-  React.useEffect(() => {
-    const root = window.document.documentElement;
-    root.classList.toggle('dark', nightMode);
-  }, [nightMode]);
 
   // Filter custom models that are not already in exampleModels for the "Custom" group
   const customOnlyModels = availableModels.filter(
@@ -238,54 +223,6 @@ export const RightSidebar: React.FC = () => {
           <p className="mt-1 text-xs text-neutral-500 dark:text-neutral-400">
             Number of past messages sent to the API.
           </p>
-        </div>
-
-        {/* UI Toggles */}
-        <div className="space-y-3 pt-2">
-          <div className="flex items-center justify-between">
-            <Label className="cursor-pointer" htmlFor="nightMode">
-              Night Mode
-            </Label>
-            <Switch
-              checked={nightMode}
-              id="nightMode"
-              onCheckedChange={setNightMode}
-            />
-          </div>
-
-          <div className="flex items-center justify-between">
-            <Label className="cursor-pointer" htmlFor="showTimestamps">
-              Show Timestamps
-            </Label>
-            <Switch
-              checked={showTimestamps}
-              id="showTimestamps"
-              onCheckedChange={setShowTimestamps} // Use setter directly
-            />
-          </div>
-
-          <div className="flex items-center justify-between">
-            <Label className="cursor-pointer" htmlFor="showEstimatedTokens">
-              Show Estimated Tokens
-            </Label>
-            <Switch
-              checked={showEstimatedTokens}
-              id="showEstimatedTokens"
-              onCheckedChange={setShowEstimatedTokens} // Use setter directly
-            />
-          </div>
-
-          <div className="flex items-center justify-between">
-            <Label className="cursor-not-allowed" htmlFor="generateSummary">
-              Summary Chat Title
-            </Label>
-            <Switch
-              checked={generateSummary}
-              id="generateSummary"
-              onCheckedChange={setGenerateSummary}
-              title="Summary generation not implemented"
-            />
-          </div>
         </div>
       </div>
     </div>
