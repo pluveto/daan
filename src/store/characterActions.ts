@@ -1,4 +1,8 @@
-import type { CustomCharacter, SupportedModels } from '@/types.ts';
+import type {
+  CustomCharacter,
+  PartialCharacter,
+  SupportedModels,
+} from '@/types.ts';
 import { atom } from 'jotai';
 import OpenAI from 'openai';
 import { toast } from 'sonner';
@@ -10,6 +14,7 @@ import {
   apiKeyAtom,
   defaultModelAtom,
   defaultPromptAtom,
+  defaultSummaryModelAtom,
 } from './settings.ts';
 
 // --- Helper Functions ---
@@ -58,6 +63,7 @@ export const addCharacterAtom = atom(null, (get, set): string => {
     createdAt: now,
     updatedAt: now,
   };
+  console.log('newCharacter', newCharacter);
 
   set(customCharactersAtom, [...currentCharacters, newCharacter]);
   toast.success(`Character "${newCharacter.name}" created.`);
@@ -225,19 +231,11 @@ export const duplicateCharacterAtom = atom(
 /** Attempts to auto-fill character details (icon, description, prompt) using AI. */
 export const autoFillCharacterAtom = atom(
   null,
-  async (get, set, characterId: string) => {
+  async (get, set, characterToFill: PartialCharacter) => {
     // Mark atom as async
     const apiKey = get(apiKeyAtom);
     if (!apiKey) {
       toast.error('Auto-fill failed: OpenAI API Key not set.');
-      return;
-    }
-
-    const characters = get(customCharactersAtom);
-    const characterToFill = characters.find((c) => c.id === characterId);
-
-    if (!characterToFill) {
-      toast.error('Auto-fill failed: Character not found.');
       return;
     }
 
@@ -253,24 +251,31 @@ export const autoFillCharacterAtom = atom(
     try {
       // 1. Prepare partial data (only non-empty/non-default fields)
       const partialData: Partial<CustomCharacter> = {};
-      if (characterToFill.name && characterToFill.name !== 'New Character')
+      if (characterToFill.name && characterToFill.name !== 'New Character') {
         partialData.name = characterToFill.name;
-      if (characterToFill.icon && characterToFill.icon !== '👤')
+      }
+      if (characterToFill.icon && characterToFill.icon !== '👤') {
         partialData.icon = characterToFill.icon;
-      if (characterToFill.description)
+      }
+      if (characterToFill.description) {
         partialData.description = characterToFill.description;
+      }
       // Include prompt only if non-empty and maybe different from default? Let's include if non-empty.
       if (
-        characterToFill.prompt /* && characterToFill.prompt !== get(defaultPromptAtom) */
-      )
+        characterToFill.prompt &&
+        characterToFill.prompt !== get(defaultPromptAtom)
+      ) {
         partialData.prompt = characterToFill.prompt;
+      }
       // Include model only if different from default?
       if (
         characterToFill.model /* && characterToFill.model !== get(defaultModelAtom) */
-      )
+      ) {
         partialData.model = characterToFill.model;
-      if (characterToFill.maxHistory !== null)
+      }
+      if (characterToFill.maxHistory !== null) {
         partialData.maxHistory = characterToFill.maxHistory;
+      }
 
       if (Object.keys(partialData).length === 0) {
         toast.error(
@@ -288,7 +293,7 @@ Use the provided values where available, otherwise generate suitable content.
 Ensure name is concise (several words) and fits the character's persona.
 The 'description' should be a concise summary (1-2 sentences).
 The 'prompt' should define the character's persona and instructions for the chatbot.
-Provide the most appropriate (according to the topic) single emoji for the 'icon' if not provided or if unsuitable.
+Provide the most appropriate (according to the topic) single emoji for the 'icon' if not provided or if unsuitable (NEVER use too generic emoji like 🤖).
 Respond ONLY with a single, valid JSON object containing the following keys: "name", "icon", "description", "prompt", "model", "maxHistory".
 'maxHistory' should be a number or null.
 
@@ -309,11 +314,12 @@ JSON Response format (ONLY the JSON object):
       });
 
       // Use the character's specified model or the global default for the generation request itself
-      const modelToUseForGeneration: SupportedModels =
-        characterToFill.model || get(defaultModelAtom);
+      const modelToUseForGeneration: SupportedModels = get(
+        defaultSummaryModelAtom,
+      );
 
       console.log(
-        `Requesting auto-fill for char ${characterId} with model ${modelToUseForGeneration}...`,
+        `Requesting auto-fill for char ${characterToFill.id} with model ${modelToUseForGeneration}...`,
       );
 
       const response = await openai.chat.completions.create({
@@ -395,7 +401,10 @@ JSON Response format (ONLY the JSON object):
 
       // 6. Update State via updateCharacterAtom
       // Use the specific updateCharacterAtom which handles state update and toast
-      set(updateCharacterAtom, { id: characterId, ...fieldsToUpdate });
+      return {
+        id: characterToFill.id,
+        ...fieldsToUpdate, // Apply updates (omit id, createdAt, and updatedAt)
+      };
       // updateCharacterAtom will show its own success toast
     } catch (error) {
       console.error('Auto-fill API call failed:', error);
