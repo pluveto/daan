@@ -1,30 +1,17 @@
 import { cn } from '@/lib/utils.ts';
+import { updateChatAtom } from '@/store/chatActions.ts'; // Keep updateChatAtom for debounced input
 import {
-  abortControllerAtom,
   activeChatAtom,
-  apiBaseUrlAtom,
-  apiKeyAtom,
-  appendContentToMessageAtom,
-  callOpenAIStreamLogic,
   cancelGenerationAtom,
-  defaultMaxHistoryAtom,
-  defaultSummaryModelAtom,
-  deleteMessageFromActiveChatAtom,
-  finalizeStreamingMessageAtom,
   focusInputAtom,
-  generateChatTitle,
-  generateSummaryAtom,
-  getHistoryForApi,
   isAssistantLoadingAtom,
   regenerateLastResponseAtom,
+  // Import the NEW action atom
+  sendMessageActionAtom,
   showEstimatedTokensAtom,
-  updateChatAtom,
-  upsertMessageInActiveChatAtom,
 } from '@/store/index.ts';
-import type { Message } from '@/types.ts';
 import { useAtom, useAtomValue, useSetAtom } from 'jotai';
-import _ from 'lodash'; // Import lodash debounce
-
+import _ from 'lodash';
 import React, {
   useCallback,
   useEffect,
@@ -34,208 +21,103 @@ import React, {
 } from 'react';
 import { LuChartBar, LuRefreshCw, LuSend, LuSquare } from 'react-icons/lu';
 import { approximateTokenSize } from 'tokenx';
-import { v4 as uuidv4 } from 'uuid';
 import { Button } from './ui/Button.tsx';
 import { Textarea } from './ui/Textarea.tsx';
 
 const debounce = _.debounce;
-
-const DEBOUNCE_DELAY = 400; // Delay in milliseconds for debouncing global state update
+const DEBOUNCE_DELAY = 400;
 
 export const MessageInput: React.FC = () => {
   // --- Hooks for Jotai Atoms ---
-  const [isLoading, setIsLoading] = useAtom(isAssistantLoadingAtom);
-  const [activeChat] = useAtom(activeChatAtom); // Get the whole chat object to access id and input
-  const updateChat = useSetAtom(updateChatAtom);
-  const upsertMessage = useSetAtom(upsertMessageInActiveChatAtom);
-  const deleteMessage = useSetAtom(deleteMessageFromActiveChatAtom);
-  const appendContent = useSetAtom(appendContentToMessageAtom);
-  const finalizeStream = useSetAtom(finalizeStreamingMessageAtom);
-  const setAbortController = useSetAtom(abortControllerAtom);
-  const cancelGeneration = useSetAtom(cancelGenerationAtom);
-  const regenerateAction = useSetAtom(regenerateLastResponseAtom);
-  const abortInfo = useAtomValue(abortControllerAtom);
-  const apiKey = useAtomValue(apiKeyAtom);
-  const apiBaseUrl = useAtomValue(apiBaseUrlAtom);
-  const generateSummary = useAtomValue(generateSummaryAtom);
-  const summaryModel = useAtomValue(defaultSummaryModelAtom);
-  const showEstimatedTokens = useAtomValue(showEstimatedTokensAtom);
-  const globalDefaultMaxHistory = useAtomValue(defaultMaxHistoryAtom);
-  const triggerFocus = useAtomValue(focusInputAtom); // Get focus trigger value
+  const [isLoading] = useAtom(isAssistantLoadingAtom); // Keep for UI state
+  const [activeChat] = useAtom(activeChatAtom); // Keep for enabling/disabling, placeholder, and debounced save
+  const updateChat = useSetAtom(updateChatAtom); // Keep for debounced input saving
+  const cancelGeneration = useSetAtom(cancelGenerationAtom); // Keep for stop button
+  const regenerateAction = useSetAtom(regenerateLastResponseAtom); // Keep for regenerate button
+  const showEstimatedTokens = useAtomValue(showEstimatedTokensAtom); // Keep for display
+  const triggerFocus = useAtomValue(focusInputAtom); // Keep for focusing
+
+  // *** Get the setter for the NEW action atom ***
+  const sendMessage = useSetAtom(sendMessageActionAtom);
+
+  // REMOVE hooks for: upsertMessage, deleteMessage, appendContent, finalizeStream, setAbortController, apiKey, apiBaseUrl, etc.
 
   // --- Local State ---
-  // Local state for the textarea, updated immediately on change
   const [input, setInputRaw] = useState<string>('');
   const textareaRef = useRef<HTMLTextAreaElement>(null);
-  const [isComposing, setIsComposing] = useState(false); // State for IME composition
+  const [isComposing, setIsComposing] = useState(false);
 
-  // --- State Synchronization ---
-  // Effect to sync local state when activeChat changes (e.g., switching chats)
+  // --- State Synchronization (Keep) ---
   useEffect(() => {
-    // Set the local input to the value stored in the newly selected chat
     setInputRaw(activeChat?.input ?? '');
+  }, [activeChat]);
 
-    // When the chat changes, we assume any previously typed input for the *old* chat
-    // shouldn't be saved anymore. We can cancel any pending debounced updates.
-    // Note: `debouncedUpdateGlobalInput` is recreated by useCallback when activeChat.id changes,
-    // effectively cancelling for the old ID, but explicit cancellation is safer.
-    // We need to ensure the debounced function reference is stable or managed correctly.
-    // The useCallback below handles recreation, so explicit cancel might not be strictly necessary
-    // unless the component unmounts. Let's rely on useCallback recreation for simplicity here.
-  }, [activeChat]); // Re-run when the activeChat object reference changes
-
-  // --- Debounced Global State Update ---
-  // Create a debounced function to update the global Jotai state
+  // --- Debounced Global State Update (Keep) ---
   const debouncedUpdateGlobalInput = useCallback(
     debounce((value: string) => {
       if (activeChat) {
-        console.log('Debounced: Updating global input state with', value);
+        // console.log('Debounced: Updating global input state with', value);
         updateChat({ id: activeChat.id, input: value });
       }
     }, DEBOUNCE_DELAY),
-    [activeChat?.id, updateChat], // Dependencies: Recreate debounce if chat ID or update function changes
+    [activeChat?.id, updateChat],
   );
-
-  // Cleanup debounce on unmount
   useEffect(() => {
     return () => {
       debouncedUpdateGlobalInput.cancel();
     };
   }, [debouncedUpdateGlobalInput]);
 
-  // --- Effect for focusing input ---
+  // --- Effect for focusing input (Keep) ---
   useEffect(() => {
-    // Check triggerFocus > 0 to avoid focus on initial load if atom default is 0
     if (triggerFocus > 0 && textareaRef.current) {
-      console.log('Focusing input triggered');
-      // Small delay might sometimes help ensure element is fully ready after state updates
-      // setTimeout(() => textareaRef.current?.focus(), 0);
       textareaRef.current?.focus();
     }
-  }, [triggerFocus]); // Depend only on the trigger value
+  }, [triggerFocus]);
 
-  // --- Input Change Handler ---
-  // Updates local state instantly and triggers the debounced global update
+  // --- Input Change Handler (Keep) ---
   const handleInputChange = useCallback(
     (e: React.ChangeEvent<HTMLTextAreaElement>) => {
       const newValue = e.target.value;
-      setInputRaw(newValue); // Update local state immediately for responsive typing
-      debouncedUpdateGlobalInput(newValue); // Schedule global state update
+      setInputRaw(newValue);
+      debouncedUpdateGlobalInput(newValue);
     },
-    [debouncedUpdateGlobalInput], // Dependency on the debounced function
+    [debouncedUpdateGlobalInput],
   );
 
-  // --- Send Message Logic ---
-  const maxHistory = activeChat?.maxHistory ?? globalDefaultMaxHistory;
+  // --- *** SIMPLIFIED Send Message Handler *** ---
   const handleSend = useCallback(() => {
-    const trimmedInput = input.trim(); // Read from local state
+    const trimmedInput = input.trim();
     if (!trimmedInput || !activeChat || isLoading) {
-      return;
+      return; // Basic checks remain
     }
 
-    // Immediately clear the debounced global update since we are sending
+    // Cancel any pending debounced save of the draft
     debouncedUpdateGlobalInput.cancel();
-    // Optionally update global state to empty string immediately on send
-    // updateChat({ id: activeChat.id, input: '' }); // Uncomment if you want draft cleared instantly
 
-    // Context Clearing ('---')
-    if (trimmedInput === '---') {
-      const lastMessage = activeChat.messages.at(-1);
-      if (lastMessage?.content === '---') {
-        deleteMessage(lastMessage.id);
-      } else {
-        const dividerMessage: Message = {
-          content: '---',
-          id: uuidv4(),
-          role: 'divider',
-          timestamp: Date.now(),
-        };
-        upsertMessage(dividerMessage);
-      }
-      setInputRaw(''); // Clear local input
-      debouncedUpdateGlobalInput('');
-      if (textareaRef.current) textareaRef.current.style.height = 'auto';
-      textareaRef.current?.focus();
-      return;
-    }
+    // *** Call the action atom ***
+    sendMessage(trimmedInput);
 
-    // Standard Message Sending
-    const userMessage: Message = {
-      content: trimmedInput,
-      id: uuidv4(),
-      role: 'user',
-      timestamp: Date.now(),
-    };
-    upsertMessage(userMessage);
-
-    const messagesToSend = getHistoryForApi(
-      [...activeChat.messages, userMessage], // Use updated messages list
-      maxHistory,
-      activeChat.systemPrompt?.trim(), // Use optional chaining for safety
-    );
-
-    // Generate Title (Async)
-    if (
-      !activeChat.characterId &&
-      generateSummary &&
-      messagesToSend.filter((msg) => msg.role !== 'system').length === 1
-    ) {
-      const lastMsgContent = messagesToSend.at(-1)?.content;
-      if (lastMsgContent) {
-        generateChatTitle(
-          apiKey,
-          apiBaseUrl,
-          summaryModel,
-          lastMsgContent.toString(),
-          activeChat.id,
-          updateChat,
-        ).catch((err) => console.error('Failed to generate title:', err)); // Add error handling
-      }
-    }
-
-    // Call API Stream Logic
-    callOpenAIStreamLogic(
-      apiKey,
-      apiBaseUrl,
-      activeChat.model,
-      messagesToSend,
-      setIsLoading,
-      upsertMessage,
-      appendContent,
-      finalizeStream,
-      setAbortController,
-    );
-
-    // Clear Input & Reset Height & Focus
-    setInputRaw(''); // Clear local input state
-    debouncedUpdateGlobalInput('');
+    // Clear Local Input & Reset Height & Focus
+    setInputRaw('');
+    // No need to call debouncedUpdateGlobalInput('') here,
+    // the action atom handles clearing the draft in the global state.
 
     if (textareaRef.current) textareaRef.current.style.height = 'auto';
+    // Focus might need slight delay after state updates triggered by sendMessage
     setTimeout(() => textareaRef.current?.focus(), 50);
   }, [
     input, // Depends on local input state
-    activeChat,
-    isLoading,
-    maxHistory,
-    apiKey,
-    apiBaseUrl,
-    summaryModel,
-    generateSummary,
-    upsertMessage,
-    deleteMessage,
-    setIsLoading,
-    appendContent,
-    finalizeStream,
-    setAbortController,
-    updateChat,
-    debouncedUpdateGlobalInput, // Include debounced function to cancel it
-    // getHistoryForApi and generateChatTitle are stable functions if imported correctly
+    activeChat, // Still needed for checks and draft clearing logic
+    isLoading, // Still needed for checks
+    sendMessage, // Dependency on the new action atom setter
+    debouncedUpdateGlobalInput, // Still needed to cancel debounce
+    // No longer depends on apiKey, apiBaseUrl, upsertMessage, etc.
   ]);
 
-  // --- Keyboard Handler ---
+  // --- Keyboard Handler (Keep, dependency list simplified) ---
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-      // Check if Enter is pressed without Shift, not loading, AND not composing
       if (
         e.key === 'Enter' &&
         !e.shiftKey &&
@@ -243,28 +125,26 @@ export const MessageInput: React.FC = () => {
         !isComposing &&
         input.trim()
       ) {
-        e.preventDefault(); // Prevent newline
+        e.preventDefault();
         handleSend();
       }
     },
-    [isLoading, handleSend, input, isComposing], // Add isComposing dependency
-  ); // Depends on loading state and handleSend callback, and input for the trim check
+    [isLoading, handleSend, input, isComposing], // Simpler dependencies
+  );
 
-  // --- Derived State & Memos ---
+  // --- Derived State & Memos (Keep, dependency list potentially simplified) ---
   const canRegenerate = useMemo(
     () =>
       !isLoading &&
       activeChat &&
-      activeChat.messages.length > 0 &&
-      activeChat.messages.at(-1)?.role === 'assistant' &&
-      !activeChat.messages.at(-1)?.isStreaming,
-    [isLoading, activeChat],
+      activeChat.messages.some((m) => m.role === 'assistant' && !m.isStreaming), // Simplified check for any completed assistant message
+    [isLoading, activeChat], // Dependencies unchanged
   );
 
   const numTokens = useMemo(
-    () => (showEstimatedTokens ? approximateTokenSize(input) : 0), // Calculate based on local input
+    () => (showEstimatedTokens ? approximateTokenSize(input) : 0),
     [showEstimatedTokens, input],
-  ); // Depends on local input
+  );
 
   // --- Render ---
   return (
@@ -330,7 +210,7 @@ export const MessageInput: React.FC = () => {
           variant={isLoading ? 'destructive' : 'default'}
           onClick={isLoading ? cancelGeneration : handleSend} // cancelGeneration is stable setter
           // Disable send if no input, no active chat, OR if loading (unless it's the stop button)
-          disabled={isLoading ? !abortInfo : !input.trim() || !activeChat}
+          disabled={isLoading ? false : !input.trim() || !activeChat} // Stop button always enabled when loading
         >
           {isLoading ? (
             <LuSquare className="h-5 w-5" /> // Stop Icon

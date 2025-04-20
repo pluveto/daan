@@ -12,6 +12,7 @@ export * from './importExport.ts';
 export * from './apiState.ts';
 export * from './apiActions.ts';
 export * from './regeneration.ts';
+export * from './chatFlowActions.ts';
 
 // Optionally re-export specific helpers if they are needed directly by UI components
 // export { getHistoryForApi } from './regeneration.ts'; // Example
