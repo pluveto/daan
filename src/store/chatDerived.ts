@@ -1,7 +1,7 @@
-import { exampleModels, type Chat, type SupportedModels } from '@/types.ts';
+import { exampleModels, type Chat, type SupportedModels } from '@/types';
 import { atom } from 'jotai';
-import { activeChatIdAtom, chatsAtom } from './chatData.ts';
-import { customModelsAtom } from './settings.ts';
+import { activeChatIdAtom, chatsAtom } from './chatData';
+import { customModelsAtom } from './settings';
 
 // --- Derived Atoms ---
 

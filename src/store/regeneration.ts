@@ -1,22 +1,13 @@
-import type { Message } from '@/types.ts';
+import type { Message } from '@/types';
 import { atom } from 'jotai';
 import OpenAI from 'openai'; // Keep OpenAI type import if needed for helpers
 
 import { toast } from 'sonner';
-import { callOpenAIStreamLogic } from './apiActions.ts'; // Import the refactored API call logic
-import { isAssistantLoadingAtom } from './apiState.ts';
-import { activeChatAtom } from './chatDerived.ts';
-import {
-  appendContentToMessageAtom,
-  deleteMessageFromActiveChatAtom,
-  finalizeStreamingMessageAtom,
-  upsertMessageInActiveChatAtom,
-} from './messageActions.ts';
-import {
-  apiBaseUrlAtom,
-  apiKeyAtom,
-  defaultMaxHistoryAtom,
-} from './settings.ts';
+import { callOpenAIStreamLogic } from './apiActions'; // Import the refactored API call logic
+import { isAssistantLoadingAtom } from './apiState';
+import { activeChatAtom } from './chatDerived';
+import { deleteMessageFromActiveChatAtom } from './messageActions';
+import { apiBaseUrlAtom, apiKeyAtom, defaultMaxHistoryAtom } from './settings';
 
 // --- Helper Function ---
 

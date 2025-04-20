@@ -1,5 +1,5 @@
 // src/components/CharacterEditor/CharacterForm.tsx
-import { Button } from '@/components/ui/Button.tsx';
+import { Button } from '@/components/ui/Button';
 // Import shadcn/ui Form components
 import {
   Form,
@@ -9,8 +9,8 @@ import {
   FormItem,
   FormLabel,
   FormMessage,
-} from '@/components/ui/Form.tsx';
-import { Input } from '@/components/ui/Input.tsx';
+} from '@/components/ui/Form';
+import { Input } from '@/components/ui/Input';
 import {
   Select,
   SelectContent,
@@ -19,17 +19,14 @@ import {
   SelectLabel,
   SelectTrigger,
   SelectValue,
-} from '@/components/ui/Select.tsx';
-import { Textarea } from '@/components/ui/Textarea.tsx';
-import { cn } from '@/lib/utils.ts';
-import { defaultModelAtom } from '@/store/settings.ts';
-import { CustomCharacter, exampleModels, PartialCharacter } from '@/types.ts';
+} from '@/components/ui/Select';
+import { Textarea } from '@/components/ui/Textarea';
+import { CustomCharacter, exampleModels, PartialCharacter } from '@/types';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { useAtomValue } from 'jotai';
-import React, { useEffect } from 'react';
+import React from 'react';
 import { useForm, useWatch } from 'react-hook-form';
 import { LuLoader } from 'react-icons/lu';
-import { CharacterFormData, characterSchema } from './validation.ts';
+import { CharacterFormData, characterSchema } from './validation';
 
 interface CharacterFormProps {
   characterData: CustomCharacter;

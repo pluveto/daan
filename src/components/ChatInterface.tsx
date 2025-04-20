@@ -1,9 +1,9 @@
-import { activeChatAtom } from '@/store/index.ts';
+import { activeChatAtom } from '@/store/index';
 import { useAtomValue } from 'jotai';
 import React from 'react';
-import { ChatHeader } from './ChatHeader.tsx';
-import { ChatHistory } from './ChatHistory.tsx';
-import { MessageInput } from './MessageInput.tsx';
+import { ChatHeader } from './ChatHeader';
+import { ChatHistory } from './ChatHistory';
+import { MessageInput } from './MessageInput';
 
 export const ChatInterface: React.FC = () => {
   const activeChat = useAtomValue(activeChatAtom);

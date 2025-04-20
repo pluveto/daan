@@ -1,5 +1,5 @@
-import { atomWithSafeStorage } from '@/lib/utils.ts';
-import type { SupportedModels } from '@/types.ts';
+import { atomWithSafeStorage } from '@/lib/utils';
+import type { SupportedModels } from '@/types';
 
 // --- Global Settings Atoms ---
 

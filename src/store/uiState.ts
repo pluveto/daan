@@ -1,4 +1,4 @@
-import { atomWithSafeStorage } from '@/lib/utils.ts';
+import { atomWithSafeStorage } from '@/lib/utils';
 import { atom } from 'jotai';
 
 // --- UI State Atoms ---

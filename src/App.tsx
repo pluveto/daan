@@ -1,30 +1,30 @@
-import { CharacterEditor } from '@/components/CharacterEditor/index.tsx';
-import { ChatInterface } from '@/components/ChatInterface.tsx';
-import { ChatSettingsModal } from '@/components/ChatSettingsModal.tsx';
-import { ConversationSearchDialog } from '@/components/ConversationSearchDialog.tsx';
-import { LeftSidebar } from '@/components/LeftSidebar.tsx';
-import { RightSidebar } from '@/components/RightSidebar.tsx';
+import { CharacterEditor } from '@/components/CharacterEditor/index';
+import { ChatInterface } from '@/components/ChatInterface';
+import { ChatSettingsModal } from '@/components/ChatSettingsModal';
+import { ConversationSearchDialog } from '@/components/ConversationSearchDialog';
+import { LeftSidebar } from '@/components/LeftSidebar';
+import { RightSidebar } from '@/components/RightSidebar';
 import {
   Drawer,
   DrawerContent,
   DrawerDescription,
   DrawerHeader,
   DrawerTitle,
-} from '@/components/ui/Drawer.tsx';
-import { useMediaQuery } from '@/hooks/use-media-query.ts';
-import { cn } from '@/lib/utils.ts';
+} from '@/components/ui/Drawer';
+import { useMediaQuery } from '@/hooks/use-media-query';
+import { cn } from '@/lib/utils';
 import {
   activeChatAtom,
   isLeftSidebarOpenAtom,
   isRightSidebarOpenAtom,
   nightModeAtom,
   resetStreamingStatesAtom,
-} from '@/store/index.ts';
+} from '@/store/index';
 import { useAtom, useAtomValue } from 'jotai';
 import { VisuallyHidden } from 'radix-ui';
 import { useEffect } from 'react';
-import FastImport from './components/FastImport.tsx';
-import { Toaster } from './components/ui/Toaster.tsx';
+import FastImport from './components/FastImport';
+import { Toaster } from './components/ui/Toaster';
 
 const appName = import.meta.env.VITE_APP_NAME || 'Daan';
 const defaultTitle = `${appName}`;

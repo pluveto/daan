@@ -1,5 +1,5 @@
-import { atomWithSafeStorage } from '@/lib/utils.ts';
-import type { Chat } from '@/types.ts';
+import { atomWithSafeStorage } from '@/lib/utils';
+import type { Chat } from '@/types';
 
 // --- Type Definition ---
 export type ChatsRecord = Record<string, Chat>;

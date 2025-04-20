@@ -1,20 +1,20 @@
-import type { Chat, Message, SupportedModels } from '@/types.ts';
+import type { Chat, Message, SupportedModels } from '@/types';
 import { Atom, atom, WritableAtom } from 'jotai';
 import OpenAI from 'openai';
 import { toast } from 'sonner';
 import { v4 as uuidv4 } from 'uuid';
-import { abortControllerAtom, isAssistantLoadingAtom } from './apiState.ts';
-import { updateChatAtom } from './chatActions.ts';
+import { abortControllerAtom, isAssistantLoadingAtom } from './apiState';
+import { updateChatAtom } from './chatActions';
 import {
   appendContentToMessageAtom,
   finalizeStreamingMessageAtom,
   upsertMessageInActiveChatAtom,
-} from './messageActions.ts';
+} from './messageActions';
 import {
   apiBaseUrlAtom,
   apiKeyAtom,
   defaultSummaryModelAtom,
-} from './settings.ts';
+} from './settings';
 
 /** Action to cancel the current ongoing AI generation. */
 export const cancelGenerationAtom = atom(null, (get, set) => {

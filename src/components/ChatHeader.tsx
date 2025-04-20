@@ -2,8 +2,8 @@ import {
   isChatSettingsModalOpenAtom,
   isLeftSidebarOpenAtom,
   isRightSidebarOpenAtom,
-} from '@/store/index.ts';
-import type { Chat } from '@/types.ts';
+} from '@/store/index';
+import type { Chat } from '@/types';
 import { useAtom, useSetAtom } from 'jotai';
 import React from 'react';
 import {
@@ -14,7 +14,7 @@ import {
   LuPanelRightClose,
   LuSettings2,
 } from 'react-icons/lu';
-import { Button } from './ui/Button.tsx';
+import { Button } from './ui/Button';
 
 interface ChatHeaderProps {
   chat: Chat | null;

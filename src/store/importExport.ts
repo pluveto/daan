@@ -1,9 +1,9 @@
-import type { Chat, CustomCharacter, Message } from '@/types.ts';
+import type { Chat, CustomCharacter, Message } from '@/types';
 import { atom } from 'jotai';
 import { toast } from 'sonner';
-import { normalizeCharacterSort } from './characterActions.ts'; // Import helper
-import { customCharactersAtom } from './characterData.ts';
-import { chatsAtom, type ChatsRecord } from './chatData.ts';
+import { normalizeCharacterSort } from './characterActions'; // Import helper
+import { customCharactersAtom } from './characterData';
+import { chatsAtom, type ChatsRecord } from './chatData';
 
 // --- Validation Helpers ---
 

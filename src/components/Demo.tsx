@@ -6,7 +6,7 @@ import {
   Implementation,
 } from '@moinfra/mcp-client-sdk/types.js';
 import { z } from 'zod';
-import { Button } from './ui/Button.tsx';
+import { Button } from './ui/Button';
 
 export function Demo() {
   async function runDemo() {

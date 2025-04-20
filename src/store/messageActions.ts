@@ -1,8 +1,8 @@
-import type { Message } from '@/types.ts';
+import type { Message } from '@/types';
 import { atom } from 'jotai';
-import { abortControllerAtom, isAssistantLoadingAtom } from './apiState.ts';
-import { activeChatIdAtom, chatsAtom, type ChatsRecord } from './chatData.ts';
-import { editingMessageIdAtom } from './uiState.ts';
+import { abortControllerAtom, isAssistantLoadingAtom } from './apiState';
+import { activeChatIdAtom, chatsAtom, type ChatsRecord } from './chatData';
+import { editingMessageIdAtom } from './uiState';
 
 // --- Helper Function ---
 
@@ -32,8 +32,6 @@ const updateMessagesInChat = (
   if (newMessages === chatToUpdate.messages && !updateTimestamp) {
     return chats;
   }
-
-  const timestamp = updateTimestamp ? Date.now() : chatToUpdate.updatedAt;
 
   // Only update timestamp if messages changed or explicitly requested
   const finalTimestamp =

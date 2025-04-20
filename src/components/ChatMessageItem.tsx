@@ -1,6 +1,6 @@
 // src/components/ChatMessageItem.tsx (Optimized)
-import { cn } from '@/lib/utils.ts';
-import type { Message } from '@/types.ts';
+import { cn } from '@/lib/utils';
+import type { Message } from '@/types';
 // Use specific icons from lucide-react directly
 import React, {
   useCallback,
@@ -17,10 +17,10 @@ import rehypeRaw from 'rehype-raw';
 import remarkGfm from 'remark-gfm';
 import remarkMath from 'remark-math';
 import { approximateTokenSize } from 'tokenx'; // Assuming this library exists
-import { MessageToolbar } from './MessageToolbar.tsx';
-import { Button } from './ui/Button.tsx';
-import { CodeBlock } from './ui/CodeBlock.tsx';
-import { Textarea } from './ui/Textarea.tsx'; // Assuming this is your Textarea component
+import { MessageToolbar } from './MessageToolbar';
+import { Button } from './ui/Button';
+import { CodeBlock } from './ui/CodeBlock';
+import { Textarea } from './ui/Textarea'; // Assuming this is your Textarea component
 
 // Helper function to format timestamp
 const formatTimestamp = (timestamp: number): string => {

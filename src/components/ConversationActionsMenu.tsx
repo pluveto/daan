@@ -9,7 +9,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
   AlertDialogTrigger,
-} from '@/components/ui/AlertDialog.tsx';
+} from '@/components/ui/AlertDialog';
 // Import AlertDialog
 import {
   DropdownMenu,
@@ -20,9 +20,9 @@ import {
   DropdownMenuSubContent,
   DropdownMenuSubTrigger,
   DropdownMenuTrigger,
-} from '@/components/ui/DropdownMenu.tsx';
-import { downloadJson } from '@/lib/download.ts'; // Assuming download helper exists
-import { readFileAsText } from '@/lib/file.ts'; // Assuming file reader helper exists
+} from '@/components/ui/DropdownMenu';
+import { downloadJson } from '@/lib/download'; // Assuming download helper exists
+import { readFileAsText } from '@/lib/file'; // Assuming file reader helper exists
 import {
   activeChatAtom,
   chatsAtom,
@@ -35,8 +35,8 @@ import {
   importChatsAtom, // Import new atom
   sortedChatsAtom, // Need sorted chats for above/below logic
   togglePinChatAtom,
-} from '@/store/index.ts';
-import { Chat } from '@/types.ts';
+} from '@/store/index';
+import { Chat } from '@/types';
 // Import necessary atoms
 import { useAtomValue, useSetAtom } from 'jotai'; // Import jotai hooks
 import React, { useMemo, useRef } from 'react'; // Import useRef
@@ -55,7 +55,7 @@ import {
   LuUpload,
 } from 'react-icons/lu';
 import { toast } from 'sonner'; // For feedback
-import { Button } from './ui/Button.tsx';
+import { Button } from './ui/Button';
 
 export const ConversationActionsMenu: React.FC = () => {
   // Get state values

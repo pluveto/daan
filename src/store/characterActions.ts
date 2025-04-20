@@ -2,20 +2,20 @@ import type {
   CustomCharacter,
   PartialCharacter,
   SupportedModels,
-} from '@/types.ts';
+} from '@/types';
 import { atom } from 'jotai';
 import OpenAI from 'openai';
 import { toast } from 'sonner';
 import { v4 as uuidv4 } from 'uuid';
-import { isCharacterAutoFillingAtom } from './apiState.ts';
-import { customCharactersAtom } from './characterData.ts';
+import { isCharacterAutoFillingAtom } from './apiState';
+import { customCharactersAtom } from './characterData';
 import {
   apiBaseUrlAtom,
   apiKeyAtom,
   defaultModelAtom,
   defaultPromptAtom,
   defaultSummaryModelAtom,
-} from './settings.ts';
+} from './settings';
 
 // --- Helper Functions ---
 

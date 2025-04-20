@@ -1,5 +1,5 @@
-import { cn } from '@/lib/utils.ts';
-import { updateChatAtom } from '@/store/chatActions.ts'; // Keep updateChatAtom for debounced input
+import { cn } from '@/lib/utils';
+import { updateChatAtom } from '@/store/chatActions'; // Keep updateChatAtom for debounced input
 import {
   activeChatAtom,
   cancelGenerationAtom,
@@ -9,7 +9,7 @@ import {
   // Import the NEW action atom
   sendMessageActionAtom,
   showEstimatedTokensAtom,
-} from '@/store/index.ts';
+} from '@/store/index';
 import { useAtom, useAtomValue, useSetAtom } from 'jotai';
 import _ from 'lodash';
 import React, {
@@ -21,8 +21,8 @@ import React, {
 } from 'react';
 import { LuChartBar, LuRefreshCw, LuSend, LuSquare } from 'react-icons/lu';
 import { approximateTokenSize } from 'tokenx';
-import { Button } from './ui/Button.tsx';
-import { Textarea } from './ui/Textarea.tsx';
+import { Button } from './ui/Button';
+import { Textarea } from './ui/Textarea';
 
 const debounce = _.debounce;
 const DEBOUNCE_DELAY = 400;

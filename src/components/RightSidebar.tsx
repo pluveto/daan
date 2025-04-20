@@ -12,13 +12,13 @@ import {
   nightModeAtom,
   showEstimatedTokensAtom,
   showTimestampsAtom, // Added
-} from '@/store/index.ts';
-import { exampleModels } from '@/types.ts'; // Import example models for grouping
+} from '@/store/index';
+import { exampleModels } from '@/types'; // Import example models for grouping
 import { useAtom, useAtomValue } from 'jotai';
 import React, { useState } from 'react';
-import { Button } from './ui/Button.tsx';
-import { Input } from './ui/Input.tsx';
-import { Label } from './ui/Label.tsx';
+import { Button } from './ui/Button';
+import { Input } from './ui/Input';
+import { Label } from './ui/Label';
 import {
   Select,
   SelectContent,
@@ -27,9 +27,9 @@ import {
   SelectLabel,
   SelectTrigger,
   SelectValue,
-} from './ui/Select.tsx';
-import { Switch } from './ui/Switch.tsx';
-import { Textarea } from './ui/Textarea.tsx';
+} from './ui/Select';
+import { Switch } from './ui/Switch';
+import { Textarea } from './ui/Textarea';
 
 export const RightSidebar: React.FC = () => {
   const [apiKey, setApiKey] = useAtom(apiKeyAtom);
