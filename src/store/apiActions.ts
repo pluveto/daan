@@ -162,6 +162,7 @@ export async function callOpenAIStreamLogic(
         // Check for the tool call tag in the accumulated content
         const match = accumulatedContent.match(toolCallRegex);
         if (match) {
+          const remainOutput = accumulatedContent.replace(toolCallRegex, '');
           toolCallDetected = true;
           const [, serverId, toolName, argsString] = match;
           const rawTag = match[0];
@@ -182,7 +183,8 @@ export async function callOpenAIStreamLogic(
           // Update placeholder and finalize
           set(updateMessageContentAtom, {
             messageId: assistantMessageId,
-            newContent: `Attempting to use tool: ${toolName}...`,
+            newContent:
+              remainOutput + `\n\nAttempting to use tool: ${toolName}...`,
           });
           set(finalizeStreamingMessageAtom, assistantMessageId);
           break; // Exit loop

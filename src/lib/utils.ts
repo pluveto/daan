@@ -92,3 +92,11 @@ export function atomWithSafeStorage<Value>(
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
+
+export function normalizeMath(text: string): string {
+  let processedText = text;
+  processedText = processedText.replace(/\\\((.*?)\\\)/g, '$$$1$$');
+  processedText = processedText.replace(/\\\[(.*?)\\\]/gs, '$$$$$1$$$$');
+
+  return processedText;
+}

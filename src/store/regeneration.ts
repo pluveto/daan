@@ -11,7 +11,7 @@ import { deleteMessageFromActiveChatAtom } from './messageActions';
 import { apiBaseUrlAtom, apiKeyAtom, defaultMaxHistoryAtom } from './settings';
 
 // --- Helper Function ---
-
+const daanPrompt = ``.trim();
 /**
  * Prepares the message history for the OpenAI API call.
  * Finds messages after the last 'divider', filters roles, applies max history limit,
@@ -55,6 +55,7 @@ export function getHistoryForApi(
   // --- Combine Prompts ---
   const mcpInjection = get(mcpPromptInjectionAtom); // Get MCP instructions
   const finalSystemPrompt = [
+    daanPrompt,
     systemPrompt?.trim() || null, // Original prompt
     mcpInjection ? mcpInjection.trim() : null, // MCP instructions
   ]
@@ -203,7 +204,6 @@ export const regenerateMessageAtom = atom(
     callOpenAIStreamLogic(
       get, // Pass get
       set, // Pass set
-      activeChat.model,
       relevantHistory,
       // Callbacks are replaced by direct atom sets within callOpenAIStreamLogic
     );

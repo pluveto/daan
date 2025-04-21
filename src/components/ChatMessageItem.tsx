@@ -1,5 +1,5 @@
 // src/components/ChatMessageItem.tsx (Optimized)
-import { cn } from '@/lib/utils';
+import { cn, normalizeMath } from '@/lib/utils';
 import { approveToolCallAtom, denyToolCallAtom } from '@/store';
 import type { Message, ToolCallInfo } from '@/types';
 // Add icons for tool calls
@@ -63,6 +63,8 @@ const msgPostProcess = (content: string) => {
   } else {
     tmp = tmp.replace(/<\/think>/g, '</div>');
   }
+
+  tmp = normalizeMath(tmp);
   return tmp;
 };
 
