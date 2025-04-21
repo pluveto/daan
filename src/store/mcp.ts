@@ -279,9 +279,44 @@ export const connectMcpServerAtom = atom(
       console.log(
         `[MCP Connect] Connected to ${serverId}. Fetching capabilities...`,
       );
-      const toolsResult = await client.listTools();
-      const resourcesResult = await client.listResources(); // Assuming listResources exists
-      const promptsResult = await client.listPrompts(); // Assuming listPrompts exists
+      let toolsResult;
+      try {
+        toolsResult = await client.listTools();
+        console.log(`[MCP Connect] Tools for ${serverId}:`, toolsResult);
+      } catch (error) {
+        console.error(
+          `[MCP Connect] Failed to list tools for ${serverId}:`,
+          error,
+        );
+        toolsResult = { tools: [] }; // Provide a default value to avoid further errors
+      }
+
+      let resourcesResult;
+      try {
+        resourcesResult = await client.listResources(); // Assuming listResources exists
+        console.log(
+          `[MCP Connect] Resources for ${serverId}:`,
+          resourcesResult,
+        );
+      } catch (error) {
+        console.error(
+          `[MCP Connect] Failed to list resources for ${serverId}:`,
+          error,
+        );
+        resourcesResult = { resources: [] }; // Provide a default value
+      }
+
+      let promptsResult;
+      try {
+        promptsResult = await client.listPrompts(); // Assuming listPrompts exists
+        console.log(`[MCP Connect] Prompts for ${serverId}:`, promptsResult);
+      } catch (error) {
+        console.error(
+          `[MCP Connect] Failed to list prompts for ${serverId}:`,
+          error,
+        );
+        promptsResult = { prompts: [] }; // Provide a default value
+      }
 
       const capabilities: McpDiscoveredCapabilities = {
         tools: toolsResult.tools || [],
@@ -817,7 +852,7 @@ async function executeToolCall(
   get: Getter,
   set: Setter,
   chatId: string,
-  pendingMessageId: string,
+  pendingMessageId: string, // The ID of the message that started as pending/running
   toolCallInfo: PendingToolCallInfo,
   client: Client,
 ) {
@@ -845,36 +880,38 @@ async function executeToolCall(
     })) as CallToolResult;
     console.log(`[MCP Execute] Tool ${toolName} result:`, result);
 
-    // 3. Process SUCCESS result
+    // 3. Process SUCCESS result - Update the original message
     const resultContent = formatToolResultContent(result);
     const resultInfo: ToolCallInfo = {
       callId,
       toolName,
       type: 'result',
       isError: false,
+      // Include serverId/serverName if needed for display consistency
+      // serverId,
+      // serverName,
     };
-    const resultMessage: Message = {
-      id: uuidv4(),
-      role: 'system', // Use system role for tool results for clarity? Or assistant? Let's try system.
-      content: resultContent, // Display formatted result
-      timestamp: Date.now(),
-      toolCallInfo: resultInfo,
-    };
-    // Add the result message
     set(chatsAtom, (prev) =>
-      updateMessagesInChat(prev, chatId, (msgs) => [...msgs, resultMessage]),
+      updateMessagesInChat(prev, chatId, (msgs) =>
+        msgs.map((m) =>
+          m.id === pendingMessageId // Find the original message
+            ? { ...m, content: resultContent, toolCallInfo: resultInfo } // Update its content and info
+            : m,
+        ),
+      ),
     );
 
-    // 4. Feed result back to AI
+    // 4. Feed result back to AI (Add a NEW message for this purpose)
+    // This message might be hidden or styled differently in the UI,
+    // or simply exist in the history for the AI's context.
     const resultForAI = formatToolResultForAI(result);
     const feedbackMessage: Message = {
       id: uuidv4(),
-      // MUST be role 'tool' for some models like OpenAI function calling V2,
-      // or 'user'/'assistant' containing structured info.
-      // Let's try using a descriptive user message for now for broad compatibility.
-      role: 'user',
-      content: `(Tool ${toolName} finished with result: ${resultForAI})`, // Context for the AI
+      role: 'user', // Or 'tool' if required by the specific model/API
+      content: `(Tool ${toolName} finished with result: ${resultForAI})`,
       timestamp: Date.now(),
+      // Optional: Add toolCallId or other metadata if the model needs it
+      // tool_call_id: callId, // Example if using OpenAI's tool role
     };
     set(chatsAtom, (prev) =>
       updateMessagesInChat(prev, chatId, (msgs) => [...msgs, feedbackMessage]),
@@ -883,37 +920,45 @@ async function executeToolCall(
     // 5. Trigger AI again with the updated history
     triggerAICallWithUpdatedHistory(get, set, chatId);
   } catch (error: any) {
-    // 3. Process ERROR result
+    // 3. Process ERROR result - Update the original message
     console.error(`[MCP Execute] Tool call ${toolName} failed:`, error);
-    const errorContent = `Tool **${toolName}** failed: ${error.message || 'Unknown error'}`;
+    const errorContent = `Tool **${toolName}** on **${serverName}** failed: ${error.message || 'Unknown error'}`;
     const errorInfo: ToolCallInfo = {
       callId,
       toolName,
       type: 'error',
       isError: true,
+      // Include serverId/serverName if needed for display consistency
+      // serverId,
+      // serverName,
     };
-    const errorMessage: Message = {
-      id: uuidv4(),
-      role: 'system', // Keep consistent with success result message role
-      content: errorContent,
-      timestamp: Date.now(),
-      toolCallInfo: errorInfo,
-    };
-    // Add the error message
     set(chatsAtom, (prev) =>
-      updateMessagesInChat(prev, chatId, (msgs) => [...msgs, errorMessage]),
+      updateMessagesInChat(prev, chatId, (msgs) =>
+        msgs.map((m) =>
+          m.id === pendingMessageId // Find the original message
+            ? { ...m, content: errorContent, toolCallInfo: errorInfo } // Update its content and info
+            : m,
+        ),
+      ),
     );
 
-    // Decide whether to re-trigger AI after an error. Maybe not automatically.
-    // The user might want to retry or modify their request based on the error.
+    // Display error to the user
     toast.error(
       `Tool "${toolName}" failed: ${error.message || 'Unknown error'}`,
     );
+
+    // Decide whether to re-trigger AI after an error.
+    // Current logic: Do not trigger AI again on error. This seems reasonable.
+    // If you wanted to feed the error back, you'd add a feedback message here too.
+    /*
+        const errorForAI = `Tool ${toolName} failed: ${error.message || 'Unknown error'}`;
+        const errorFeedbackMessage: Message = { ... };
+        set(chatsAtom, ...);
+        triggerAICallWithUpdatedHistory(get, set, chatId); // Optional: if you want AI to react to the error
+        */
   } finally {
-    // Should we update the original 'running' message? Maybe remove it?
-    // For now, let's leave the history (pending -> running -> result/error)
-    // Or maybe update the running message to final state?
-    // Let's just leave it and add the separate result/error message.
+    // No specific action needed in finally anymore, as the message update
+    // happens within the try/catch blocks.
   }
 }
 
