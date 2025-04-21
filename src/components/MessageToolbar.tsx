@@ -1,16 +1,16 @@
 // src/components/MessageToolbar.tsx
-import { cn } from '@/lib/utils.ts';
+import { cn } from '@/lib/utils';
 import {
   deleteMessageFromActiveChatAtom,
   isAssistantLoadingAtom, // Check loading state
   setEditingMessageIdAtom,
-} from '@/store/index.ts';
-import type { Message } from '@/types.ts';
+} from '@/store/index';
+import type { Message } from '@/types';
 import copy from 'copy-to-clipboard';
 import { useAtomValue, useSetAtom } from 'jotai'; // Added useAtomValue
 import React from 'react';
 import { LuCopy, LuPencil, LuRefreshCw, LuTrash2 } from 'react-icons/lu';
-import { Button } from './ui/Button.tsx';
+import { Button } from './ui/Button';
 
 interface MessageToolbarProps {
   message: Message;

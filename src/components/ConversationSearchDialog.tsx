@@ -5,20 +5,19 @@ import {
   DialogDescription,
   DialogHeader,
   DialogTitle,
-} from '@/components/ui/Dialog.tsx';
-import { Input } from '@/components/ui/Input.tsx';
+} from '@/components/ui/Dialog';
+import { Input } from '@/components/ui/Input';
 import {
   activeChatIdAtom,
   chatsAtom,
   isConversationSearchOpenAtom,
-} from '@/store/index.ts';
-import { Chat, Message } from '@/types.ts';
+} from '@/store/index';
 import { useAtom, useAtomValue, useSetAtom } from 'jotai';
 import _ from 'lodash'; // For debouncing
 
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { LuSearch, LuX } from 'react-icons/lu';
-import { Button } from './ui/Button.tsx';
+import { Button } from './ui/Button';
 
 interface SearchResult {
   chatId: string;

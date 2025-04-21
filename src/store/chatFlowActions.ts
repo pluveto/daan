@@ -1,25 +1,24 @@
 // src/store/chatFlowActions.ts (or similar)
-import type { Message } from '@/types.ts';
+import type { Message } from '@/types';
 import { atom } from 'jotai';
 import { toast } from 'sonner';
 import { v4 as uuidv4 } from 'uuid';
-import { callOpenAIStreamLogic, generateChatTitle } from './apiActions.ts';
-import { isAssistantLoadingAtom } from './apiState.ts';
-import { updateChatAtom } from './chatActions.ts';
+import { callOpenAIStreamLogic, generateChatTitle } from './apiActions';
+import { isAssistantLoadingAtom } from './apiState';
+import { updateChatAtom } from './chatActions';
 // Import all necessary atoms and functions directly here
-import { activeChatAtom } from './chatDerived.ts';
+import { activeChatAtom } from './chatDerived';
 import {
   deleteMessageFromActiveChatAtom,
   upsertMessageInActiveChatAtom,
-} from './messageActions.ts';
-import { getHistoryForApi } from './regeneration.ts';
+} from './messageActions';
+import { getHistoryForApi } from './regeneration';
 import {
   apiBaseUrlAtom,
   apiKeyAtom,
   defaultMaxHistoryAtom,
-  defaultSummaryModelAtom,
   generateSummaryAtom,
-} from './settings.ts';
+} from './settings';
 
 export const sendMessageActionAtom = atom(
   null, // Write-only atom
@@ -43,7 +42,6 @@ export const sendMessageActionAtom = atom(
     const apiBaseUrl = get(apiBaseUrlAtom);
     const globalDefaultMaxHistory = get(defaultMaxHistoryAtom);
     const generateSummary = get(generateSummaryAtom);
-    const summaryModel = get(defaultSummaryModelAtom);
 
     // Context Clearing ('---')
     if (trimmedInput === '---') {
@@ -102,6 +100,7 @@ export const sendMessageActionAtom = atom(
     // --- End Title Generation ---
 
     const messagesToSend = getHistoryForApi(
+      get,
       historyMessages, // Use messages from the latest state
       maxHistory,
       updatedChat.systemPrompt?.trim(),
@@ -117,13 +116,7 @@ export const sendMessageActionAtom = atom(
     }
 
     // Call NEW signature, passing set
-    callOpenAIStreamLogic(
-      set, // Pass set!
-      apiKey,
-      apiBaseUrl,
-      updatedChat.model,
-      messagesToSend,
-    ).catch((err) =>
+    callOpenAIStreamLogic(get, set, messagesToSend).catch((err) =>
       console.error('Error during assistant response generation:', err),
     );
 

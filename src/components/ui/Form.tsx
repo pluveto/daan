@@ -1,5 +1,5 @@
-import { Label } from '@/components/ui/Label.tsx';
-import { cn } from '@/lib/utils.ts';
+import { Label } from '@/components/ui/Label';
+import { cn } from '@/lib/utils';
 import * as LabelPrimitive from '@radix-ui/react-label';
 import { Slot } from '@radix-ui/react-slot';
 import * as React from 'react';

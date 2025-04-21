@@ -1,5 +1,5 @@
 // src/components/ChatHistory.tsx (Optimized)
-import { cn } from '@/lib/utils.ts';
+import { cn } from '@/lib/utils';
 import {
   activeChatAtom,
   editingMessageIdAtom,
@@ -7,11 +7,11 @@ import {
   showEstimatedTokensAtom,
   showTimestampsAtom,
   updateMessageContentAtom,
-} from '@/store/index.ts';
+} from '@/store/index';
 import { useAtom, useAtomValue, useSetAtom } from 'jotai';
 import React, { useCallback, useEffect, useRef } from 'react';
 // Import the memoized ChatMessageItem
-import { ChatMessageItem } from './ChatMessageItem.tsx';
+import { ChatMessageItem } from './ChatMessageItem';
 
 interface ChatHistoryProps {
   className?: string;

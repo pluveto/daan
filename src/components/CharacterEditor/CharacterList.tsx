@@ -9,8 +9,8 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
   AlertDialogTrigger,
-} from '@/components/ui/AlertDialog.tsx';
-import { Button } from '@/components/ui/Button.tsx';
+} from '@/components/ui/AlertDialog';
+import { Button } from '@/components/ui/Button';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -20,12 +20,12 @@ import {
   DropdownMenuSubContent,
   DropdownMenuSubTrigger,
   DropdownMenuTrigger,
-} from '@/components/ui/DropdownMenu.tsx';
-import { downloadJson } from '@/lib/download.ts';
-import { readFileAsText } from '@/lib/file.ts';
-import { cn } from '@/lib/utils.ts';
-import { customCharactersAtom } from '@/store/index.ts';
-import { CustomCharacter } from '@/types.ts';
+} from '@/components/ui/DropdownMenu';
+import { downloadJson } from '@/lib/download';
+import { readFileAsText } from '@/lib/file';
+import { cn } from '@/lib/utils';
+import { customCharactersAtom } from '@/store/index';
+import { CustomCharacter } from '@/types';
 import { useAtomValue } from 'jotai';
 import React, { useRef } from 'react';
 import {

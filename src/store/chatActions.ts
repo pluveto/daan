@@ -1,16 +1,16 @@
-import type { Chat } from '@/types.ts';
+import type { Chat } from '@/types';
 import { atom } from 'jotai';
 import { toast } from 'sonner';
 import { v4 as uuidv4 } from 'uuid';
-import { abortControllerAtom, isAssistantLoadingAtom } from './apiState.ts';
-import { activeChatIdAtom, chatsAtom, type ChatsRecord } from './chatData.ts';
-import { activeChatAtom, sortedChatsAtom } from './chatDerived.ts';
+import { abortControllerAtom, isAssistantLoadingAtom } from './apiState';
+import { activeChatIdAtom, chatsAtom, type ChatsRecord } from './chatData';
+import { activeChatAtom, sortedChatsAtom } from './chatDerived';
 import {
   defaultMaxHistoryAtom,
   defaultModelAtom,
   defaultPromptAtom,
-} from './settings.ts';
-import { editingMessageIdAtom, focusInputAtom } from './uiState.ts';
+} from './settings';
+import { editingMessageIdAtom, focusInputAtom } from './uiState';
 
 // --- Helper Type ---
 type NewChatOptions = Partial<

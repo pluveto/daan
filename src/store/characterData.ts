@@ -1,5 +1,5 @@
-import { atomWithSafeStorage } from '@/lib/utils.ts';
-import type { CustomCharacter } from '@/types.ts';
+import { atomWithSafeStorage } from '@/lib/utils';
+import type { CustomCharacter } from '@/types';
 
 // --- Character Data Atom ---
 

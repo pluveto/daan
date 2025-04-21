@@ -1,4 +1,4 @@
-import { cn } from '@/lib/utils.ts';
+import { cn } from '@/lib/utils';
 import * as SelectPrimitive from '@radix-ui/react-select';
 import * as React from 'react';
 import { LuCheck, LuChevronDown, LuChevronUp } from 'react-icons/lu';

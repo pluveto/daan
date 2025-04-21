@@ -1,16 +1,75 @@
 // src/types.ts
+
 export type ValidRoles = 'user' | 'assistant' | 'system';
+
+// --- Tool Call Info Structure ---
+interface BaseToolCallInfo {
+  callId: string; // Unique ID for this specific tool call instance
+  toolName: string;
+}
+export interface PendingToolCallInfo extends BaseToolCallInfo {
+  type: 'pending';
+  serverId: string;
+  serverName: string; // User-friendly name for display
+  args: any; // Parsed arguments
+}
+export interface RunningToolCallInfo extends BaseToolCallInfo {
+  type: 'running';
+  serverId: string;
+  serverName: string;
+  args: any;
+}
+export interface ResultToolCallInfo extends BaseToolCallInfo {
+  type: 'result';
+  isError: false;
+  // Result content will be in the main message content field
+  // result: any; // Store structured result if needed, otherwise use message content
+}
+export interface ErrorToolCallInfo extends BaseToolCallInfo {
+  type: 'error';
+  isError: true;
+  // Error message will be in the main message content field
+  // error: string;
+}
+export interface DeniedToolCallInfo extends BaseToolCallInfo {
+  type: 'denied';
+}
+
+export type ToolCallInfo =
+  | PendingToolCallInfo
+  | RunningToolCallInfo
+  | ResultToolCallInfo
+  | ErrorToolCallInfo
+  | DeniedToolCallInfo;
+
+export function getFriendlyNameOfToolCallInfo(info: ToolCallInfo): string {
+  switch (info.type) {
+    case 'pending':
+      return info.serverName;
+    case 'running':
+      return info.serverName;
+    case 'result':
+      return '(Result)';
+    case 'error':
+      return '(Error)';
+    case 'denied':
+      return '(Denied)';
+  }
+}
+
+// --- End Tool Call Info ---
 
 export interface Message {
   content: string;
   id: string;
   isStreaming?: boolean;
-  // Add 'divider' role
-  role: ValidRoles | 'divider';
+  role: ValidRoles | 'divider' | 'tool_call_pending' | 'tool_call_result';
   timestamp: number;
-  // Optional: Add other metadata if needed, e.g., error state
-  // error?: string;
+  toolCallInfo?: ToolCallInfo | null;
 }
+
+// Represents a namespaced model ID, e.g., "openai::gpt-4o" or "custom::my-model"
+export type NamespacedModelId = `${string}::${string}`;
 
 export interface Chat {
   createdAt: number;
@@ -18,54 +77,51 @@ export interface Chat {
   id: string;
   characterId: string | null;
   isPinned: boolean;
-  // Added for pinning
   maxHistory: number | null;
   messages: Message[];
-  // Emoji
-  model: string;
+  model: NamespacedModelId; // Use namespaced ID
   name: string;
   systemPrompt: string;
-  input: string; // active input message
-  updatedAt: number; // Added for per-chat history limit (null = use global)
-  // Optional: Add summary later if needed
-  // summary?: string;
+  input: string;
+  updatedAt: number;
+
+  /** Overrides the default temperature for this chat. Null uses default. */
+  temperature?: number | null;
+  /** Overrides the default max tokens for this chat. Null uses default. */
+  maxTokens?: number | null;
+  /** Overrides the default top P for this chat. Null uses default. */
+  topP?: number | null;
 }
 
-// Add more specific types as needed, e.g., for models
-// Let's allow any string for flexibility, but keep the examples
-export type SupportedModels = string; // Allow any string
+// Model definition within a provider
+export interface ApiModelConfig {
+  id: NamespacedModelId; // Fully namespaced ID (e.g., "openai::gpt-4o")
+  name: string; // User-facing display name (e.g., "GPT-4o")
+  supportsFileUpload?: boolean;
+  supportsImageUpload?: boolean;
+  // Optional model-specific parameter overrides (null = use provider/global default)
+  temperature?: number | null;
+  maxTokens?: number | null;
+  topP?: number | null;
+}
 
-// Example models (can be extended)
-export const exampleModels: SupportedModels[] = [
-  'claude-3-5-haiku-20241022',
-  'claude-3-5-sonnet-20241022',
-  'claude-3-7-sonnet-thinking',
-  'claude-3-haiku-20240307',
-  'claude-3-opus-20240229',
-  'claude-3-sonnet-20240229',
-  'deepseek-r1',
-  'deepseek-v3-250324',
-  'gemini-1.5-pro-latest',
-  'gemini-2.0-flash-lite-preview-02-05',
-  'gemini-2.0-flash-lite',
-  'gemini-2.0-flash-thinking-exp-01-21',
-  'gemini-2.0-flash',
-  'gemini-2.5-pro-preview-03-25',
-  'gemini-pro',
-  'gpt-3.5-turbo',
-  'gpt-4-turbo',
-  'gpt-4.1-mini',
-  'gpt-4.1-nano',
-  'gpt-4',
-  'gpt-4o',
-  'o1-mini',
-  'o1',
-  'o3-mini',
-  'o3',
-  'o4-mini',
-];
+// API Provider Configuration
+export interface ApiProviderConfig {
+  id: string; // Unique provider ID (e.g., "openai", "custom")
+  name: string; // User-facing display name (e.g., "OpenAI")
+  description?: string;
+  enabled: boolean;
+  // Optional provider-level overrides (null/empty = use global fallback)
+  apiKey?: string | null;
+  apiBaseUrl?: string | null;
+  defaultTemperature?: number | null;
+  defaultMaxTokens?: number | null;
+  defaultTopP?: number | null;
+  // List of models offered by this provider
+  models: ApiModelConfig[];
+}
 
-// Simple list of common emojis for selection (can be expanded)
+// Common emojis list (unchanged)
 export const commonEmojis = [
   '💬',
   '🧠',
@@ -89,6 +145,7 @@ export const commonEmojis = [
   '📎',
 ];
 
+// Custom Character type (unchanged)
 export interface CustomCharacter {
   id: string;
   sort: number;
@@ -96,7 +153,7 @@ export interface CustomCharacter {
   description?: string;
   icon: string;
   prompt: string;
-  model: string;
+  model: NamespacedModelId; // Use namespaced ID
   maxHistory: number | null;
   createdAt: number;
   updatedAt: number;

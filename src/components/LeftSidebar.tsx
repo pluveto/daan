@@ -6,8 +6,8 @@ import {
   AlertDialogDescription,
   AlertDialogTitle,
   AlertDialogTrigger,
-} from '@/components/ui/AlertDialog.tsx';
-import { cn } from '@/lib/utils.ts';
+} from '@/components/ui/AlertDialog';
+import { cn } from '@/lib/utils';
 import {
   activeChatIdAtom,
   clearUnpinnedChatsAtom, // Import clear action
@@ -16,10 +16,11 @@ import {
   deleteChatAtom,
   isCharacterEditorOpenAtom,
   isConversationSearchOpenAtom,
-  sortedChatsAtom, // Use sorted chats
+  isSystemSettingsDialogOpenAtom,
+  sortedChatsAtom,
   togglePinChatAtom, // Import toggle pin action
-} from '@/store/index.ts';
-import { Chat, CustomCharacter } from '@/types.ts';
+} from '@/store/index';
+import { Chat, CustomCharacter } from '@/types';
 import { format, isToday, isYesterday, startOfDay } from 'date-fns'; // Import date-fns functions
 
 import { Provider, useAtom, useAtomValue, useSetAtom } from 'jotai';
@@ -33,13 +34,14 @@ import {
   LuPinOff,
   LuPlus,
   LuSearch,
+  LuSettings,
   LuTrash2,
 } from 'react-icons/lu';
-import { ConversationActionsMenu } from './ConversationActionsMenu.tsx'; // Import the new component
+import { ConversationActionsMenu } from './ConversationActionsMenu'; // Import the new component
 
-import { AlertDialogFooter, AlertDialogHeader } from './ui/AlertDialog.tsx';
+import { AlertDialogFooter, AlertDialogHeader } from './ui/AlertDialog';
 // Added Pin icons
-import { Button } from './ui/Button.tsx';
+import { Button } from './ui/Button';
 
 // Get branding from environment variables or use defaults
 const appName = import.meta.env.VITE_APP_NAME || 'Daan';
@@ -87,6 +89,7 @@ interface GroupedChats {
 export const LeftSidebar: React.FC = () => {
   const sortedChats = useAtomValue(sortedChatsAtom); // Use the derived sorted atom
   const setIsCharacterEditorOpen = useSetAtom(isCharacterEditorOpenAtom); // Setter for editor
+  const setIsSystemSettingsOpen = useSetAtom(isSystemSettingsDialogOpenAtom); // <--- New setter
 
   const characters = useAtomValue(customCharactersAtom);
   const [activeChatId, setActiveChatId] = useAtom(activeChatIdAtom);
@@ -213,6 +216,16 @@ export const LeftSidebar: React.FC = () => {
               {slogan}
             </p>
           </div>
+          {/* System Settings Button */}
+          <Button
+            aria-label="System Settings"
+            className="ml-auto flex-shrink-0" // Push to the right
+            onClick={() => setIsSystemSettingsOpen(true)} // Open dialog
+            size="icon"
+            variant="ghost"
+          >
+            <LuSettings className="h-5 w-5" />
+          </Button>
         </div>
       </div>
 

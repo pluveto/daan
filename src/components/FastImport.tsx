@@ -8,9 +8,9 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
   AlertDialogTrigger,
-} from '@/components/ui/AlertDialog.tsx';
+} from '@/components/ui/AlertDialog';
 // 假设使用shadcn的alert-dialog
-import { apiBaseUrlAtom, apiKeyAtom } from '@/store/index.ts';
+import { apiBaseUrlAtom, apiKeyAtom } from '@/store/index';
 import { useAtom } from 'jotai';
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';

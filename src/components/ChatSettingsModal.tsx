@@ -5,11 +5,11 @@ import {
   defaultMaxHistoryAtom, // To show default value
   isChatSettingsModalOpenAtom,
   updateChatAtom,
-} from '@/store/index.ts';
-import { commonEmojis, exampleModels } from '@/types.ts'; // Import emojis and example models
+} from '@/store/index';
+import { commonEmojis, exampleModels } from '@/types'; // Import emojis and example models
 import { useAtom, useAtomValue, useSetAtom } from 'jotai';
 import React, { useEffect, useState } from 'react';
-import { Button } from './ui/Button.tsx';
+import { Button } from './ui/Button';
 import {
   Dialog,
   DialogContent,
@@ -17,9 +17,9 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from './ui/Dialog.tsx';
-import { Input } from './ui/Input.tsx';
-import { Label } from './ui/Label.tsx';
+} from './ui/Dialog';
+import { Input } from './ui/Input';
+import { Label } from './ui/Label';
 import {
   Select,
   SelectContent,
@@ -28,8 +28,8 @@ import {
   SelectLabel,
   SelectTrigger,
   SelectValue,
-} from './ui/Select.tsx';
-import { Textarea } from './ui/Textarea.tsx';
+} from './ui/Select';
+import { Textarea } from './ui/Textarea';
 
 export const ChatSettingsModal: React.FC = () => {
   const [isOpen, setIsOpen] = useAtom(isChatSettingsModalOpenAtom);

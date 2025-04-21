@@ -6,7 +6,7 @@ import {
   DialogHeader,
   DialogTitle,
   DialogTrigger,
-} from '@/components/ui/Dialog.tsx';
+} from '@/components/ui/Dialog';
 import {
   addCharacterAtom,
   apiKeyAtom,
@@ -21,19 +21,19 @@ import {
   isCharacterEditorOpenAtom,
   moveCharacterAtom,
   updateCharacterAtom,
-} from '@/store/index.ts';
-import { CustomCharacter } from '@/types.ts';
+} from '@/store/index';
+import { CustomCharacter } from '@/types';
 import { useAtom, useAtomValue, useSetAtom } from 'jotai';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
-import { CharacterForm } from './CharacterForm.tsx';
-import { CharacterList } from './CharacterList.tsx';
+import { CharacterForm } from './CharacterForm';
+import { CharacterList } from './CharacterList';
 
 type PartialCharacter = Partial<CustomCharacter>;
 
 export const CharacterEditor: React.FC = () => {
   const [isOpen, setIsOpen] = useAtom(isCharacterEditorOpenAtom);
-  const [characters, setCharacters] = useAtom(customCharactersAtom); // Still need set for direct updates if needed
+  const [characters] = useAtom(customCharactersAtom); // Still need set for direct updates if needed
   const availableModels = useAtomValue(availableModelsAtom);
   const globalDefaultMaxHistory = useAtomValue(defaultMaxHistoryAtom);
   const apiKey = useAtomValue(apiKeyAtom); // For auto-fill check

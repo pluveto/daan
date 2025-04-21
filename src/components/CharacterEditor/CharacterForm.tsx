@@ -1,5 +1,5 @@
 // src/components/CharacterEditor/CharacterForm.tsx
-import { Button } from '@/components/ui/Button.tsx';
+import { Button } from '@/components/ui/Button';
 // Import shadcn/ui Form components
 import {
   Form,
@@ -9,8 +9,8 @@ import {
   FormItem,
   FormLabel,
   FormMessage,
-} from '@/components/ui/Form.tsx';
-import { Input } from '@/components/ui/Input.tsx';
+} from '@/components/ui/Form';
+import { Input } from '@/components/ui/Input';
 import {
   Select,
   SelectContent,
@@ -19,21 +19,19 @@ import {
   SelectLabel,
   SelectTrigger,
   SelectValue,
-} from '@/components/ui/Select.tsx';
-import { Textarea } from '@/components/ui/Textarea.tsx';
-import { cn } from '@/lib/utils.ts';
-import { defaultModelAtom } from '@/store/settings.ts';
-import { CustomCharacter, exampleModels, PartialCharacter } from '@/types.ts';
+} from '@/components/ui/Select';
+import { Textarea } from '@/components/ui/Textarea';
+import { groupedAvailableModelsAtom } from '@/store';
+import { CustomCharacter, NamespacedModelId, PartialCharacter } from '@/types';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useAtomValue } from 'jotai';
-import React, { useEffect } from 'react';
+import React from 'react';
 import { useForm, useWatch } from 'react-hook-form';
 import { LuLoader } from 'react-icons/lu';
-import { CharacterFormData, characterSchema } from './validation.ts';
+import { CharacterFormData, characterSchema } from './validation';
 
 interface CharacterFormProps {
   characterData: CustomCharacter;
-  availableModels: string[];
   globalDefaultMaxHistory: number | null;
   isAutoFilling: boolean;
   canAutoFill: boolean;
@@ -43,23 +41,40 @@ interface CharacterFormProps {
 
 export const CharacterForm: React.FC<CharacterFormProps> = ({
   characterData,
-  availableModels,
   globalDefaultMaxHistory,
   isAutoFilling,
   canAutoFill,
   onSave,
   onAutoFill,
 }) => {
-  // 1. Initialize react-hook-form
+  // --- Get Grouped Models ---
+  const groupedModels = useAtomValue(groupedAvailableModelsAtom);
+  // Flatten the list of available model IDs for checking if current value exists
+  const availableModelIds = React.useMemo(
+    () => groupedModels.flatMap((group) => group.models.map((m) => m.id)),
+    [groupedModels],
+  );
+
+  // --- Form Setup ---
   const form = useForm<CharacterFormData>({
     resolver: zodResolver(characterSchema),
     mode: 'onChange',
-    defaultValues: characterData,
+    defaultValues: {
+      ...characterData,
+      // Ensure maxHistoryStr is initialized correctly (from null or number)
+      maxHistoryStr:
+        characterData.maxHistory === null
+          ? ''
+          : String(characterData.maxHistory),
+    },
     // Default values are set via reset in useEffect
   });
 
   // Watch model for Select rendering logic
   const currentModelValue = useWatch({ control: form.control, name: 'model' });
+  const isModelInAvailableList = availableModelIds.includes(
+    currentModelValue as NamespacedModelId,
+  );
 
   // 3. Define submit handler
   const onSubmit = (data: CharacterFormData) => {
@@ -71,22 +86,18 @@ export const CharacterForm: React.FC<CharacterFormProps> = ({
         ? data.description.trim()
         : undefined,
       prompt: data.prompt,
-      model: data.model,
+      model: data.model as NamespacedModelId, // Already NamespacedModelId from form state
       maxHistory:
         data.maxHistoryStr === undefined || data.maxHistoryStr.trim() === ''
           ? null
           : Number.parseInt(data.maxHistoryStr, 10),
     };
-    console.log(processedData);
+    console.log('Saving Character:', processedData);
     onSave(processedData);
-    // Reset form to submitted values to clear dirty state
-    form.reset(data);
+    form.reset(data); // Reset form to submitted values to clear dirty state
   };
 
-  // 4. Define other handlers
-  const handleResetClick = () => {
-    form.reset();
-  };
+  const handleResetClick = () => form.reset();
 
   const handleAutoFillClick = async () => {
     if (canAutoFill) {
@@ -96,16 +107,15 @@ export const CharacterForm: React.FC<CharacterFormProps> = ({
         form.reset({
           ...tempData,
           ...autoFilledData,
+          // Ensure maxHistoryStr is correctly formatted after autofill
+          maxHistoryStr:
+            autoFilledData.maxHistory === null
+              ? ''
+              : String(autoFilledData.maxHistory),
         });
       }
     }
   };
-
-  // Prepare model lists for Select
-  const customOnlyModels = availableModels.filter(
-    (m) => !exampleModels.includes(m),
-  );
-  const isModelInAvailableList = availableModels.includes(currentModelValue);
 
   // 5. Render the form using shadcn/ui Form components
   return (
@@ -204,71 +214,65 @@ export const CharacterForm: React.FC<CharacterFormProps> = ({
           />
 
           {/* Model Field */}
+          {/* --- UPDATED Model Field --- */}
           <FormField
             control={form.control}
             name="model"
-            render={({ field }) => {
-              console.log(field);
-
-              return (
-                <FormItem>
-                  <FormLabel>
-                    Model <span className="text-destructive">*</span>
-                  </FormLabel>
-                  {/* Use Select component inside FormItem */}
-                  <Select onValueChange={field.onChange} value={field.value}>
-                    <FormControl>
-                      {/* Trigger goes inside FormControl */}
-                      <SelectTrigger ref={field.ref}>
-                        <SelectValue placeholder="Select a model" />
-                      </SelectTrigger>
-                    </FormControl>
-                    {/* Content remains outside FormControl */}
-                    <SelectContent>
-                      {/* Recommended Models */}
-                      <SelectGroup>
-                        <SelectLabel>Recommended</SelectLabel>
-                        {exampleModels.map((m) => (
-                          <SelectItem key={m} value={m}>
-                            {m}
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>
+                  Model <span className="text-destructive">*</span>
+                </FormLabel>
+                <Select onValueChange={field.onChange} value={field.value}>
+                  <FormControl>
+                    <SelectTrigger ref={field.ref}>
+                      <SelectValue placeholder="Select a model" />
+                    </SelectTrigger>
+                  </FormControl>
+                  <SelectContent>
+                    {groupedModels.map((group) => (
+                      <SelectGroup key={group.providerName}>
+                        <SelectLabel>{group.providerName}</SelectLabel>
+                        {group.models.map((model) => (
+                          <SelectItem key={model.id} value={model.id}>
+                            {model.name}
                           </SelectItem>
                         ))}
                       </SelectGroup>
-                      {/* Custom Models */}
-                      {customOnlyModels.length > 0 && (
-                        <SelectGroup>
-                          <SelectLabel>Custom</SelectLabel>
-                          {customOnlyModels.map((m) => (
-                            <SelectItem key={m} value={m}>
-                              {m}
-                            </SelectItem>
-                          ))}
-                        </SelectGroup>
-                      )}
-                      {/* Ensure current model value is always selectable */}
-                      {currentModelValue && !isModelInAvailableList && (
-                        <SelectGroup>
-                          <SelectLabel>Current (Not in lists)</SelectLabel>
-                          <SelectItem
-                            key={currentModelValue}
-                            value={currentModelValue}
-                          >
-                            {currentModelValue}
-                          </SelectItem>
-                        </SelectGroup>
-                      )}
-                    </SelectContent>
-                  </Select>
-                  <FormMessage />
-                </FormItem>
-              );
-            }}
+                    ))}
+                    {/* Ensure current value is selectable if not in the available list */}
+                    {currentModelValue && !isModelInAvailableList && (
+                      <SelectGroup>
+                        <SelectLabel className="text-destructive">
+                          Current (Unavailable)
+                        </SelectLabel>
+                        <SelectItem
+                          key={currentModelValue}
+                          value={currentModelValue}
+                          className="text-destructive" // Optional: Style unavailable item
+                        >
+                          {currentModelValue.split('::')[1] ||
+                            currentModelValue}{' '}
+                          {/* Show base name */}
+                        </SelectItem>
+                      </SelectGroup>
+                    )}
+                    {groupedModels.length === 0 && !currentModelValue && (
+                      <SelectItem value="none" disabled>
+                        No models available
+                      </SelectItem>
+                    )}
+                  </SelectContent>
+                </Select>
+                <FormMessage />
+              </FormItem>
+            )}
           />
 
-          {/* Max History Field */}
+          {/* Max History Field (unchanged structure, ensure validation handles empty string) */}
           <FormField
             control={form.control}
-            name="maxHistoryStr"
+            name="maxHistoryStr" // Use the string field for input
             render={({ field }) => (
               <FormItem>
                 <FormLabel>Max History (Messages)</FormLabel>
@@ -279,8 +283,7 @@ export const CharacterForm: React.FC<CharacterFormProps> = ({
                     step="1"
                     placeholder={`Global Default (${globalDefaultMaxHistory ?? 'None'})`}
                     {...field}
-                    // Ensure value passed to number input is string or empty string
-                    value={field.value ?? ''}
+                    value={field.value ?? ''} // Controlled input needs string
                   />
                 </FormControl>
                 <FormDescription className="text-xs">
