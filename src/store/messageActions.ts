@@ -14,7 +14,7 @@ import { editingMessageIdAtom } from './uiState';
  * @param updateTimestamp Whether to update the chat's `updatedAt` timestamp. Defaults to true.
  * @returns The new ChatsRecord state with the updated chat.
  */
-const updateMessagesInChat = (
+export const updateMessagesInChat = (
   chats: ChatsRecord,
   chatId: string,
   messageUpdater: (messages: Message[]) => Message[],

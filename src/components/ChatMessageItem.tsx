@@ -1,6 +1,9 @@
 // src/components/ChatMessageItem.tsx (Optimized)
 import { cn } from '@/lib/utils';
-import type { Message } from '@/types';
+import { approveToolCallAtom, denyToolCallAtom } from '@/store';
+import type { Message, ToolCallInfo } from '@/types';
+// Add icons for tool calls
+import { useSetAtom } from 'jotai';
 // Use specific icons from lucide-react directly
 import React, {
   useCallback,
@@ -10,7 +13,19 @@ import React, {
   useState,
 } from 'react';
 // Use specific imports if LucideBarChart is the only one needed from lucide-react
-import { LuBot, LuChartBar, LuClock, LuLoader, LuUser } from 'react-icons/lu';
+import {
+  LuBot,
+  LuChartBar,
+  LuCircleCheck,
+  LuClock,
+  LuCog,
+  LuLoader,
+  LuRefreshCw,
+  LuThumbsDown,
+  LuThumbsUp,
+  LuTriangleAlert,
+  LuUser,
+} from 'react-icons/lu';
 import ReactMarkdown from 'react-markdown';
 import rehypeKatex from 'rehype-katex';
 import rehypeRaw from 'rehype-raw';
@@ -51,6 +66,33 @@ const msgPostProcess = (content: string) => {
   return tmp;
 };
 
+// --- New Tool Call Info Type Guards ---
+function isPendingToolCall(
+  info?: ToolCallInfo | null,
+): info is Extract<ToolCallInfo, { type: 'pending' }> {
+  return info?.type === 'pending';
+}
+function isRunningToolCall(
+  info?: ToolCallInfo | null,
+): info is Extract<ToolCallInfo, { type: 'running' }> {
+  return info?.type === 'running';
+}
+function isResultToolCall(
+  info?: ToolCallInfo | null,
+): info is Extract<ToolCallInfo, { type: 'result' }> {
+  return info?.type === 'result';
+}
+function isErrorToolCall(
+  info?: ToolCallInfo | null,
+): info is Extract<ToolCallInfo, { type: 'error' }> {
+  return info?.type === 'error';
+}
+function isDeniedToolCall(
+  info?: ToolCallInfo | null,
+): info is Extract<ToolCallInfo, { type: 'denied' }> {
+  return info?.type === 'denied';
+}
+
 interface ChatMessageItemProps {
   message: Message;
   isEditing: boolean;
@@ -66,6 +108,40 @@ interface ChatMessageItemProps {
   // setEditingId: (id: string | null) => void;
 }
 
+interface ToolCallPendingMessage extends Message {
+  role: 'tool_call_pending'; // Custom role
+  toolCall: {
+    serverName: string; // User-friendly name
+    toolName: string;
+    args: any; // Parsed arguments
+  };
+}
+interface ToolCallResultMessage extends Message {
+  role: 'tool_call_result'; // Custom role
+  toolCall: {
+    toolName: string;
+    isError: boolean;
+    // Content will hold the stringified result or error message
+  };
+}
+
+function isToolCallPendingMessage(
+  message: Message,
+): message is ToolCallPendingMessage {
+  return (
+    message.role === 'tool_call_pending' &&
+    typeof (message as any).toolCall === 'object'
+  );
+}
+function isToolCallResultMessage(
+  message: Message,
+): message is ToolCallResultMessage {
+  return (
+    message.role === 'tool_call_result' &&
+    typeof (message as any).toolCall === 'object'
+  );
+}
+
 const _ChatMessageItem: React.FC<ChatMessageItemProps> = ({
   message,
   isEditing,
@@ -79,6 +155,10 @@ const _ChatMessageItem: React.FC<ChatMessageItemProps> = ({
   // --- Internal State for Editing ---
   const [internalEditContent, setInternalEditContent] = useState<string>('');
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  // --- Atoms for Tool Call Actions ---
+  const approveToolCall = useSetAtom(approveToolCallAtom);
+  const denyToolCall = useSetAtom(denyToolCallAtom);
 
   // --- Memoized Calculations (Good practice) ---
   const numTokens = useMemo(() => {
@@ -163,6 +243,146 @@ const _ChatMessageItem: React.FC<ChatMessageItemProps> = ({
   };
 
   // --- Component Rendering ---
+  const toolCallInfo = message.toolCallInfo; // Extract for easier access
+
+  // --- Tool Call Pending Rendering ---
+  if (isPendingToolCall(toolCallInfo)) {
+    return (
+      <div className="message-item group relative my-2 flex flex-col rounded border border-amber-300 bg-amber-50 p-3 dark:border-amber-700 dark:bg-amber-900/30">
+        <div className="mb-1.5 flex items-center space-x-2 text-sm font-medium text-amber-800 dark:text-amber-300">
+          <LuCog className="h-4 w-4 text-amber-600 dark:text-amber-400" />
+          <span>Tool Call Request</span>
+        </div>
+        <div className="ml-6 space-y-1 text-sm text-neutral-800 dark:text-neutral-300">
+          <p>
+            Assistant wants to use tool:
+            <br />
+            <strong>{toolCallInfo.toolName}</strong> on{' '}
+            <strong>{toolCallInfo.serverName}</strong>
+          </p>
+          <p>Arguments:</p>
+          <pre className="rounded bg-black/5 p-2 text-xs whitespace-pre-wrap dark:bg-white/5">
+            {JSON.stringify(toolCallInfo.args, null, 2)}
+          </pre>
+        </div>
+        {/* Approval Buttons */}
+        <div className="mt-3 ml-6 flex gap-2">
+          <Button
+            size="xs"
+            variant="default"
+            onClick={() => approveToolCall(message.id)}
+          >
+            <LuThumbsUp className="mr-1 h-3 w-3" /> Approve
+          </Button>
+          <Button
+            size="xs"
+            variant="destructive"
+            onClick={() => denyToolCall(message.id)}
+          >
+            <LuThumbsDown className="mr-1 h-3 w-3" /> Deny
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
+  // --- Tool Call Running Rendering ---
+  if (isRunningToolCall(toolCallInfo)) {
+    return (
+      <div className="message-item group relative my-2 flex flex-col rounded border border-blue-300 bg-blue-50 p-3 dark:border-blue-700 dark:bg-blue-900/30">
+        <div className="mb-1.5 flex items-center space-x-2 text-sm font-medium text-blue-800 dark:text-blue-300">
+          <LuRefreshCw className="h-4 w-4 animate-spin text-blue-600 dark:text-blue-400" />
+          <span>Tool Running...</span>
+        </div>
+        <div className="ml-6 space-y-1 text-sm text-neutral-800 dark:text-neutral-300">
+          {/* Content might say "Running tool: ... on ..." */}
+          <p>{message.content}</p>
+        </div>
+      </div>
+    );
+  }
+
+  // --- Tool Call Result/Error/Denied Rendering ---
+  // Combine these as they share similar structure but different styling
+  if (
+    isResultToolCall(toolCallInfo) ||
+    isErrorToolCall(toolCallInfo) ||
+    isDeniedToolCall(toolCallInfo)
+  ) {
+    const isError = isErrorToolCall(toolCallInfo);
+    const isDenied = isDeniedToolCall(toolCallInfo);
+    const isSuccess = isResultToolCall(toolCallInfo);
+
+    const borderColor = isError
+      ? 'border-red-300 dark:border-red-700'
+      : isDenied
+        ? 'border-gray-300 dark:border-gray-600'
+        : 'border-green-300 dark:border-green-700';
+    const bgColor = isError
+      ? 'bg-red-50 dark:bg-red-900/30'
+      : isDenied
+        ? 'bg-gray-50 dark:bg-gray-800/30'
+        : 'bg-green-50 dark:bg-green-900/30';
+    const textColor = isError
+      ? 'text-red-800 dark:text-red-300'
+      : isDenied
+        ? 'text-gray-700 dark:text-gray-400'
+        : 'text-green-800 dark:text-green-300';
+    const icon = isError
+      ? LuTriangleAlert
+      : isDenied
+        ? LuThumbsDown
+        : LuCircleCheck;
+    const title = isError
+      ? `Tool Error: ${toolCallInfo.toolName}`
+      : isDenied
+        ? `Tool Denied: ${toolCallInfo.toolName}`
+        : `Tool Result: ${toolCallInfo.toolName}`;
+
+    return (
+      <div
+        className={cn(
+          'message-item group relative my-2 flex flex-col rounded border p-3',
+          borderColor,
+          bgColor,
+        )}
+      >
+        <div
+          className={cn(
+            'mb-1.5 flex items-center space-x-2 text-sm font-medium',
+            textColor,
+          )}
+        >
+          {React.createElement(icon, { className: 'h-4 w-4' })}
+          <span>{title}</span>
+        </div>
+        <div
+          className={cn(
+            'ml-6 space-y-1 text-sm',
+            isError
+              ? 'text-red-700 dark:text-red-400'
+              : isDenied
+                ? 'text-gray-600 dark:text-gray-400'
+                : 'text-neutral-800 dark:text-neutral-300',
+          )}
+        >
+          {/* Render content using markdown for potential formatting in results */}
+          <div className="prose prose-sm dark:prose-invert max-w-none">
+            <ReactMarkdown
+              components={{
+                code: CodeBlock,
+                p: ({ children }) => <>{children}</>,
+              }}
+            >
+              {message.content}
+            </ReactMarkdown>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // --- Standard User/Assistant Message Rendering ---
   return (
     <div
       className={cn(

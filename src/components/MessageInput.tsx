@@ -1,15 +1,21 @@
+// src/components/MessageInput.tsx
 import { cn } from '@/lib/utils';
-import { updateChatAtom } from '@/store/chatActions'; // Keep updateChatAtom for debounced input
+import { updateChatAtom } from '@/store/chatActions';
 import {
   activeChatAtom,
   cancelGenerationAtom,
   focusInputAtom,
   isAssistantLoadingAtom,
   regenerateLastResponseAtom,
-  // Import the NEW action atom
   sendMessageActionAtom,
   showEstimatedTokensAtom,
 } from '@/store/index';
+import {
+  isMcpToolsPopoverOpenAtom,
+  mcpServerStatesAtom,
+  selectedMcpServerIdsAtom,
+} from '@/store/mcp';
+// Import MCP atoms
 import { useAtom, useAtomValue, useSetAtom } from 'jotai';
 import _ from 'lodash';
 import React, {
@@ -19,44 +25,65 @@ import React, {
   useRef,
   useState,
 } from 'react';
-import { LuChartBar, LuRefreshCw, LuSend, LuSquare } from 'react-icons/lu';
+// Added LuPlug icon
+import {
+  LuChartBar,
+  LuPlug,
+  LuRefreshCw,
+  LuSend,
+  LuSquare,
+} from 'react-icons/lu';
 import { approximateTokenSize } from 'tokenx';
+// Import the new Popover content component
+import { McpToolsPopover } from './McpToolsPopover';
 import { Button } from './ui/Button';
+// Import Popover components
+import { Popover, PopoverContent, PopoverTrigger } from './ui/Popover';
 import { Textarea } from './ui/Textarea';
 
 const debounce = _.debounce;
 const DEBOUNCE_DELAY = 400;
 
 export const MessageInput: React.FC = () => {
-  // --- Hooks for Jotai Atoms ---
-  const [isLoading] = useAtom(isAssistantLoadingAtom); // Keep for UI state
-  const [activeChat] = useAtom(activeChatAtom); // Keep for enabling/disabling, placeholder, and debounced save
-  const updateChat = useSetAtom(updateChatAtom); // Keep for debounced input saving
-  const cancelGeneration = useSetAtom(cancelGenerationAtom); // Keep for stop button
-  const regenerateAction = useSetAtom(regenerateLastResponseAtom); // Keep for regenerate button
-  const showEstimatedTokens = useAtomValue(showEstimatedTokensAtom); // Keep for display
-  const triggerFocus = useAtomValue(focusInputAtom); // Keep for focusing
-
-  // *** Get the setter for the NEW action atom ***
+  const [isLoading] = useAtom(isAssistantLoadingAtom);
+  const [activeChat] = useAtom(activeChatAtom);
+  const updateChat = useSetAtom(updateChatAtom);
+  const cancelGeneration = useSetAtom(cancelGenerationAtom);
+  const regenerateAction = useSetAtom(regenerateLastResponseAtom);
+  const showEstimatedTokens = useAtomValue(showEstimatedTokensAtom);
+  const triggerFocus = useAtomValue(focusInputAtom);
   const sendMessage = useSetAtom(sendMessageActionAtom);
 
-  // REMOVE hooks for: upsertMessage, deleteMessage, appendContent, finalizeStream, setAbortController, apiKey, apiBaseUrl, etc.
+  // MCP State
+  const [isMcpPopoverOpen, setIsMcpPopoverOpen] = useAtom(
+    isMcpToolsPopoverOpenAtom,
+  );
+  const serverStates = useAtomValue(mcpServerStatesAtom);
+  const selectedServerIds = useAtomValue(selectedMcpServerIdsAtom);
 
-  // --- Local State ---
   const [input, setInputRaw] = useState<string>('');
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const [isComposing, setIsComposing] = useState(false);
 
-  // --- State Synchronization (Keep) ---
+  // --- Check if any MCP servers are connected ---
+  const hasConnectedMcpServers = useMemo(() => {
+    for (const state of serverStates.values()) {
+      if (state.isConnected) {
+        return true;
+      }
+    }
+    return false;
+  }, [serverStates]);
+
+  // --- State Synchronization ---
   useEffect(() => {
     setInputRaw(activeChat?.input ?? '');
   }, [activeChat]);
 
-  // --- Debounced Global State Update (Keep) ---
+  // --- Debounced Global State Update ---
   const debouncedUpdateGlobalInput = useCallback(
     debounce((value: string) => {
       if (activeChat) {
-        // console.log('Debounced: Updating global input state with', value);
         updateChat({ id: activeChat.id, input: value });
       }
     }, DEBOUNCE_DELAY),
@@ -68,54 +95,56 @@ export const MessageInput: React.FC = () => {
     };
   }, [debouncedUpdateGlobalInput]);
 
-  // --- Effect for focusing input (Keep) ---
+  // --- Effect for focusing input ---
   useEffect(() => {
     if (triggerFocus > 0 && textareaRef.current) {
       textareaRef.current?.focus();
     }
   }, [triggerFocus]);
 
-  // --- Input Change Handler (Keep) ---
+  // --- Input Change Handler ---
   const handleInputChange = useCallback(
     (e: React.ChangeEvent<HTMLTextAreaElement>) => {
       const newValue = e.target.value;
       setInputRaw(newValue);
       debouncedUpdateGlobalInput(newValue);
+      // Auto-resize textarea height based on content
+      if (textareaRef.current) {
+        textareaRef.current.style.height = 'auto'; // Reset height
+        textareaRef.current.style.height = `${textareaRef.current.scrollHeight}px`; // Set to scroll height
+      }
     },
     [debouncedUpdateGlobalInput],
   );
 
-  // --- *** SIMPLIFIED Send Message Handler *** ---
+  // Adjust height on initial load/chat change
+  useEffect(() => {
+    if (textareaRef.current) {
+      setTimeout(() => {
+        // Needs timeout to allow rendering
+        textareaRef.current!.style.height = 'auto';
+        textareaRef.current!.style.height = `${textareaRef.current!.scrollHeight}px`;
+      }, 0);
+    }
+  }, [input, activeChat?.id]);
+
+  // --- Send Message Handler ---
   const handleSend = useCallback(() => {
     const trimmedInput = input.trim();
     if (!trimmedInput || !activeChat || isLoading) {
-      return; // Basic checks remain
+      return;
     }
-
-    // Cancel any pending debounced save of the draft
     debouncedUpdateGlobalInput.cancel();
-
-    // *** Call the action atom ***
     sendMessage(trimmedInput);
-
-    // Clear Local Input & Reset Height & Focus
-    setInputRaw('');
-    // No need to call debouncedUpdateGlobalInput('') here,
-    // the action atom handles clearing the draft in the global state.
-
-    if (textareaRef.current) textareaRef.current.style.height = 'auto';
-    // Focus might need slight delay after state updates triggered by sendMessage
+    setInputRaw(''); // Clear local input *immediately*
+    // Reset textarea height after clearing
+    if (textareaRef.current) {
+      textareaRef.current.style.height = 'auto';
+    }
     setTimeout(() => textareaRef.current?.focus(), 50);
-  }, [
-    input, // Depends on local input state
-    activeChat, // Still needed for checks and draft clearing logic
-    isLoading, // Still needed for checks
-    sendMessage, // Dependency on the new action atom setter
-    debouncedUpdateGlobalInput, // Still needed to cancel debounce
-    // No longer depends on apiKey, apiBaseUrl, upsertMessage, etc.
-  ]);
+  }, [input, activeChat, isLoading, sendMessage, debouncedUpdateGlobalInput]);
 
-  // --- Keyboard Handler (Keep, dependency list simplified) ---
+  // --- Keyboard Handler ---
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
       if (
@@ -129,16 +158,16 @@ export const MessageInput: React.FC = () => {
         handleSend();
       }
     },
-    [isLoading, handleSend, input, isComposing], // Simpler dependencies
+    [isLoading, handleSend, input, isComposing],
   );
 
-  // --- Derived State & Memos (Keep, dependency list potentially simplified) ---
+  // --- Derived State & Memos ---
   const canRegenerate = useMemo(
     () =>
       !isLoading &&
       activeChat &&
-      activeChat.messages.some((m) => m.role === 'assistant' && !m.isStreaming), // Simplified check for any completed assistant message
-    [isLoading, activeChat], // Dependencies unchanged
+      activeChat.messages.some((m) => m.role === 'assistant' && !m.isStreaming),
+    [isLoading, activeChat],
   );
 
   const numTokens = useMemo(
@@ -146,7 +175,6 @@ export const MessageInput: React.FC = () => {
     [showEstimatedTokens, input],
   );
 
-  // --- Render ---
   return (
     <div
       className={cn(
@@ -155,6 +183,7 @@ export const MessageInput: React.FC = () => {
     >
       {/* Top Toolbar Area */}
       <div className="flex items-center space-x-2 pb-2">
+        {/* Regenerate Button */}
         <Button
           aria-label="Regenerate last response"
           className={cn(
@@ -162,17 +191,49 @@ export const MessageInput: React.FC = () => {
             (!canRegenerate || isLoading) && 'cursor-not-allowed opacity-50',
           )}
           disabled={!canRegenerate || isLoading}
-          onClick={regenerateAction} // regenerateAction is a stable atom setter
+          onClick={regenerateAction}
           size="xs"
           variant="ghost"
           title="Regenerate last response"
         >
           <LuRefreshCw className="h-4 w-4" />
         </Button>
+
+        {/* MCP Tools Popover Trigger */}
+        {hasConnectedMcpServers && ( // Only show if servers are connected
+          <Popover open={isMcpPopoverOpen} onOpenChange={setIsMcpPopoverOpen}>
+            <PopoverTrigger asChild>
+              <Button
+                aria-label="Select MCP Tools"
+                size="xs"
+                variant="ghost"
+                title="Select MCP Tools"
+                className={cn(
+                  'flex-shrink-0',
+                  selectedServerIds.length > 0 &&
+                    'text-blue-600 dark:text-blue-400',
+                )} // Indicate selection
+              >
+                <LuPlug className="h-4 w-4" />
+                {/* Optional: Show count of selected servers */}
+                {selectedServerIds.length > 0 && (
+                  <span className="ml-1 text-xs">
+                    ({selectedServerIds.length})
+                  </span>
+                )}
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-auto p-0" align="start">
+              {/* Render the popover content component */}
+              <McpToolsPopover />
+            </PopoverContent>
+          </Popover>
+        )}
+
         {/* Spacer */}
         <div className="flex-1" />
         {/* Token Counter */}
-        {showEstimatedTokens && (
+        {showEstimatedTokens && numTokens > 0 && (
           <span className="flex items-center gap-1 text-xs text-neutral-500 dark:text-neutral-400">
             <LuChartBar className="h-3 w-3" />
             {numTokens} token{numTokens === 1 ? '' : 's'}
@@ -185,11 +246,11 @@ export const MessageInput: React.FC = () => {
         <Textarea
           ref={textareaRef}
           aria-label="Chat message input"
-          className="flex-1 resize-none overflow-y-auto" // Removed min-h-[calc(theme(spacing.12))] if height adjusted by JS
-          rows={1} // Start with 1 row, let JS handle expansion
+          className="flex-1 resize-none overflow-y-hidden" // overflow-y-hidden + JS resize
+          rows={1} // Start with 1 row
           disabled={!activeChat || isLoading}
-          value={input} // Controlled by local state
-          onChange={handleInputChange} // Use the combined handler
+          value={input}
+          onChange={handleInputChange}
           onCompositionStart={() => setIsComposing(true)}
           onCompositionEnd={() => setIsComposing(false)}
           onKeyDown={handleKeyDown}
@@ -200,7 +261,8 @@ export const MessageInput: React.FC = () => {
                 ? "Type message or '---' to clear context..."
                 : 'Select or create a chat first'
           }
-          variant="flat"
+          // Assuming Textarea variant handles styling
+          // variant="flat"
         />
         <Button
           aria-label={isLoading ? 'Stop generation' : 'Send message'}
@@ -208,14 +270,13 @@ export const MessageInput: React.FC = () => {
           size="icon"
           title={isLoading ? 'Stop generation' : 'Send message'}
           variant={isLoading ? 'destructive' : 'default'}
-          onClick={isLoading ? cancelGeneration : handleSend} // cancelGeneration is stable setter
-          // Disable send if no input, no active chat, OR if loading (unless it's the stop button)
-          disabled={isLoading ? false : !input.trim() || !activeChat} // Stop button always enabled when loading
+          onClick={isLoading ? cancelGeneration : handleSend}
+          disabled={isLoading ? false : !input.trim() || !activeChat}
         >
           {isLoading ? (
-            <LuSquare className="h-5 w-5" /> // Stop Icon
+            <LuSquare className="h-5 w-5" />
           ) : (
-            <LuSend className="h-5 w-5" /> // Send Icon
+            <LuSend className="h-5 w-5" />
           )}
         </Button>
       </div>

@@ -1,18 +1,18 @@
 [sheafy]
 # List of file extensions to include (without dots)
 ignore_patterns = """
-    /src/components/ui/*
-    /components.json
-    /git-hooks/pre-commit
-    /index.html
-    /package.json
-    /pnpm-lock.yaml
-    /prettier.config.mjs
-    /LICENSE
-    /wrangler.jsonc
-    /worker
-    *.png
-    *.md
+/src/components/ui/*
+/components.json
+/git-hooks/pre-commit
+/index.html
+/package.json
+/pnpm-lock.yaml
+/prettier.config.mjs
+/LICENSE
+/wrangler.jsonc
+/worker
+*.png
+*.md
 """
 
 # Output filename for bundle command

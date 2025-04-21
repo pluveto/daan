@@ -1,6 +1,10 @@
+// src/App.tsx
+// Removed ChatSettingsModal import and render
+// Ensured SystemSettingsDialog is rendered
+
 import { CharacterEditor } from '@/components/CharacterEditor/index';
 import { ChatInterface } from '@/components/ChatInterface';
-import { ChatSettingsModal } from '@/components/ChatSettingsModal';
+// import { ChatSettingsModal } from '@/components/ChatSettingsModal'; // REMOVED
 import { ConversationSearchDialog } from '@/components/ConversationSearchDialog';
 import { LeftSidebar } from '@/components/LeftSidebar';
 import { RightSidebar } from '@/components/RightSidebar';
@@ -23,10 +27,10 @@ import {
 import { useAtom, useAtomValue } from 'jotai';
 import { VisuallyHidden } from 'radix-ui';
 import { useEffect } from 'react';
-import { Demo } from './components/Demo';
+import { Demo } from './components/Demo'; // Keep Demo for now if needed
 import FastImport from './components/FastImport';
 import { Toaster } from './components/ui/Toaster';
-import { SystemSettingsDialog } from './SystemSettingsDialog';
+import { SystemSettingsDialog } from './SystemSettingsDialog'; // Import the new Dialog
 
 const appName = import.meta.env.VITE_APP_NAME || 'Daan';
 const defaultTitle = `${appName}`;
@@ -38,8 +42,7 @@ function App() {
   const activeChat = useAtomValue(activeChatAtom);
   const [, resetStreamingStates] = useAtom(resetStreamingStatesAtom);
 
-  // Hook to check screen size (example: true if screen is less than 1024px)
-  const isMobile = useMediaQuery('(max-width: 1023px)'); // lg breakpoint is 1024px
+  const isMobile = useMediaQuery('(max-width: 1023px)');
   const isDesktop = !isMobile;
 
   useEffect(() => {
@@ -53,7 +56,6 @@ function App() {
       : defaultTitle;
   }, [activeChat]);
 
-  // Close sidebars when switching between mobile/desktop view
   useEffect(() => {
     if (isMobile && (isLeftOpen || isRightOpen)) {
       setIsLeftOpen(false);
@@ -68,75 +70,63 @@ function App() {
         isNightMode ? 'dark' : '',
       )}
     >
-      <ChatSettingsModal />
       <ConversationSearchDialog />
       <CharacterEditor />
       <Toaster />
       <FastImport />
       <SystemSettingsDialog />
 
-      {/* Left Sidebar - Conditional rendering based on screen size */}
+      {/* Left Sidebar */}
       {isDesktop ? (
-        // Desktop: Inline Sidebar (conditionally shown by state)
         <div
           className={cn(
             'h-full flex-shrink-0 transition-all duration-300 ease-in-out',
-            // Use Tailwind prefix for default desktop state
-            isLeftOpen ? 'w-72' : 'w-0', // Toggle width based on state
+            isLeftOpen ? 'w-72' : 'w-0',
           )}
         >
-          {/* Render only when open to potentially save resources, or always render and use w-0/hidden */}
           {isLeftOpen && <LeftSidebar />}
         </div>
       ) : (
-        // Mobile: Drawer
         <Drawer direction="left" open={isLeftOpen} onOpenChange={setIsLeftOpen}>
-          {/* DrawerTrigger is typically placed in the header, see ChatHeader adjustments */}
           <DrawerContent className="mt-0 h-full w-4/5 max-w-sm rounded-none">
-            {' '}
-            {/* Adjust width/styling as needed */}
             <VisuallyHidden.Root>
               <DrawerHeader>
                 <DrawerTitle>Left Sidebar</DrawerTitle>
-                <DrawerDescription>This is the left sidebar.</DrawerDescription>
+                <DrawerDescription>Navigation and actions</DrawerDescription>
               </DrawerHeader>
             </VisuallyHidden.Root>
             <LeftSidebar />
-            {/* Add a close button inside if needed */}
           </DrawerContent>
         </Drawer>
       )}
 
-      {/* Main Content Area */}
+      {/* Main Content */}
       <div className="relative flex flex-1 flex-col overflow-hidden">
         <ChatInterface />
       </div>
 
-      {/* Right Sidebar - Conditional rendering based on screen size */}
+      {/* Right Sidebar */}
       {isDesktop ? (
-        // Desktop: Inline Sidebar
         <div
           className={cn(
             'h-full flex-shrink-0 transition-all duration-300 ease-in-out',
-            isRightOpen ? 'w-72' : 'w-0',
+            isRightOpen ? 'w-72' : 'w-0', // Width controlled by state
           )}
         >
-          {isRightOpen && <RightSidebar />}
+          {isRightOpen && <RightSidebar />} {/* Render based on state */}
         </div>
       ) : (
-        // Mobile: Drawer
         <Drawer
           direction="right"
           open={isRightOpen}
           onOpenChange={setIsRightOpen}
         >
-          {/* DrawerTrigger is typically placed in the header */}
           <DrawerContent className="mt-0 h-full w-4/5 max-w-sm rounded-none">
             <VisuallyHidden.Root>
               <DrawerHeader>
-                <DrawerTitle>Right Sidebar</DrawerTitle>
+                <DrawerTitle>Character Settings</DrawerTitle>
                 <DrawerDescription>
-                  This is the right sidebar.
+                  Character related settings
                 </DrawerDescription>
               </DrawerHeader>
             </VisuallyHidden.Root>

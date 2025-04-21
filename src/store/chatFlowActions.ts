@@ -100,6 +100,7 @@ export const sendMessageActionAtom = atom(
     // --- End Title Generation ---
 
     const messagesToSend = getHistoryForApi(
+      get,
       historyMessages, // Use messages from the latest state
       maxHistory,
       updatedChat.systemPrompt?.trim(),
@@ -115,13 +116,7 @@ export const sendMessageActionAtom = atom(
     }
 
     // Call NEW signature, passing set
-    callOpenAIStreamLogic(
-      set, // Pass set!
-      apiKey,
-      apiBaseUrl,
-      updatedChat.model,
-      messagesToSend,
-    ).catch((err) =>
+    callOpenAIStreamLogic(get, set, messagesToSend).catch((err) =>
       console.error('Error during assistant response generation:', err),
     );
 

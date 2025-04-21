@@ -1,19 +1,27 @@
-import type { Chat, Message, SupportedModels } from '@/types';
-import { Atom, atom, WritableAtom } from 'jotai';
+import type { ApiProviderConfig, Message, NamespacedModelId } from '@/types';
+import { Atom, atom, Getter, Setter, WritableAtom } from 'jotai';
 import OpenAI from 'openai';
 import { toast } from 'sonner';
 import { v4 as uuidv4 } from 'uuid';
 import { abortControllerAtom, isAssistantLoadingAtom } from './apiState';
 import { updateChatAtom } from './chatActions';
+import { activeChatIdAtom } from './chatData';
+import { activeChatAtom, getEffectiveChatParams } from './chatDerived';
+import { handleMcpToolCallAtom } from './mcp';
 import {
   appendContentToMessageAtom,
   finalizeStreamingMessageAtom,
+  updateMessageContentAtom,
   upsertMessageInActiveChatAtom,
 } from './messageActions';
 import {
   apiBaseUrlAtom,
   apiKeyAtom,
+  apiProvidersAtom,
+  defaultMaxTokensAtom,
   defaultSummaryModelAtom,
+  defaultTemperatureAtom,
+  defaultTopPAtom,
 } from './settings';
 
 /** Action to cancel the current ongoing AI generation. */
@@ -44,83 +52,151 @@ export const cancelGenerationAtom = atom(null, (get, set) => {
 
 /**
  * Core logic for calling the OpenAI Chat Completions API with streaming.
- * Handles state updates for loading, messages, and cancellation.
+ * Handles state updates, cancellation, and MCP tool call detection.
  */
 export async function callOpenAIStreamLogic(
-  // Use Jotai's set function directly for atom updates
-  set: (
-    atom: WritableAtom<any, any[], any>,
-    ...args: any[]
-  ) => void | Promise<void>,
-  // Pass necessary values instead of the whole get function
-  apiKey: string,
-  apiBaseUrl: string | null,
-  model: string,
+  get: Getter,
+  set: Setter,
   messagesToSend: OpenAI.ChatCompletionMessageParam[],
-  // Callbacks are replaced by direct atom updates via `set`
 ) {
+  // --- Get Active Chat and its Effective Parameters ---
+  const activeChat = get(activeChatAtom); // Get the whole chat object
+  if (!activeChat) {
+    console.error('Cannot call API: No active chat.');
+    toast.error('Cannot process request: No active chat selected.');
+    return;
+  }
+  const modelId = activeChat.model; // Get model from the active chat
+  // Get effective parameters using the helper, considering chat overrides
+  const { temperature, maxTokens, topP } = getEffectiveChatParams(
+    activeChat,
+    get,
+  );
+  console.log(
+    `[API Call] Effective Params for ${modelId}: Temp=${temperature}, MaxTokens=${maxTokens}, TopP=${topP}`,
+  );
+
+  // --- Setup: Get settings, check API key, set loading state ---
+  const providers = get(apiProvidersAtom);
+  const globalApiKey = get(apiKeyAtom);
+  const globalApiBaseUrl = get(apiBaseUrlAtom);
+
+  const activeChatId = get(activeChatIdAtom); // Get active chat ID for tool call handler
+
+  if (!activeChatId) {
+    console.error('Cannot call API: No active chat ID.');
+    toast.error('Cannot process request: No active chat selected.');
+    return; // Exit early if no active chat
+  }
+
+  // Determine provider config (same as before)
+  const providerId = modelId.split('::')[0];
+  const modelName = modelId.split('::')[1]; // Get the base model name for the API call
+  const providerConfig = providers.find((p) => p.id === providerId);
+
+  if (!providerConfig?.enabled) {
+    toast.error(
+      `API Provider "${providerConfig?.name || providerId}" is not enabled.`,
+    );
+    return;
+  }
+
+  const apiKey = providerConfig.apiKey || globalApiKey;
+  const apiBaseUrl = providerConfig.apiBaseUrl || globalApiBaseUrl;
+
   if (!apiKey) {
-    // Use toast for user feedback, alert is generally discouraged
-    toast.error('API Key not set. Please configure it in Settings.');
+    toast.error(
+      `API Key not set for provider "${providerConfig.name}". Please configure it in Settings.`,
+    );
     return;
   }
 
   set(isAssistantLoadingAtom, true);
-  const assistantMessageId = uuidv4(); // ID for the *new* assistant message
+  const assistantMessageId = uuidv4();
   const controller = new AbortController();
-
-  // Store the controller *before* the API call, associated with the new message ID
   set(abortControllerAtom, { controller, messageId: assistantMessageId });
 
-  // Add placeholder assistant message to the active chat
+  // Add placeholder message (same as before)
   const placeholderMessage: Message = {
-    content: '',
     id: assistantMessageId,
-    isStreaming: true,
     role: 'assistant',
+    content: '',
     timestamp: Date.now(),
+    isStreaming: true,
   };
-  // Use the specific atom action to add/update the message
   set(upsertMessageInActiveChatAtom, placeholderMessage);
+
+  // --- Tool Call Detection Logic ---
+  let accumulatedContent = ''; // Buffer to detect tag across chunks
+  let toolCallDetected = false;
+  const toolCallRegex =
+    /<mcp-tool-call\s+server="([^"]+)"\s+tool="([^"]+)"\s+arguments='([^']+)'>/; // Simple regex, might need refinement for escaped quotes in args
 
   try {
     const openai = new OpenAI({
       apiKey,
-      baseURL: apiBaseUrl || undefined, // Use null or undefined based on OpenAI client expectations
-      dangerouslyAllowBrowser: true, // Acknowledge the risk
+      baseURL: apiBaseUrl || undefined,
+      dangerouslyAllowBrowser: true,
     });
 
     console.log(
-      `Sending ${messagesToSend.length} messages to OpenAI model ${model}...`,
+      `Sending ${messagesToSend.length} messages to model ${modelId}...`,
     );
     const stream = await openai.chat.completions.create(
       {
         messages: messagesToSend,
-        model,
+        model: modelName, // Use the base model name
+        temperature: temperature ?? undefined,
+        max_tokens: maxTokens ?? undefined,
+        top_p: topP ?? undefined,
         stream: true,
-        // temperature: 0.7, // Add other parameters as needed
       },
-      { signal: controller.signal }, // Pass the abort signal
+      { signal: controller.signal },
     );
 
-    let contentReceived = false;
     for await (const chunk of stream) {
-      // The OpenAI client v4+ should throw an AbortError if the signal is aborted,
-      // so an explicit check `controller.signal.aborted` within the loop is often redundant,
-      // but can be kept for clarity or older versions.
-
       const contentChunk = chunk.choices[0]?.delta?.content || '';
       if (contentChunk) {
-        contentReceived = true;
-        // Append content using the specific message action
+        accumulatedContent += contentChunk;
+
+        // Check for the tool call tag in the accumulated content
+        const match = accumulatedContent.match(toolCallRegex);
+        if (match) {
+          toolCallDetected = true;
+          const [, serverId, toolName, argsString] = match;
+          const rawTag = match[0];
+          console.log(
+            `[MCP Tool Call Detected] Server: ${serverId}, Tool: ${toolName}`,
+          );
+          toast.info(`Assistant wants to use tool: ${toolName}`);
+
+          // Trigger handler (pass activeChat.id)
+          set(handleMcpToolCallAtom, {
+            chatId: activeChat.id,
+            serverId,
+            toolName,
+            argsString,
+            rawTag,
+          });
+
+          // Update placeholder and finalize
+          set(updateMessageContentAtom, {
+            messageId: assistantMessageId,
+            newContent: `Attempting to use tool: ${toolName}...`,
+          });
+          set(finalizeStreamingMessageAtom, assistantMessageId);
+          break; // Exit loop
+        }
+
+        // If no tool call detected yet, append content normally
         set(appendContentToMessageAtom, {
           contentChunk,
           messageId: assistantMessageId,
         });
       }
 
+      // Handle finish reasons (same as before)
       const finishReason = chunk.choices[0]?.finish_reason;
-      // Log finish reasons other than 'stop' or null/undefined
       if (finishReason && finishReason !== 'stop') {
         console.warn(
           `Stream finished with reason: ${finishReason} for message ${assistantMessageId}`,
@@ -133,71 +209,90 @@ export async function callOpenAIStreamLogic(
           toast.error('Response stopped due to content filter.', {
             duration: 5000,
           });
+        } else if (finishReason === 'tool_calls') {
+          // This happens if the model itself uses OpenAI's native tool calling format
+          console.warn(
+            'Model used native tool_calls finish reason. Ensure MCP format is preferred.',
+          );
+          toast.warning('AI tried using a different tool format.');
+          // We might need to handle `chunk.choices[0]?.delta?.tool_calls` here if we want to support native calls too.
         }
-        // Add handling for other reasons if needed
       }
+    } // End stream loop
+
+    // Finalize normally ONLY if no tool call was detected
+    if (!toolCallDetected) {
+      console.log(
+        `Stream finished normally for message ${assistantMessageId}.`,
+      );
+      set(finalizeStreamingMessageAtom, assistantMessageId);
     }
-
-    // If loop completes without error (and wasn't aborted before starting), finalize normally.
-    console.log(
-      `Stream finished normally for message ${assistantMessageId}. Content received: ${contentReceived}`,
-    );
-    // Finalize using the specific message action - this handles loading/abort state internally
-    set(finalizeStreamingMessageAtom, assistantMessageId);
   } catch (error: any) {
-    // Check if it's an abort error
     const isAbortError = error?.name === 'AbortError';
-
     console.error(`OpenAI API Error/Abort (${assistantMessageId}):`, error);
 
-    if (!isAbortError) {
+    // Only show error toast/update message if it wasn't a deliberate tool call interruption or user cancel
+    if (!isAbortError && !toolCallDetected) {
       toast.error(`Error: ${error?.message ?? 'Failed to get response.'}`);
-      // Update the placeholder message with an error state ONLY if it wasn't an abort
       const errorMessageContent = `Error: ${error?.message ?? 'Failed to get response'}`;
-      const errorMessageUpdate: Message = {
-        ...placeholderMessage, // Use the ID of the message that failed
-        id: assistantMessageId, // Ensure correct ID
-        content: errorMessageContent,
-        isStreaming: false, // Stop streaming on error
-      };
-      set(upsertMessageInActiveChatAtom, errorMessageUpdate); // Update placeholder with error
-    } else {
-      console.log(`Generation cancelled for message ${assistantMessageId}.`);
-      // No error toast needed for user-initiated cancel
+      // Use updateMessageContentAtom instead of upsert to avoid creating duplicates if placeholder exists
+      set(updateMessageContentAtom, {
+        messageId: assistantMessageId,
+        newContent: errorMessageContent,
+      });
+    } else if (isAbortError) {
+      console.log(
+        `Generation cancelled/aborted for message ${assistantMessageId}.`,
+      );
+      // No error toast for user cancel or tool call handover
     }
 
-    // Always finalize the stream state (to handle loading/abort atoms),
-    // regardless of whether it was a normal finish, error, or abort.
-    // finalizeStreamingMessageAtom checks the message ID before clearing the *global* controller.
-    set(finalizeStreamingMessageAtom, assistantMessageId);
+    // Always finalize the stream state for the specific message ID,
+    // unless a tool call was detected (which finalized it already).
+    if (!toolCallDetected) {
+      set(finalizeStreamingMessageAtom, assistantMessageId);
+    }
   }
-  // No finally block needed here because finalizeStreamingMessageAtom now handles
-  // the cleanup of isAssistantLoadingAtom and abortControllerAtom based on message ID.
 }
-
 /** Generates a concise chat title based on the first user message using AI. */
 export async function generateChatTitle(
-  // Pass specific state values and the 'set' function
-  set: (
-    atom: WritableAtom<any, any[], any>,
-    ...args: any[]
-  ) => void | Promise<void>,
-  get: (atom: Atom<any>) => any, // Need get for reading settings inside
+  set: Setter,
+  get: Getter, // Pass get
   chatId: string,
   userMessageContent: string,
-  // Remove updateChat callback, use set(updateChatAtom, ...) instead
 ): Promise<void> {
   const apiKey = get(apiKeyAtom); // Read values using get
   const apiBaseUrl = get(apiBaseUrlAtom);
-  const summaryModel = get(defaultSummaryModelAtom);
+  const summaryModelId = get(defaultSummaryModelAtom); // Get the configured summary model
+  const providers = get(apiProvidersAtom); // Get providers to find config
 
-  if (!apiKey) {
-    console.warn('Cannot generate title: API Key not set.');
+  if (!apiKey && !providers.some((p) => p.enabled && p.apiKey)) {
+    console.warn('Cannot generate title: No global or provider API Key set.');
     return;
   }
   if (!userMessageContent?.trim()) {
     console.warn('Cannot generate title: User message is empty.');
     return;
+  }
+  if (!summaryModelId) {
+    console.warn(
+      'Cannot generate title: Default Summary Model not configured.',
+    );
+    return;
+  }
+
+  // Determine API settings for the summary model
+  const [providerId, modelName] = summaryModelId.split('::');
+  const providerConfig = providers.find((p) => p.id === providerId);
+
+  const finalApiKey = providerConfig?.apiKey || get(apiKeyAtom); // Use provider key or global
+  const finalApiBaseUrl = providerConfig?.apiBaseUrl || get(apiBaseUrlAtom); // Use provider URL or global
+
+  if (!finalApiKey) {
+    console.warn(
+      `Cannot generate title: API Key not resolved for summary model ${summaryModelId}.`,
+    );
+    return; // Need a key to make the call
   }
 
   // Truncate long messages to avoid excessive token usage/cost for title generation
@@ -216,19 +311,22 @@ User Message: "${processedContent}"`;
 
   try {
     const openai = new OpenAI({
-      apiKey,
-      baseURL: apiBaseUrl || undefined,
+      apiKey: finalApiKey,
+      baseURL: finalApiBaseUrl || undefined,
       dangerouslyAllowBrowser: true,
     });
 
     console.log(
-      `Generating chat title for ${chatId} with model ${summaryModel}...`,
+      `Generating chat title for ${chatId} with model ${modelName}...`,
     );
     const response = await openai.chat.completions.create({
-      model: summaryModel,
-      messages: [{ role: 'user', content: prompt }],
+      model: modelName,
+      messages: [
+        { role: 'user', content: prompt } as OpenAI.ChatCompletionMessageParam,
+      ],
+
       max_tokens: 30,
-      temperature: 0.5, // Lower temperature for more predictable titles
+      temperature: 0.5, // Fixed temperature for title generation
       stream: false,
       // stop: ['\n'], // Optional: try stopping at newline
     });

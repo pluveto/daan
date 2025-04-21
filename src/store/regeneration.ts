@@ -1,11 +1,12 @@
 import type { Message } from '@/types';
-import { atom } from 'jotai';
+import { atom, Getter } from 'jotai';
 import OpenAI from 'openai'; // Keep OpenAI type import if needed for helpers
 
 import { toast } from 'sonner';
 import { callOpenAIStreamLogic } from './apiActions'; // Import the refactored API call logic
 import { isAssistantLoadingAtom } from './apiState';
 import { activeChatAtom } from './chatDerived';
+import { mcpPromptInjectionAtom } from './mcp';
 import { deleteMessageFromActiveChatAtom } from './messageActions';
 import { apiBaseUrlAtom, apiKeyAtom, defaultMaxHistoryAtom } from './settings';
 
@@ -20,12 +21,18 @@ import { apiBaseUrlAtom, apiKeyAtom, defaultMaxHistoryAtom } from './settings';
  * @param systemPrompt The system prompt string, or null.
  * @returns An array of messages formatted for the OpenAI API.
  */
+
+/**
+ * Prepares the message history for the OpenAI API call.
+ * Includes MCP tool instructions if applicable.
+ */
 export function getHistoryForApi(
+  get: Getter,
   allMessages: Message[],
   maxHistoryCount: number,
-  systemPrompt: string | null,
+  systemPrompt: string | null, // Original system prompt from chat/character
 ): OpenAI.ChatCompletionMessageParam[] {
-  // Find the start index after the last divider, if any
+  // --- Find relevant messages (same as before) ---
   let startIndex = 0;
   for (let i = allMessages.length - 1; i >= 0; i--) {
     if (allMessages[i].role === 'divider') {
@@ -33,35 +40,44 @@ export function getHistoryForApi(
       break;
     }
   }
-
   const relevantMessages = allMessages.slice(startIndex);
-
-  // Filter valid roles, ensure content is non-empty string, apply limit
   const history = relevantMessages
     .filter(
-      (
-        msg,
-      ): msg is Message & { content: string; role: 'user' | 'assistant' } => // Type predicate
+      (msg): msg is Message & { content: string; role: 'user' | 'assistant' } =>
         (msg.role === 'user' || msg.role === 'assistant') &&
         typeof msg.content === 'string' &&
-        msg.content.trim() !== '', // Filter out empty/whitespace-only messages
+        msg.content.trim() !== '',
     )
-    .slice(-maxHistoryCount); // Apply history limit *after* filtering
+    .slice(-maxHistoryCount);
 
   const messagesToSend: OpenAI.ChatCompletionMessageParam[] = [];
 
-  // Add system prompt first if provided
-  if (systemPrompt && systemPrompt.trim() !== '') {
-    messagesToSend.push({ content: systemPrompt, role: 'system' });
+  // --- Combine Prompts ---
+  const mcpInjection = get(mcpPromptInjectionAtom); // Get MCP instructions
+  const finalSystemPrompt = [
+    systemPrompt?.trim() || null, // Original prompt
+    mcpInjection ? mcpInjection.trim() : null, // MCP instructions
+  ]
+    .filter(Boolean)
+    .join('\n\n'); // Join non-empty parts
+
+  // Add system prompt first if there's any content
+  if (finalSystemPrompt) {
+    messagesToSend.push({ content: finalSystemPrompt, role: 'system' });
   }
 
   // Add the filtered history messages
   history.forEach((msg) => {
     messagesToSend.push({
-      content: msg.content, // Content is guaranteed string by filter
-      role: msg.role, // Role is guaranteed user/assistant by filter
+      content: msg.content,
+      role: msg.role,
     });
   });
+
+  // Log the final system prompt being sent (optional debug)
+  if (finalSystemPrompt) {
+    console.log('[getHistoryForApi] Final System Prompt:\n', finalSystemPrompt);
+  }
 
   return messagesToSend;
 }
@@ -77,7 +93,7 @@ export const regenerateMessageAtom = atom(
     const apiBaseUrl = get(apiBaseUrlAtom); // Already string | null type from atom
 
     // Check necessary conditions before proceeding
-    if (!activeChat) {
+    if (!activeChat || get(isAssistantLoadingAtom) || !targetMessageId) {
       console.warn('Regeneration aborted: No active chat.');
       return;
     }
@@ -130,6 +146,7 @@ export const regenerateMessageAtom = atom(
 
     // Prepare messages for the API using the helper
     const relevantHistory = getHistoryForApi(
+      get, // <-- Pass get
       historySlice,
       maxHistory,
       activeChat.systemPrompt,
@@ -184,9 +201,8 @@ export const regenerateMessageAtom = atom(
     // 2. Call the streamlined OpenAI stream logic
     // Pass the 'set' function and necessary parameters directly.
     callOpenAIStreamLogic(
-      set, // Pass the set function from the atom's context
-      apiKey,
-      apiBaseUrl,
+      get, // Pass get
+      set, // Pass set
       activeChat.model,
       relevantHistory,
       // Callbacks are replaced by direct atom sets within callOpenAIStreamLogic
@@ -197,7 +213,11 @@ export const regenerateMessageAtom = atom(
 /** Regenerates the *last* assistant response in the active chat. */
 export const regenerateLastResponseAtom = atom(null, (get, set) => {
   const activeChat = get(activeChatAtom); // Use derived atom
-  if (!activeChat || activeChat.messages.length === 0) {
+  if (
+    !activeChat ||
+    activeChat.messages.length === 0 ||
+    get(isAssistantLoadingAtom)
+  ) {
     console.warn(
       'Cannot regenerate last response: No active chat or chat is empty.',
     );

@@ -1,3 +1,5 @@
+// src/store/uiState.ts
+// No changes needed, isSystemSettingsDialogOpenAtom already exists.
 import { atomWithSafeStorage } from '@/lib/utils';
 import { atom } from 'jotai';
 
@@ -16,6 +18,7 @@ export const isRightSidebarOpenAtom = atomWithSafeStorage(
 );
 
 /** Controls the visibility of the chat settings modal. */
+// This might be repurposed for chat-specific settings later if needed.
 export const isChatSettingsModalOpenAtom = atom(false);
 
 /** Controls the visibility of the character editor/creator view. */
@@ -28,7 +31,7 @@ export const editingMessageIdAtom = atom<string | null>(null);
 export const isConversationSearchOpenAtom = atom(false);
 
 /** Controls the visibility of the System Settings dialog. */
-export const isSystemSettingsDialogOpenAtom = atom(false); // <--- New atom
+export const isSystemSettingsDialogOpenAtom = atom(false); // Already here
 
 /** Atom to trigger focus on the main chat input. Increment the value to trigger focus. */
 export const focusInputAtom = atom(0);

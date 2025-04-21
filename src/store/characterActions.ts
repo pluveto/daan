@@ -1,7 +1,7 @@
 import type {
   CustomCharacter,
+  NamespacedModelId,
   PartialCharacter,
-  SupportedModels,
 } from '@/types';
 import { atom } from 'jotai';
 import OpenAI from 'openai';
@@ -314,7 +314,7 @@ JSON Response format (ONLY the JSON object):
       });
 
       // Use the character's specified model or the global default for the generation request itself
-      const modelToUseForGeneration: SupportedModels = get(
+      const modelToUseForGeneration: NamespacedModelId = get(
         defaultSummaryModelAtom,
       );
 
@@ -386,7 +386,7 @@ JSON Response format (ONLY the JSON object):
       if (typeof aiJson.prompt === 'string' && aiJson.prompt.trim())
         fieldsToUpdate.prompt = aiJson.prompt.trim();
       if (typeof aiJson.model === 'string' && aiJson.model.trim())
-        fieldsToUpdate.model = aiJson.model.trim() as SupportedModels; // Assume valid model name
+        fieldsToUpdate.model = aiJson.model.trim() as NamespacedModelId; // Assume valid model name
       if (typeof aiJson.maxHistory === 'number' && aiJson.maxHistory >= 0)
         fieldsToUpdate.maxHistory = Math.floor(aiJson.maxHistory);
       else if (aiJson.maxHistory === null) fieldsToUpdate.maxHistory = null;
