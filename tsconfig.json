@@ -19,7 +19,7 @@
     "resolveJsonModule": true,
     "skipLibCheck": true,
     "strict": true,
-    "target": "es2017",
+    "target": "es2018",
     "types": ["vite/client"]
   },
   "exclude": ["node_modules"],
