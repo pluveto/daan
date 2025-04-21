@@ -86,7 +86,7 @@ export const CharacterForm: React.FC<CharacterFormProps> = ({
         ? data.description.trim()
         : undefined,
       prompt: data.prompt,
-      model: data.model, // Already NamespacedModelId from form state
+      model: data.model as NamespacedModelId, // Already NamespacedModelId from form state
       maxHistory:
         data.maxHistoryStr === undefined || data.maxHistoryStr.trim() === ''
           ? null
