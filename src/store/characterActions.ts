@@ -321,9 +321,10 @@ JSON Response format (ONLY the JSON object):
       console.log(
         `Requesting auto-fill for char ${characterToFill.id} with model ${modelToUseForGeneration}...`,
       );
+      const [_providerId, modelName] = modelToUseForGeneration.split('::');
 
       const response = await openai.chat.completions.create({
-        model: modelToUseForGeneration, // Use a capable model like gpt-4o or similar
+        model: modelName, // Use a capable model like gpt-4o or similar
         messages: [{ role: 'user', content: prompt }],
         temperature: 0.7, // Allow some creativity
         max_tokens: 500, // Adjust based on expected length

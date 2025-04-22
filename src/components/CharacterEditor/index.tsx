@@ -203,7 +203,6 @@ export const CharacterEditor: React.FC = () => {
             <CharacterForm
               key={selectedCharacterId} // Re-mount form when ID changes to ensure reset works reliably
               characterData={currentCharacterData}
-              availableModels={availableModels}
               globalDefaultMaxHistory={globalDefaultMaxHistory ?? 0} // Pass a default number
               isAutoFilling={isAutoFilling}
               canAutoFill={canAutoFill}
