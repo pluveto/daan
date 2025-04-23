@@ -7,7 +7,7 @@
 
 Daan (答案, "Answer" in Chinese) is a concise and lightweight client for interacting with Large Language Models (LLMs), offering a smooth and efficient AI experience. It's compatible with OpenAI's GPT series and other OpenAI-compatible APIs.
 
-[Try the Demo](https://daan.xyzw.space)
+[Try the Demo](https://demo.daan.one)
 
 ## Key Features
 
@@ -33,7 +33,7 @@ Daan (答案, "Answer" in Chinese) is a concise and lightweight client for inter
 
 ## Quick Start
 
-0. **Install Daan:** Go to [Online Demo](https://daan.xyzw.space) or deploy/install Daan locally.
+0. **Install Daan:** Go to [Online Demo](https://demo.daan.one) or deploy/install Daan locally.
 1. **Get API Key:** Obtain an API key from OpenAI or a compatible service.
 2. **Configure Daan:** Enter your API key in Daan's settings. Select your desired model.
 3. **Start Chatting:** Click "+ New Chat" and begin your conversation!
