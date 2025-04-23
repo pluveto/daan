@@ -56,7 +56,7 @@ export const CharacterForm: React.FC<CharacterFormProps> = ({
   );
 
   // --- Form Setup ---
-  const form = useForm<CharacterFormData>({
+  const form = useForm({
     resolver: zodResolver(characterSchema),
     mode: 'onChange',
     defaultValues: {

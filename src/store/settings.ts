@@ -5,15 +5,15 @@ import type { ApiProviderConfig, NamespacedModelId } from '@/types'; // Use Name
 // --- Global Settings Atoms ---
 
 /** Global fallback API Key. */
-export const apiKeyAtom = atomWithSafeStorage<string>(
+export const apiKeyAtom = atomWithSafeStorage<string | null>(
   'globalSettings_apiKey',
-  '',
+  null,
 );
 
 /** Global fallback custom OpenAI-compatible API base URL. */
-export const apiBaseUrlAtom = atomWithSafeStorage<string>(
+export const apiBaseUrlAtom = atomWithSafeStorage<string | null>(
   'globalSettings_apiBaseUrl',
-  '',
+  null,
 );
 
 /** Default Temperature for API calls (0.0 to 2.0). */
