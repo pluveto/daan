@@ -57,7 +57,7 @@ export const apiProvidersAtom = atomWithSafeStorage<ApiProviderConfig[]>(
       description: 'Official OpenAI API models.',
       enabled: true,
       apiKey: null, // Use global fallback by default
-      apiBaseUrl: null, // Use global fallback by default
+      apiBaseUrl: 'https://api.openai.com/v1', // Use global fallback by default
       defaultTemperature: null, // Use global fallback
       defaultMaxTokens: null, // Use global fallback
       defaultTopP: null, // Use global fallback
@@ -183,7 +183,7 @@ export const apiProvidersAtom = atomWithSafeStorage<ApiProviderConfig[]>(
       description: 'Google Gemini models via Google AI Studio or Vertex AI.',
       enabled: false,
       apiKey: null,
-      apiBaseUrl: null, // Needs specific URL for Gemini API
+      apiBaseUrl: 'https://generativelanguage.googleapis.com/v1', // Needs specific URL for Gemini API
       defaultTemperature: null,
       defaultMaxTokens: null,
       defaultTopP: null, // Gemini often uses TopP
@@ -244,7 +244,7 @@ export const apiProvidersAtom = atomWithSafeStorage<ApiProviderConfig[]>(
       description: 'Anthropic Claude models.',
       enabled: false,
       apiKey: null,
-      apiBaseUrl: null, // Needs specific URL
+      apiBaseUrl: 'https://api.anthropic.com/v1', // Needs specific URL
       defaultTemperature: null,
       defaultMaxTokens: null,
       defaultTopP: null,
@@ -289,7 +289,7 @@ export const apiProvidersAtom = atomWithSafeStorage<ApiProviderConfig[]>(
       description: 'DeepSeek models.',
       enabled: false,
       apiKey: null,
-      apiBaseUrl: null, // Needs specific URL
+      apiBaseUrl: 'https://api.deepseek.com/v1', // Needs specific URL
       defaultTemperature: null,
       defaultMaxTokens: null,
       defaultTopP: null,
