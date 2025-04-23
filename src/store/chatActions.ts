@@ -4,12 +4,8 @@ import { toast } from 'sonner';
 import { v4 as uuidv4 } from 'uuid';
 import { abortControllerAtom, isAssistantLoadingAtom } from './apiState';
 import { activeChatIdAtom, chatsAtom, type ChatsRecord } from './chatData';
-import { activeChatAtom, sortedChatsAtom } from './chatDerived';
-import {
-  defaultMaxHistoryAtom,
-  defaultModelAtom,
-  defaultPromptAtom,
-} from './settings';
+import { sortedChatsAtom } from './chatDerived';
+import { defaultModelAtom, defaultPromptAtom } from './settings';
 import { editingMessageIdAtom, focusInputAtom } from './uiState';
 
 // --- Helper Type ---

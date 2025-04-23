@@ -1,12 +1,7 @@
 // src/store/mcp.ts
 import { atomWithSafeStorage } from '@/lib/utils';
 import { createBuiltinExprEvaluatorServer } from '@/mcp/builtinExprEvaluator';
-import type {
-  Message,
-  NamespacedModelId,
-  PendingToolCallInfo,
-  ToolCallInfo,
-} from '@/types';
+import type { Message, PendingToolCallInfo, ToolCallInfo } from '@/types';
 // Import ToolCallInfo
 import { Client } from '@moinfra/mcp-client-sdk/client/index.js';
 import { PseudoTransport } from '@moinfra/mcp-client-sdk/client/pseudo.js';
@@ -856,7 +851,7 @@ async function executeToolCall(
   toolCallInfo: PendingToolCallInfo,
   client: Client,
 ) {
-  const { callId, serverId, serverName, toolName, args } = toolCallInfo;
+  const { callId, serverName, toolName, args } = toolCallInfo;
 
   // 1. Update pending message to "running" state
   const runningInfo: ToolCallInfo = { ...toolCallInfo, type: 'running' };

@@ -110,7 +110,7 @@ interface ChatMessageItemProps {
   // setEditingId: (id: string | null) => void;
 }
 
-interface ToolCallPendingMessage extends Message {
+export interface ToolCallPendingMessage extends Message {
   role: 'tool_call_pending'; // Custom role
   toolCall: {
     serverName: string; // User-friendly name
@@ -118,7 +118,7 @@ interface ToolCallPendingMessage extends Message {
     args: any; // Parsed arguments
   };
 }
-interface ToolCallResultMessage extends Message {
+export interface ToolCallResultMessage extends Message {
   role: 'tool_call_result'; // Custom role
   toolCall: {
     toolName: string;
@@ -127,7 +127,7 @@ interface ToolCallResultMessage extends Message {
   };
 }
 
-function isToolCallPendingMessage(
+export function isToolCallPendingMessage(
   message: Message,
 ): message is ToolCallPendingMessage {
   return (
@@ -135,7 +135,7 @@ function isToolCallPendingMessage(
     typeof (message as any).toolCall === 'object'
   );
 }
-function isToolCallResultMessage(
+export function isToolCallResultMessage(
   message: Message,
 ): message is ToolCallResultMessage {
   return (
@@ -313,7 +313,6 @@ const _ChatMessageItem: React.FC<ChatMessageItemProps> = ({
   ) {
     const isError = isErrorToolCall(toolCallInfo);
     const isDenied = isDeniedToolCall(toolCallInfo);
-    const isSuccess = isResultToolCall(toolCallInfo);
 
     const borderColor = isError
       ? 'border-red-300 dark:border-red-700'

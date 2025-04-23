@@ -8,7 +8,7 @@ import { isAssistantLoadingAtom } from './apiState';
 import { activeChatAtom } from './chatDerived';
 import { mcpPromptInjectionAtom } from './mcp';
 import { deleteMessageFromActiveChatAtom } from './messageActions';
-import { apiBaseUrlAtom, apiKeyAtom, defaultMaxHistoryAtom } from './settings';
+import { defaultMaxHistoryAtom } from './settings';
 
 // --- Helper Function ---
 const daanPrompt = ``.trim();
@@ -90,8 +90,6 @@ export const regenerateMessageAtom = atom(
   null,
   (get, set, targetMessageId: string) => {
     const activeChat = get(activeChatAtom); // Use derived atom for efficiency
-    const apiKey = get(apiKeyAtom);
-    const apiBaseUrl = get(apiBaseUrlAtom); // Already string | null type from atom
 
     // Check necessary conditions before proceeding
     if (!activeChat || get(isAssistantLoadingAtom) || !targetMessageId) {

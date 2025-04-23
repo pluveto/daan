@@ -13,12 +13,7 @@ import {
   upsertMessageInActiveChatAtom,
 } from './messageActions';
 import { getHistoryForApi } from './regeneration';
-import {
-  apiBaseUrlAtom,
-  apiKeyAtom,
-  defaultMaxHistoryAtom,
-  generateSummaryAtom,
-} from './settings';
+import { defaultMaxHistoryAtom, generateSummaryAtom } from './settings';
 
 export const sendMessageActionAtom = atom(
   null, // Write-only atom
@@ -38,8 +33,6 @@ export const sendMessageActionAtom = atom(
       return;
     }
 
-    const apiKey = get(apiKeyAtom);
-    const apiBaseUrl = get(apiBaseUrlAtom);
     const globalDefaultMaxHistory = get(defaultMaxHistoryAtom);
     const generateSummary = get(generateSummaryAtom);
 

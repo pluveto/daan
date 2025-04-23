@@ -23,7 +23,7 @@ import {
 import { Chat, CustomCharacter } from '@/types';
 import { format, isToday, isYesterday, startOfDay } from 'date-fns'; // Import date-fns functions
 
-import { Provider, useAtom, useAtomValue, useSetAtom } from 'jotai';
+import { useAtom, useAtomValue, useSetAtom } from 'jotai';
 import React, { useMemo } from 'react';
 import {
   LuArchiveRestore,

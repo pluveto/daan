@@ -1,6 +1,5 @@
 // src/settings/McpSettingsTab.tsx
 import { Button } from '@/components/ui/Button';
-import { Checkbox } from '@/components/ui/Checkbox';
 import {
   Dialog,
   DialogContent,
@@ -20,7 +19,6 @@ import {
   FormMessage,
 } from '@/components/ui/Form';
 import { Input } from '@/components/ui/Input';
-import { Label } from '@/components/ui/Label';
 import {
   Select,
   SelectContent,
@@ -64,6 +62,7 @@ import React, { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import {
   LuCircleDotDashed,
+  LuInfo,
   LuPlug,
   LuPlugZap,
   LuPlus,
@@ -103,7 +102,7 @@ const mcpServerFormSchema = z
 type McpServerFormData = z.infer<typeof mcpServerFormSchema>;
 
 export const McpSettingsTab: React.FC = () => {
-  const [servers, setServers] = useAtom(mcpServersAtom);
+  const [servers] = useAtom(mcpServersAtom);
   const [serverStates] = useAtom(mcpServerStatesAtom);
   const connectServer = useSetAtom(connectMcpServerAtom);
   const disconnectServer = useSetAtom(disconnectMcpServerAtom);

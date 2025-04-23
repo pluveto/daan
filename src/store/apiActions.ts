@@ -1,5 +1,5 @@
-import type { ApiProviderConfig, Message, NamespacedModelId } from '@/types';
-import { Atom, atom, Getter, Setter, WritableAtom } from 'jotai';
+import type { Message } from '@/types';
+import { atom, Getter, Setter } from 'jotai';
 import OpenAI from 'openai';
 import { toast } from 'sonner';
 import { v4 as uuidv4 } from 'uuid';
@@ -18,10 +18,7 @@ import {
   apiBaseUrlAtom,
   apiKeyAtom,
   apiProvidersAtom,
-  defaultMaxTokensAtom,
   defaultSummaryModelAtom,
-  defaultTemperatureAtom,
-  defaultTopPAtom,
 } from './settings';
 
 /** Action to cancel the current ongoing AI generation. */
@@ -264,7 +261,6 @@ export async function generateChatTitle(
   userMessageContent: string,
 ): Promise<void> {
   const apiKey = get(apiKeyAtom); // Read values using get
-  const apiBaseUrl = get(apiBaseUrlAtom);
   const summaryModelId = get(defaultSummaryModelAtom); // Get the configured summary model
   const providers = get(apiProvidersAtom); // Get providers to find config
 

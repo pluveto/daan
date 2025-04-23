@@ -17,10 +17,6 @@ export const isRightSidebarOpenAtom = atomWithSafeStorage(
   true,
 );
 
-/** Controls the visibility of the chat settings modal. */
-// This might be repurposed for chat-specific settings later if needed.
-export const isChatSettingsModalOpenAtom = atom(false);
-
 /** Controls the visibility of the character editor/creator view. */
 export const isCharacterEditorOpenAtom = atom(false);
 

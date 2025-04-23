@@ -11,7 +11,6 @@ import {
   addCharacterAtom,
   apiKeyAtom,
   autoFillCharacterAtom,
-  availableModelsAtom,
   customCharactersAtom,
   defaultMaxHistoryAtom,
   deleteCharacterAtom,
@@ -34,7 +33,6 @@ type PartialCharacter = Partial<CustomCharacter>;
 export const CharacterEditor: React.FC = () => {
   const [isOpen, setIsOpen] = useAtom(isCharacterEditorOpenAtom);
   const [characters] = useAtom(customCharactersAtom); // Still need set for direct updates if needed
-  const availableModels = useAtomValue(availableModelsAtom);
   const globalDefaultMaxHistory = useAtomValue(defaultMaxHistoryAtom);
   const apiKey = useAtomValue(apiKeyAtom); // For auto-fill check
   const isAutoFilling = useAtomValue(isCharacterAutoFillingAtom);

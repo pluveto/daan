@@ -1,10 +1,6 @@
-import {
-  isChatSettingsModalOpenAtom,
-  isLeftSidebarOpenAtom,
-  isRightSidebarOpenAtom,
-} from '@/store/index';
+import { isLeftSidebarOpenAtom, isRightSidebarOpenAtom } from '@/store/index';
 import type { Chat } from '@/types';
-import { useAtom, useSetAtom } from 'jotai';
+import { useAtom } from 'jotai';
 import React from 'react';
 import {
   LuMessageSquare,
@@ -12,7 +8,6 @@ import {
   LuPanelLeftClose,
   LuPanelRight,
   LuPanelRightClose,
-  LuSettings2,
 } from 'react-icons/lu';
 import { Button } from './ui/Button';
 
@@ -20,7 +15,6 @@ interface ChatHeaderProps {
   chat: Chat | null;
 }
 export const ChatHeader: React.FC<ChatHeaderProps> = ({ chat }) => {
-  const setIsChatSettingsModalOpen = useSetAtom(isChatSettingsModalOpenAtom);
   const [isLeftOpen, setIsLeftOpen] = useAtom(isLeftSidebarOpenAtom);
   const [isRightOpen, setIsRightOpen] = useAtom(isRightSidebarOpenAtom);
 
@@ -68,16 +62,6 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({ chat }) => {
 
       {/* Right Controls (Settings + Right Sidebar Toggle) */}
       <div className="flex flex-shrink-0 items-center space-x-1">
-        {chat && ( // Only show settings button if a chat is active
-          <Button
-            aria-label="Chat Settings"
-            onClick={() => setIsChatSettingsModalOpen(true)}
-            size="icon"
-            variant="ghost"
-          >
-            <LuSettings2 className="h-5 w-5" />
-          </Button>
-        )}
         <Button
           aria-label={
             isRightOpen ? 'Close right sidebar' : 'Open right sidebar'

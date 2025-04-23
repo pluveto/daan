@@ -9,7 +9,7 @@ import {
 // Import necessary atoms
 
 import { commonEmojis, NamespacedModelId } from '@/types';
-import { useAtom, useAtomValue, useSetAtom } from 'jotai';
+import { useAtomValue, useSetAtom } from 'jotai';
 import { debounce } from 'lodash'; // Use debounce for input saving
 import React, { useEffect, useMemo, useState } from 'react';
 import { LuInfo } from 'react-icons/lu';

@@ -26,7 +26,7 @@ import { CustomCharacter, NamespacedModelId, PartialCharacter } from '@/types';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useAtomValue } from 'jotai';
 import React from 'react';
-import { useForm, useWatch } from 'react-hook-form';
+import { SubmitHandler, useForm, useWatch } from 'react-hook-form';
 import { LuLoader } from 'react-icons/lu';
 import { CharacterFormData, characterSchema } from './validation';
 
@@ -77,7 +77,9 @@ export const CharacterForm: React.FC<CharacterFormProps> = ({
   );
 
   // 3. Define submit handler
-  const onSubmit = (data: CharacterFormData) => {
+  const onSubmit: SubmitHandler<CharacterFormData> = (
+    data: CharacterFormData,
+  ) => {
     const processedData: PartialCharacter = {
       id: characterData.id,
       name: data.name.trim(),
@@ -102,7 +104,10 @@ export const CharacterForm: React.FC<CharacterFormProps> = ({
   const handleAutoFillClick = async () => {
     if (canAutoFill) {
       const tempData = form.getValues();
-      const autoFilledData = await onAutoFill(tempData);
+      const autoFilledData = await onAutoFill({
+        ...tempData,
+        model: tempData.model as NamespacedModelId,
+      });
       if (autoFilledData) {
         form.reset({
           ...tempData,

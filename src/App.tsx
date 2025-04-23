@@ -1,10 +1,8 @@
 // src/App.tsx
-// Removed ChatSettingsModal import and render
 // Ensured SystemSettingsDialog is rendered
 
 import { CharacterEditor } from '@/components/CharacterEditor/index';
 import { ChatInterface } from '@/components/ChatInterface';
-// import { ChatSettingsModal } from '@/components/ChatSettingsModal'; // REMOVED
 import { ConversationSearchDialog } from '@/components/ConversationSearchDialog';
 import { LeftSidebar } from '@/components/LeftSidebar';
 import { RightSidebar } from '@/components/RightSidebar';
@@ -27,7 +25,6 @@ import {
 import { useAtom, useAtomValue } from 'jotai';
 import { VisuallyHidden } from 'radix-ui';
 import { useEffect } from 'react';
-import { Demo } from './components/Demo'; // Keep Demo for now if needed
 import FastImport from './components/FastImport';
 import { Toaster } from './components/ui/Toaster';
 import { SystemSettingsDialog } from './SystemSettingsDialog'; // Import the new Dialog

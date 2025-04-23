@@ -10,8 +10,6 @@ import {
 } from '@/store/mcp';
 import { useAtom, useAtomValue } from 'jotai';
 import React from 'react';
-import { LuPlugZap, LuServer } from 'react-icons/lu';
-import { Badge } from './ui/Badge';
 
 export const McpToolsPopover: React.FC = () => {
   const servers = useAtomValue(mcpServersAtom);

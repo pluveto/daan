@@ -1,5 +1,4 @@
 // src/components/CharacterEditor/validation.ts
-import { NamespacedModelId } from '@/types';
 import { z } from 'zod';
 
 // Helper to allow empty string or positive integer
@@ -24,9 +23,9 @@ export const characterSchema = z.object({
 
 export type CharacterFormData = {
   name: string;
-  icon: string;
-  description: string;
-  prompt: string;
-  model: NamespacedModelId;
-  maxHistoryStr: string;
+  model: string;
+  description?: string | undefined;
+  icon?: string | undefined;
+  prompt?: string | undefined;
+  maxHistoryStr?: string | undefined;
 };

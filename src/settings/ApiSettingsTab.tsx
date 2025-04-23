@@ -10,11 +10,10 @@ import { Button } from '@/components/ui/Button';
 import {
   Form,
   FormControl,
-  FormDescription,
   FormField,
   FormItem,
   FormLabel,
-  FormMessage, // Ensures error messages are rendered
+  FormMessage,
 } from '@/components/ui/Form';
 import { Input } from '@/components/ui/Input';
 import { ScrollArea } from '@/components/ui/ScrollArea';
@@ -41,7 +40,7 @@ import { useAtom } from 'jotai';
 import isEqual from 'lodash/isEqual'; // For deep comparison
 import React, { useCallback, useEffect, useRef } from 'react';
 import { useFieldArray, useForm } from 'react-hook-form';
-import { LuFile, LuImage, LuInfo, LuPlus, LuTrash2 } from 'react-icons/lu'; // Removed LuSave
+import { LuFile, LuImage, LuPlus, LuTrash2 } from 'react-icons/lu'; // Removed LuSave
 import { toast } from 'sonner';
 import { useDebouncedCallback } from 'use-debounce'; // Using use-debounce library
 import { v4 as uuidv4 } from 'uuid';
@@ -181,7 +180,7 @@ export const ApiSettingsTab: React.FC = () => {
   });
 
   // `useFieldArray` for managing providers
-  const { fields, append, remove, update } = useFieldArray({
+  const { fields /* append, remove, update */ } = useFieldArray({
     control: form.control,
     name: 'providers',
     keyName: 'fieldId', // Use a different key name than 'id'
@@ -401,6 +400,7 @@ export const ApiSettingsTab: React.FC = () => {
                         min="0"
                         max="2"
                         {...field}
+                        value={(field.value as string) ?? ''}
                       />
                     </FormControl>
                     <FormMessage /> {/* Shows validation errors */}
@@ -421,7 +421,7 @@ export const ApiSettingsTab: React.FC = () => {
                         placeholder="Default"
                         {...field}
                         // Important: RHF expects string value for number inputs
-                        value={field.value ?? ''}
+                        value={(field.value as string) ?? ''}
                         onChange={(e) =>
                           field.onChange(
                             e.target.value === ''
@@ -450,7 +450,7 @@ export const ApiSettingsTab: React.FC = () => {
                         placeholder="Default"
                         {...field}
                         // Important: RHF expects string value for number inputs
-                        value={field.value ?? ''}
+                        value={(field.value as string) ?? ''}
                         // Adjust parsing based on expected type (float?)
                         onChange={(e) =>
                           field.onChange(
