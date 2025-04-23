@@ -79,7 +79,7 @@ const mcpServerFormSchema = z
     id: z.string().optional(), // Present when editing
     name: z.string().min(1, 'Server name is required'),
     description: z.string().optional(),
-    type: z.enum(['sse-client'], {
+    type: z.enum(['sse'], {
       required_error: 'Server type is required',
     }),
     url: z.string().optional(),
@@ -87,8 +87,8 @@ const mcpServerFormSchema = z
   })
   .refine(
     (data) => {
-      // URL is required only if type is 'sse-client'
-      if (data.type === 'sse-client' && (!data.url || data.url.trim() === '')) {
+      // URL is required only if type is 'sse'
+      if (data.type === 'sse' && (!data.url || data.url.trim() === '')) {
         return false;
       }
       return true;
@@ -123,7 +123,7 @@ export const McpSettingsTab: React.FC = () => {
     defaultValues: {
       name: '',
       description: '',
-      type: 'sse-client',
+      type: 'sse',
       url: '',
       autoApproveTools: false,
     },
@@ -150,7 +150,7 @@ export const McpSettingsTab: React.FC = () => {
         id: undefined,
         name: '',
         description: '',
-        type: 'sse-client',
+        type: 'sse',
         url: '',
         autoApproveTools: false,
       });
@@ -306,7 +306,7 @@ export const McpSettingsTab: React.FC = () => {
                             <SelectContent>
                               {/* Only allow adding SSE type manually */}
                               {/* <SelectItem value="builtin-pseudo" disabled>Built-in Pseudo Server</SelectItem> */}
-                              <SelectItem value="sse-client">
+                              <SelectItem value="sse">
                                 SSE Client (External)
                               </SelectItem>
                             </SelectContent>
@@ -316,7 +316,7 @@ export const McpSettingsTab: React.FC = () => {
                       )}
                     />
                     {/* Conditionally render URL input */}
-                    {form.watch('type') === 'sse-client' && (
+                    {form.watch('type') === 'sse' && (
                       <FormField
                         control={form.control}
                         name="url"
@@ -451,11 +451,11 @@ export const McpSettingsTab: React.FC = () => {
                       <span className="bg-muted rounded px-1.5 py-0.5 font-mono text-xs">
                         {server.type === 'builtin-pseudo'
                           ? 'Built-in'
-                          : server.type === 'sse-client'
+                          : server.type === 'sse'
                             ? 'SSE'
                             : server.type}
                       </span>
-                      {server.type === 'sse-client' && server.url && (
+                      {server.type === 'sse' && server.url && (
                         <Tooltip delayDuration={100}>
                           <TooltipTrigger asChild>
                             <button

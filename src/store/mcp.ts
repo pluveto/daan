@@ -30,8 +30,8 @@ export interface McpServerConfig {
   name: string;
   description: string;
   enabled: boolean;
-  type: 'builtin-pseudo' | 'sse-client';
-  url?: string; // Required for sse-client
+  type: 'builtin-pseudo' | 'sse';
+  url?: string; // Required for sse
   autoApproveTools: boolean;
 }
 
@@ -121,7 +121,7 @@ export const addMcpServerAtom = atom(
     get,
     set,
     config: Omit<McpServerConfig, 'id' | 'enabled' | 'type'> & {
-      type: 'sse-client';
+      type: 'sse';
     },
   ) => {
     // Restrict adding only custom SSE for now
@@ -324,7 +324,7 @@ export const connectMcpServerAtom = atom(
           `[MCP Connect] Using PseudoTransport with built-in server for ${config.id}`,
         );
         // --- End Refactor ---
-      } else if (config.type === 'sse-client' && config.url) {
+      } else if (config.type === 'sse' && config.url) {
         console.log(`[MCP Connect] Using SSEClientTransport for ${config.id}`);
         transport = new SSEClientTransport(new URL(config.url));
       } else {
