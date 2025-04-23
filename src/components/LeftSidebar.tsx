@@ -219,7 +219,7 @@ export const LeftSidebar: React.FC = () => {
           {/* System Settings Button */}
           <Button
             aria-label="System Settings"
-            className="ml-auto flex-shrink-0" // Push to the right
+            className="ml-auto flex-shrink-0 hover:bg-neutral-200 dark:hover:bg-neutral-800" // Push to the right
             onClick={() => setIsSystemSettingsOpen(true)} // Open dialog
             size="icon"
             variant="ghost"

@@ -1,6 +1,6 @@
 {
   "name": "@pluveto/daan",
-  "version": "0.1.0",
+  "version": "0.3.0",
   "author": "Pluveto <zijing.zhang@proton.me>",
   "repository": {
     "type": "git",
@@ -68,6 +68,7 @@
     "@ianvs/prettier-plugin-sort-imports": "^4.4.1",
     "@swc/core": "^1.11.21",
     "@tailwindcss/typography": "^0.5.16",
+    "@tauri-apps/cli": "^2.5.0",
     "@types/lodash": "^4.17.16",
     "@types/node": "^22.14.1",
     "@types/react": "^19.1.2",
@@ -84,10 +85,11 @@
     "vitest": "^3.1.1"
   },
   "scripts": {
-    "preinstall": "command -v git >/dev/null 2>&1 && git config core.hooksPath git-hooks || true",
-    "build": "vite build",
-    "dev:update-deps": "rm -rf pnpm-lock.yaml node_modules/ **/node_modules && pnpm install",
-    "dev": "vite dev",
+    "preinstall": "node -e \"try { require('child_process').execSync('git config core.hooksPath git-hooks', { stdio: 'ignore' }) } catch (e) { /* Git command failed, ignore */ }\"",
+    "dev:web": "vite dev",
+    "build:web": "vite build",
+    "dev:desktop": "pnpm tauri dev",
+    "build:desktop": "pnpm tauri build",
     "format": "prettier --write .",
     "lint:format": "prettier --cache --check .",
     "test": "npm-run-all --parallel tsc:check vitest:run lint:format",
