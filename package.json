@@ -85,7 +85,7 @@
     "vitest": "^3.1.1"
   },
   "scripts": {
-    "preinstall": "command -v git >/dev/null 2>&1 && git config core.hooksPath git-hooks || true",
+    "preinstall": "node -e \"try { require('child_process').execSync('git config core.hooksPath git-hooks', { stdio: 'ignore' }) } catch (e) { /* Git command failed, ignore */ }\"",
     "dev:web": "vite dev",
     "build:web": "vite build",
     "dev:desktop": "pnpm tauri dev",
