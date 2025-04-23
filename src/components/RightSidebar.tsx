@@ -248,7 +248,7 @@ export const RightSidebar: React.FC = () => {
             <div className="flex items-center gap-2">
               <Input
                 id="chatIconModal"
-                className="w-16 p-1 text-center text-xl"
+                className="w-20 p-1 text-center text-xl"
                 maxLength={2}
                 value={icon}
                 onChange={(e) => setIcon(e.target.value)}
