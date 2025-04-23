@@ -22,14 +22,17 @@ export interface RunningToolCallInfo extends BaseToolCallInfo {
 export interface ResultToolCallInfo extends BaseToolCallInfo {
   type: 'result';
   isError: false;
-  // Result content will be in the main message content field
-  // result: any; // Store structured result if needed, otherwise use message content
+  serverId: string;
+  serverName: string;
+  args: any;
 }
 export interface ErrorToolCallInfo extends BaseToolCallInfo {
   type: 'error';
   isError: true;
-  // Error message will be in the main message content field
-  // error: string;
+  serverId?: string;
+  serverName?: string;
+  args?: any;
+  errorMessage?: string;
 }
 export interface DeniedToolCallInfo extends BaseToolCallInfo {
   type: 'denied';

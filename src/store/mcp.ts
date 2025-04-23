@@ -1,24 +1,26 @@
 // src/store/mcp.ts
 import { atomWithSafeStorage } from '@/lib/utils';
 import { createBuiltinExprEvaluatorServer } from '@/mcp/builtinExprEvaluator';
-import type { Message, PendingToolCallInfo, ToolCallInfo } from '@/types';
-// Import ToolCallInfo
+import { createBuiltinTimeServer } from '@/mcp/builtinTime'; // Import the time server creator
+import type {
+  Message,
+  PendingToolCallInfo,
+  ResultToolCallInfo,
+  ToolCallInfo,
+} from '@/types';
 import { Client } from '@moinfra/mcp-client-sdk/client/index.js';
 import { PseudoTransport } from '@moinfra/mcp-client-sdk/client/pseudo.js';
 import { SSEClientTransport } from '@moinfra/mcp-client-sdk/client/sse.js';
 import { McpServer } from '@moinfra/mcp-client-sdk/server/mcp.js';
-import { CallToolResult } from '@moinfra/mcp-client-sdk/types.js'; // Import necessary types
-
-//FIXME: more robust formatting
+import { CallToolResult } from '@moinfra/mcp-client-sdk/types.js';
 import { atom, Getter, Setter } from 'jotai';
 import { toast } from 'sonner';
 import { v4 as uuidv4 } from 'uuid';
-import { callOpenAIStreamLogic } from './apiActions'; // To re-trigger AI
-import { activeChatIdAtom, chatsAtom } from './chatData'; // To get chat messages/config
-
+import { callOpenAIStreamLogic } from './apiActions';
+import { activeChatIdAtom, chatsAtom } from './chatData';
 import { updateMessagesInChat } from './messageActions';
-import { getHistoryForApi } from './regeneration'; // To prepare history
-import { defaultMaxHistoryAtom } from './settings'; // For history limit
+import { getHistoryForApi } from './regeneration';
+import { defaultMaxHistoryAtom } from './settings';
 
 const formatJsonSchema = (schema: any) => JSON.stringify(schema, null, 2);
 
@@ -34,7 +36,6 @@ export interface McpServerConfig {
 }
 
 export interface McpDiscoveredCapabilities {
-  // Simplified structure for now
   tools?: { name: string; description?: string; inputSchema?: any }[];
   resources?: { name: string; uriTemplate?: string }[];
   prompts?: { name: string; arguments?: any[] }[];
@@ -46,36 +47,56 @@ export interface McpServerState {
   isConnected: boolean;
   error: string | null;
   client: Client | null;
-  transport: PseudoTransport | SSEClientTransport | null; // Keep track of transport
+  transport: PseudoTransport | SSEClientTransport | null;
   capabilities: McpDiscoveredCapabilities | null;
-  // We'll store capabilities directly, not separate lists initially
-  // tools: any[];
-  // resources: any[];
-  // prompts: any[];
 }
 
 // --- MCP State Atoms ---
 
-// Atom to hold the singleton instance of the built-in server
-// We initialize it once when the atom is first read.
-const builtinExprEvaluatorServerInstanceAtom = atom<McpServer>(() => {
-  return createBuiltinExprEvaluatorServer();
+// --- Refactored Built-in Server Management ---
+// Central registry for built-in server instances, keyed by their unique config ID.
+// Initialized once when the atom is first read.
+const builtinServersRegistryAtom = atom<Map<string, McpServer>>(() => {
+  console.log('[MCP] Initializing built-in server registry...');
+  const registry = new Map<string, McpServer>();
+
+  // Add known built-in servers to the registry
+  // The keys MUST match the 'id' field in their McpServerConfig
+  registry.set('builtin::expr_evaluator', createBuiltinExprEvaluatorServer());
+  registry.set('builtin::time', createBuiltinTimeServer());
+  // Add other built-in servers here in the future
+
+  console.log(
+    `[MCP] Built-in server registry initialized with keys: ${Array.from(registry.keys()).join(', ')}`,
+  );
+  return registry;
 });
+// --- End Refactor ---
 
 /** Stores the configuration for all MCP servers. Persisted. */
 export const mcpServersAtom = atomWithSafeStorage<McpServerConfig[]>(
   'mcpServers',
   [
-    // Add the built-in server config by default
+    // Add the built-in servers config by default
     {
-      id: 'builtin::expr_evaluator',
+      id: 'builtin::expr_evaluator', // Unique ID for the evaluator
       name: 'Expression Evaluator (Built-in)',
       description:
         'A simple JS expression evaluation tool (uses eval - use with caution). Runs locally.',
       enabled: true, // Enabled by default for testing
       type: 'builtin-pseudo',
-      autoApproveTools: false, // Default to requiring approval
+      autoApproveTools: false,
     },
+    // --- Added Time Server Config ---
+    {
+      id: 'builtin::time', // Unique ID for the time server
+      name: 'Current Time (Built-in)',
+      description: 'Provides the current date and time. Runs locally.',
+      enabled: false, // Disabled by default
+      type: 'builtin-pseudo',
+      autoApproveTools: true, // Time is generally safe to auto-approve
+    },
+    // --- End Add ---
   ],
 );
 
@@ -86,9 +107,6 @@ export const mcpServerStatesAtom = atom<Map<string, McpServerState>>(new Map());
 export const isMcpToolsPopoverOpenAtom = atom(false);
 
 /** Stores the IDs of the MCP tools *selected by the user* for injection into the current chat. */
-// We need to store selected *servers* or *capabilities*, not just tool names,
-// as tool names might not be unique across servers.
-// Let's store selected server IDs for now. The injection logic will use capabilities from these servers.
 export const selectedMcpServerIdsAtom = atomWithSafeStorage<string[]>(
   'selectedMcpServerIds',
   [],
@@ -99,11 +117,20 @@ export const selectedMcpServerIdsAtom = atomWithSafeStorage<string[]>(
 /** Action to add a new MCP server configuration. */
 export const addMcpServerAtom = atom(
   null,
-  (get, set, config: Omit<McpServerConfig, 'id' | 'enabled'>) => {
-    const newId =
-      config.type === 'builtin-pseudo'
-        ? `builtin::${uuidv4()}`
-        : `custom::${uuidv4()}`; // Simple namespacing for ID
+  (
+    get,
+    set,
+    config: Omit<McpServerConfig, 'id' | 'enabled' | 'type'> & {
+      type: 'sse-client';
+    },
+  ) => {
+    // Restrict adding only custom SSE for now
+    // Prevent adding new 'builtin-pseudo' types via UI
+    if ((config as any).type === 'builtin-pseudo') {
+      toast.error("Cannot add new 'builtin-pseudo' servers via this action.");
+      return;
+    }
+    const newId = `custom::${uuidv4()}`; // Simple namespacing for custom server IDs
     const newConfig: McpServerConfig = {
       ...config,
       id: newId,
@@ -120,21 +147,48 @@ export const updateMcpServerConfigAtom = atom(
   null,
   (get, set, update: Partial<Omit<McpServerConfig, 'id'>> & { id: string }) => {
     let serverName = 'Server';
+    let needsReconnect = false;
+
+    // Prevent changing the type or ID of built-in servers
+    if (update.id.startsWith('builtin::')) {
+      if (update.type && update.type !== 'builtin-pseudo') {
+        toast.error('Cannot change the type of a built-in server.');
+        // Don't apply the type change
+        delete update.type;
+      }
+    }
+
     set(mcpServersAtom, (prev) =>
       prev.map((server) => {
         if (server.id === update.id) {
           serverName = update.name ?? server.name; // Get name for toast
+          // Check if URL or Type changed for non-builtin servers
+          if (
+            (!server.id.startsWith('builtin::') &&
+              update.url !== undefined &&
+              update.url !== server.url) ||
+            (update.type !== undefined && update.type !== server.type)
+          ) {
+            needsReconnect = true;
+          }
           return { ...server, ...update };
         }
         return server;
       }),
     );
     toast.success(`MCP Server "${serverName}" updated.`);
-    // If URL/Type changed, might need to disconnect the old connection?
-    const currentState = get(mcpServerStatesAtom).get(update.id);
-    if (currentState?.isConnected || currentState?.isConnecting) {
-      console.log(`Disconnecting server ${update.id} due to config update.`);
-      set(disconnectMcpServerAtom, update.id); // Trigger disconnect
+
+    // If URL/Type changed for a non-builtin server, disconnect the old connection
+    if (needsReconnect) {
+      const currentState = get(mcpServerStatesAtom).get(update.id);
+      if (currentState?.isConnected || currentState?.isConnecting) {
+        console.log(
+          `Disconnecting server ${update.id} due to config update (URL/Type).`,
+        );
+        set(disconnectMcpServerAtom, update.id); // Trigger disconnect
+        // Optionally trigger reconnect if it was enabled? Or let user do it manually.
+        // if (originalConfig?.enabled) { set(connectMcpServerAtom, update.id) }
+      }
     }
   },
 );
@@ -142,9 +196,12 @@ export const updateMcpServerConfigAtom = atom(
 /** Action to delete an MCP server configuration. */
 export const deleteMcpServerAtom = atom(null, (get, set, serverId: string) => {
   let serverName = 'Server';
-  // Prevent deleting the default built-in server config
-  if (serverId === 'builtin::expr_evaluator') {
-    toast.error('Cannot delete the built-in Expression Evaluator server.');
+  // Prevent deleting *any* built-in server config based on ID prefix
+  if (serverId.startsWith('builtin::')) {
+    const config = get(mcpServersAtom).find((s) => s.id === serverId);
+    toast.error(
+      `Cannot delete the built-in server: "${config?.name || serverId}".`,
+    );
     return;
   }
 
@@ -207,11 +264,12 @@ export const connectMcpServerAtom = atom(
     const config = get(mcpServersAtom).find((s) => s.id === serverId);
     if (!config) {
       console.error(`[MCP Connect] Config not found for ${serverId}`);
+      toast.error(`Configuration for server ID "${serverId}" not found.`);
       return;
     }
     if (!config.enabled) {
       console.log(
-        `[MCP Connect] Server ${serverId} is disabled, skipping connect.`,
+        `[MCP Connect] Server ${serverId} (${config.name}) is disabled, skipping connect.`,
       );
       return;
     }
@@ -221,7 +279,7 @@ export const connectMcpServerAtom = atom(
 
     if (currentState?.isConnected || currentState?.isConnecting) {
       console.log(
-        `[MCP Connect] Server ${serverId} is already connected or connecting.`,
+        `[MCP Connect] Server ${serverId} (${config.name}) is already connected or connecting.`,
       );
       return;
     }
@@ -253,17 +311,25 @@ export const connectMcpServerAtom = atom(
 
       // Create appropriate transport
       if (config.type === 'builtin-pseudo') {
-        // Use the singleton instance of the built-in server
-        const builtinServer = get(builtinExprEvaluatorServerInstanceAtom);
+        const registry = get(builtinServersRegistryAtom); // Get the registry
+        const builtinServer = registry.get(config.id); // Look up the server instance by its ID
+
         if (!builtinServer) {
-          throw new Error('Built-in server instance not available.');
+          throw new Error(
+            `Built-in server instance not found in registry for ID: ${config.id}`,
+          );
         }
-        transport = new PseudoTransport(builtinServer);
+        transport = new PseudoTransport(builtinServer); // Use the found instance
+        console.log(
+          `[MCP Connect] Using PseudoTransport with built-in server for ${config.id}`,
+        );
+        // --- End Refactor ---
       } else if (config.type === 'sse-client' && config.url) {
+        console.log(`[MCP Connect] Using SSEClientTransport for ${config.id}`);
         transport = new SSEClientTransport(new URL(config.url));
       } else {
         throw new Error(
-          `Invalid server type or missing URL for ${config.type}`,
+          `Invalid server type (${config.type}) or missing URL for ${config.id}`,
         );
       }
 
@@ -274,6 +340,7 @@ export const connectMcpServerAtom = atom(
       console.log(
         `[MCP Connect] Connected to ${serverId}. Fetching capabilities...`,
       );
+      // Capabilities fetching logic
       let toolsResult;
       try {
         toolsResult = await client.listTools();
@@ -339,7 +406,6 @@ export const connectMcpServerAtom = atom(
       toast.error(`Failed to connect to "${config.name}": ${error.message}`);
       // Ensure client/transport are closed if partially initialized
       if (client) {
-        // && client.isConnected but MCP dont provide that api
         await client
           .close()
           .catch((closeErr) =>
@@ -349,7 +415,7 @@ export const connectMcpServerAtom = atom(
             ),
           );
       } else if (transport) {
-        // Close transport directly if client didn't connect fully
+        // Close transport directly if client didn't connect fully but transport started
         await transport
           .close()
           .catch((closeErr) =>
@@ -388,8 +454,8 @@ export const disconnectMcpServerAtom = atom(
       !currentState ||
       (!currentState.isConnected && !currentState.isConnecting)
     ) {
-      // console.log(`[MCP Disconnect] Server ${serverId} is not connected.`);
-      // Ensure state is clean if it exists but wasn't connected
+      // console.log(`[MCP Disconnect] Server ${serverId} is not connected or connecting.`);
+      // Ensure state is clean if it exists but wasn't connected/connecting
       if (currentState) {
         set(mcpServerStatesAtom, (prevMap) => {
           const newMap = new Map(prevMap);
@@ -409,22 +475,28 @@ export const disconnectMcpServerAtom = atom(
       return;
     }
 
-    console.log(`[MCP Disconnect] Disconnecting from ${serverId}...`);
+    console.log(
+      `[MCP Disconnect] Disconnecting from ${serverId} (${config?.name || 'Unknown Name'})...`,
+    );
 
     try {
+      // Important: Close the client first if it exists, as it should handle the transport.
       if (currentState.client) {
-        // client.close() should also close the associated transport
         await currentState.client.close();
         console.log(`[MCP Disconnect] Client closed for ${serverId}.`);
       } else if (currentState.transport) {
-        // Fallback if only transport exists (e.g., connect failed partially)
+        // Fallback: If only transport exists and was started (e.g., connect failed partially)
         await currentState.transport.close();
         console.log(
           `[MCP Disconnect] Transport closed directly for ${serverId}.`,
         );
+      } else {
+        console.log(
+          `[MCP Disconnect] No active client or transport to close for ${serverId}.`,
+        );
       }
       if (config) {
-        // Only toast if config exists
+        // Only toast if config exists and we were actually connected/connecting
         toast.info(`MCP Server "${config.name}" disconnected.`);
       }
     } catch (error: any) {
@@ -441,7 +513,7 @@ export const disconnectMcpServerAtom = atom(
         configId: serverId,
         isConnected: false,
         isConnecting: false,
-        error: currentState.error, // Preserve previous error if any? Or clear? Let's clear.
+        error: null, // Clear any previous error on manual disconnect
         client: null,
         transport: null,
         capabilities: null, // Clear capabilities on disconnect
@@ -449,7 +521,7 @@ export const disconnectMcpServerAtom = atom(
       set(mcpServerStatesAtom, (prevMap) =>
         new Map(prevMap).set(serverId, disconnectedState),
       );
-      // Remove from selected servers if disconnected manually
+      // Remove from selected servers if disconnected manually or disabled
       set(selectedMcpServerIdsAtom, (prev) =>
         prev.filter((id) => id !== serverId),
       );
@@ -466,13 +538,20 @@ export const connectAllMcpServersAtom = atom(null, (get, set) => {
       // Check current state before attempting connect
       const currentState = get(mcpServerStatesAtom).get(config.id);
       if (!currentState?.isConnected && !currentState?.isConnecting) {
-        console.log(`[MCP Connect All] Connecting ${config.id}`);
-        set(connectMcpServerAtom, config.id); // Use async atom correctly
+        console.log(
+          `[MCP Connect All] Connecting ${config.id} (${config.name})`,
+        );
+        // Important: Use `set` directly for async write atoms
+        set(connectMcpServerAtom, config.id);
       } else {
         console.log(
-          `[MCP Connect All] Skipping ${config.id} (already connected/connecting).`,
+          `[MCP Connect All] Skipping ${config.id} (${config.name}) (already connected/connecting).`,
         );
       }
+    } else {
+      console.log(
+        `[MCP Connect All] Skipping ${config.id} (${config.name}) (disabled).`,
+      );
     }
   });
 });
@@ -484,14 +563,14 @@ export const disconnectAllMcpServersAtom = atom(null, (get, set) => {
   states.forEach((state, serverId) => {
     if (state.isConnected || state.isConnecting) {
       console.log(`[MCP Disconnect All] Disconnecting ${serverId}`);
+      // Important: Use `set` directly for async write atoms
       set(disconnectMcpServerAtom, serverId);
     }
   });
-  // Clear all selected servers
+  // Clear all selected servers when disconnecting all
   set(selectedMcpServerIdsAtom, []);
 });
 
-// TODO: Implement remaining atoms later:
 /** Derived atom to generate the system prompt instruction for enabled/selected MCP tools. */
 export const mcpPromptInjectionAtom = atom<string>((get) => {
   const selectedIds = get(selectedMcpServerIdsAtom);
@@ -526,12 +605,14 @@ export const mcpPromptInjectionAtom = atom<string>((get) => {
                 )
               : '{}';
 
-            return `- Tool: ${tool.name}\n  Description: ${tool.description || 'No description'}\n  Input JSON Schema:\n\`\`\`json\n${schemaString}\n\`\`\``;
+            // Use triple backticks for the code block
+            return `- Tool: \`${tool.name}\`\n  Description: ${tool.description || 'No description'}\n  Input JSON Schema:\n\`\`\`json\n${schemaString}\n\`\`\``;
           })
           .join('\n');
 
+        // Use backticks for server name and ID in the section header
         availableToolsSections.push(
-          `Server: ${config.name} (ID: ${serverId})
+          `Server: \`${config.name}\` (ID: \`${serverId}\`)
 ${toolDescriptions}`,
         );
       }
@@ -540,16 +621,22 @@ ${toolDescriptions}`,
 
   if (availableToolsSections.length > 0) {
     // Construct the final prompt section
+    // Added note about unique tool names per server but potential overlap across servers
+    // Clarified argument format emphasizing JSON string validity.
     injection = `
 ---------------- MCP Tools Available ----------------
-You have access to the following external tools provided by connected MCP servers.
-To use a tool, respond *ONLY* with the following XML tag format, replacing placeholders:
-<mcp-tool-call server="SERVER_ID" tool="TOOL_NAME" arguments='JSON_ARGUMENTS'>Optional thinking text</mcp-tool-call>
+You have access to the following external tools provided by connected MCP servers. Tool names are unique *within* a single server, but the same tool name *might* exist on different servers. Always specify the correct SERVER_ID.
 
-- Replace SERVER_ID with the ID of the server providing the tool.
-- Replace TOOL_NAME with the exact name of the tool you want to call.
-- Replace JSON_ARGUMENTS with a valid JSON string matching the tool's Input JSON Schema. Ensure proper escaping if the JSON string contains quotes. For tools with no arguments, use '{}'.
-- You can optionally include thinking text between the tags, but it will be ignored by the system.
+To use a tool, respond *ONLY* with the following XML tag format, replacing placeholders precisely:
+<mcp-tool-call server="SERVER_ID" tool="TOOL_NAME" arguments='JSON_ARGUMENTS'></mcp-tool-call>
+
+- Replace \`SERVER_ID\` with the ID of the server providing the tool (e.g., "builtin::time", "custom::xyz").
+- Replace \`TOOL_NAME\` with the exact name of the tool you want to call (e.g., "getCurrentTime", "eval").
+- Replace \`JSON_ARGUMENTS\` with a *single-quoted, valid JSON string* representing the arguments required by the tool's Input JSON Schema.
+    - Ensure the JSON string itself is valid (e.g., keys and strings inside the JSON use double quotes).
+    - If the JSON string contains single quotes, they must be escaped (e.g., '{"query": "What\\'s up?"}').
+    - For tools with no arguments, use '{}'.
+- Do not include any text outside the <mcp-tool-call>...</mcp-tool-call> tags.
 
 Available Tools:
 ${availableToolsSections.join('\n\n')}
@@ -562,19 +649,26 @@ ${availableToolsSections.join('\n\n')}
 
 // --- Tool Call Handling Logic ---
 
+// (Helper functions: safeParseArgs, formatToolResultContent, formatToolResultForAI remain the same)
 // Helper to safely parse arguments, returns null on error
 function safeParseArgs(argsString: string, toolName: string): any | null {
   try {
-    // Basic unescape for JSON strings within the attribute
-    const unescapedArgs = argsString.replace(/\\'/g, "'").replace(/\\"/g, '"');
-    return JSON.parse(unescapedArgs);
+    // Basic unescape for JSON strings within the attribute - This might be too simple.
+    // JSON parsers usually handle standard escapes like \". Let's rely on JSON.parse
+    // and assume the input `argsString` is already a correctly formatted JSON string.
+    // If the string comes from an XML attribute enclosed in single quotes,
+    // double quotes inside should be fine. Issues might arise if the JSON *content*
+    // needs single quotes. The prompt now emphasizes using escaped single quotes if needed.
+    // const unescapedArgs = argsString.replace(/\\'/g, "'").replace(/\\"/g, '"'); // Probably remove this
+    return JSON.parse(argsString);
   } catch (e) {
     console.error(
-      `[MCP Tool Call] Failed to parse arguments for tool ${toolName}:`,
-      argsString,
+      `[MCP Tool Call] Failed to parse arguments for tool ${toolName}. Raw args: '${argsString}'. Error:`,
       e,
     );
-    toast.error(`Invalid arguments format for tool ${toolName}.`);
+    toast.error(
+      `Invalid arguments JSON format for tool ${toolName}. Check syntax.`,
+    );
     return null;
   }
 }
@@ -585,13 +679,23 @@ function formatToolResultContent(result: CallToolResult): string {
   if (result.content && result.content.length > 0) {
     const firstPart = result.content[0];
     if (result.isError) {
-      return `Error: ${firstPart.text}`;
+      // Assume error content is text
+      return `Error: ${firstPart?.text || '[Unknown Error Structure]'}`;
     } else if (firstPart.type === 'text') {
       return firstPart.text || '[Empty Text Result]';
-    } else {
-      // Fallback for other types (e.g., image, json) - just stringify simply for now
+    }
+    // else if (firstPart.type === 'json') {
+    //   try {
+    //     // Pretty print JSON results
+    //     return `\`\`\`json\n${JSON.stringify(firstPart.json, null, 2)}\n\`\`\``;
+    //   } catch {
+    //     return '[Invalid JSON Result Data]';
+    //   }
+    // }
+    else {
+      // Fallback for other types (e.g., image) - just stringify simply for now
       try {
-        return JSON.stringify(firstPart, null, 2);
+        return `\`\`\`json\n${JSON.stringify(firstPart, null, 2)}\n\`\`\``; // Format as JSON block
       } catch {
         return '[Unsupported Result Type]';
       }
@@ -603,15 +707,24 @@ function formatToolResultContent(result: CallToolResult): string {
 // Helper to format tool result for AI consumption
 function formatToolResultForAI(result: CallToolResult): string {
   // For now, just return the text content or error. Might need more structure later.
-  // Could potentially return JSON if the result content includes it.
+  // Could potentially return JSON string if the result content includes it.
   if (result.content && result.content.length > 0) {
     const firstPart = result.content[0];
     if (result.isError) {
-      return `Error: ${firstPart.text}`;
+      return `Error: ${firstPart?.text || '[Unknown Error Structure]'}`;
     } else if (firstPart.type === 'text') {
       return firstPart.text || '';
-    } else {
+    }
+    // else if (firstPart.type === 'json') {
+    //   try {
+    //     return JSON.stringify(firstPart.json); // Return JSON string
+    //   } catch {
+    //     return '[Invalid JSON Data]';
+    //   }
+    // }
+    else {
       try {
+        // Fallback for other unknown types
         return JSON.stringify(firstPart);
       } catch {
         return '[Unsupported Result Data]';
@@ -632,38 +745,97 @@ export const handleMcpToolCallAtom = atom(
       serverId: string;
       toolName: string;
       argsString: string;
-      rawTag: string;
+      rawTag: string; // Keep rawTag if needed for debugging or potential future use
     },
   ) => {
     const { chatId, serverId, toolName, argsString } = toolCallData;
     console.log(
-      `[MCP Handler] Processing tool call for ${toolName} on ${serverId}`,
+      `[MCP Handler] Processing tool call request: Server='${serverId}', Tool='${toolName}', Args='${argsString}'`,
     );
 
     const callId = uuidv4(); // Unique ID for this invocation
 
-    // 1. Parse Arguments
-    const parsedArgs = safeParseArgs(argsString, toolName);
-    if (parsedArgs === null) {
-      // Add error message to chat? For now, just log and maybe toast.
-      // TODO: Add user-facing error message in chat?
-      return;
-    }
-
-    // 2. Find Server Config & State
+    // 1. Find Server Config & State *first*
     const config = get(mcpServersAtom).find((s) => s.id === serverId);
     const state = get(mcpServerStatesAtom).get(serverId);
 
     if (!config) {
-      toast.error(
-        `MCP Error: Configuration for server "${serverId}" not found.`,
+      // TODO: Inform AI that the server ID is invalid?
+      // For now, toast and maybe add an error message to chat.
+      const errorContent = `MCP Error: Configuration for server ID "${serverId}" not found. Cannot call tool "${toolName}".`;
+      toast.error(errorContent);
+      set(chatsAtom, (prev) =>
+        updateMessagesInChat(prev, chatId, (msgs) => [
+          ...msgs,
+          {
+            id: uuidv4(),
+            role: 'system',
+            content: errorContent,
+            timestamp: Date.now(),
+          },
+        ]),
       );
       return;
     }
     if (!state?.isConnected || !state.client) {
-      toast.error(`MCP Error: Server "${config.name}" is not connected.`);
+      // TODO: Inform AI that the server is unavailable?
+      const errorContent = `MCP Error: Server "${config.name}" (ID: ${serverId}) is not connected. Cannot call tool "${toolName}".`;
+      toast.error(errorContent);
+      set(chatsAtom, (prev) =>
+        updateMessagesInChat(prev, chatId, (msgs) => [
+          ...msgs,
+          {
+            id: uuidv4(),
+            role: 'system',
+            content: errorContent,
+            timestamp: Date.now(),
+          },
+        ]),
+      );
       // Maybe try to reconnect? For now, fail.
-      // set(connectMcpServerAtom, serverId);
+      // if (config.enabled) { set(connectMcpServerAtom, serverId); }
+      return;
+    }
+
+    // Check if the requested tool actually exists on the connected server
+    const availableTool = state.capabilities?.tools?.find(
+      (t) => t.name === toolName,
+    );
+    if (!availableTool) {
+      const errorContent = `MCP Error: Tool "${toolName}" not found on server "${config.name}" (ID: ${serverId}). Available tools: ${state.capabilities?.tools?.map((t) => t.name).join(', ') || 'None'}`;
+      toast.error(errorContent);
+      set(chatsAtom, (prev) =>
+        updateMessagesInChat(prev, chatId, (msgs) => [
+          ...msgs,
+          {
+            id: uuidv4(),
+            role: 'system',
+            content: errorContent,
+            timestamp: Date.now(),
+          },
+        ]),
+      );
+      // Maybe re-trigger AI with this info?
+      return;
+    }
+
+    // 2. Parse Arguments (after finding server, so we know tool context)
+    const parsedArgs = safeParseArgs(argsString, toolName);
+    if (parsedArgs === null) {
+      // Error is handled by safeParseArgs (toast shown)
+      // Add error message to chat?
+      const errorContent = `MCP Error: Failed to parse arguments for tool "${toolName}" on server "${config.name}". Arguments provided: '${argsString}'. Please provide a valid JSON string.`;
+      set(chatsAtom, (prev) =>
+        updateMessagesInChat(prev, chatId, (msgs) => [
+          ...msgs,
+          {
+            id: uuidv4(),
+            role: 'system',
+            content: errorContent,
+            timestamp: Date.now(),
+          },
+        ]),
+      );
       return;
     }
 
@@ -675,11 +847,13 @@ export const handleMcpToolCallAtom = atom(
       serverName: config.name, // Use display name
       toolName,
       args: parsedArgs,
+      // Add schema for potential validation display later?
+      // inputSchema: availableTool.inputSchema,
     };
     const pendingMessage: Message = {
       id: uuidv4(), // New message ID for the pending state display
-      role: 'assistant', // Or maybe a custom role/type if needed for styling/filtering
-      content: `Wants to use tool: **${toolName}** on **${config.name}**`,
+      role: 'assistant', // Represents the AI's *request* to call the tool
+      content: `Wants to use tool: **${toolName}** on **${config.name}** with arguments: \`\`\`json\n${JSON.stringify(parsedArgs, null, 2)}\n\`\`\``,
       timestamp: Date.now(),
       toolCallInfo: pendingToolCallInfo,
     };
@@ -691,16 +865,17 @@ export const handleMcpToolCallAtom = atom(
     // 4. Check Auto-Approval & Execute or Wait
     if (config.autoApproveTools) {
       console.log(
-        `[MCP Handler] Auto-approving tool call ${callId} for ${toolName}`,
+        `[MCP Handler] Auto-approving tool call ${callId} for ${toolName} on ${serverId}`,
       );
       // Call the execution logic directly
+      // Use await here if executeToolCall remains async
       await executeToolCall(
         get,
         set,
         chatId,
-        pendingMessage.id,
+        pendingMessage.id, // Pass the ID of the message *we just created*
         pendingToolCallInfo,
-        state.client,
+        state.client, // Pass the connected client instance
       );
     } else {
       console.log(
@@ -712,39 +887,55 @@ export const handleMcpToolCallAtom = atom(
   },
 );
 
+// (approveToolCallAtom, denyToolCallAtom, executeToolCall, triggerAICallWithUpdatedHistory remain largely the same,
+// ensuring they correctly use the chatId, pendingMessageId, toolCallInfo, and client passed to them)
+
 /** Action triggered when user approves a tool call */
 export const approveToolCallAtom = atom(
   null,
   async (get, set, pendingMessageId: string) => {
     const chatId = get(activeChatIdAtom); // Assume approval is for the active chat
-    if (!chatId) return;
+    if (!chatId) {
+      console.error('[MCP Approve] No active chat ID found.');
+      toast.error('Cannot approve tool call: No active chat selected.');
+      return;
+    }
 
     const chat = get(chatsAtom)[chatId];
-    const pendingMessage = chat?.messages.find(
+    // Find the specific message using its ID
+    const pendingMessageIndex = chat?.messages.findIndex(
       (m) => m.id === pendingMessageId && m.toolCallInfo?.type === 'pending',
     );
 
     if (
-      !pendingMessage ||
-      !pendingMessage.toolCallInfo ||
-      pendingMessage.toolCallInfo.type !== 'pending'
+      pendingMessageIndex === undefined ||
+      pendingMessageIndex === -1 ||
+      !chat
     ) {
       console.error(
-        `[MCP Approve] Could not find pending message with ID ${pendingMessageId}`,
+        `[MCP Approve] Could not find pending message with ID ${pendingMessageId} in active chat ${chatId}`,
+      );
+      toast.warning(
+        'Could not find the tool call request to approve (it might have been processed or removed).',
       );
       return;
     }
 
-    const serverId = pendingMessage.toolCallInfo.serverId;
+    const pendingMessage = chat.messages[pendingMessageIndex];
+    const pendingToolCallInfo =
+      pendingMessage.toolCallInfo as PendingToolCallInfo; // Type assertion
+
+    const serverId = pendingToolCallInfo.serverId;
     const state = get(mcpServerStatesAtom).get(serverId);
+    const config = get(mcpServersAtom).find((c) => c.id === serverId); // Get config for name
 
     if (!state?.isConnected || !state.client) {
       toast.error(
-        `MCP Error: Server "${pendingMessage.toolCallInfo.serverName}" is no longer connected.`,
+        `MCP Error: Server "${config?.name || serverId}" is no longer connected. Cannot run tool.`,
       );
-      // Update the pending message to show an error?
+      // Update the pending message to show an error
       const errorInfo: ToolCallInfo = {
-        ...pendingMessage.toolCallInfo,
+        ...pendingToolCallInfo,
         type: 'error',
         isError: true,
       };
@@ -754,7 +945,7 @@ export const approveToolCallAtom = atom(
             m.id === pendingMessageId
               ? {
                   ...m,
-                  content: `Error: Server "${(pendingMessage.toolCallInfo as PendingToolCallInfo).serverName}" disconnected.`,
+                  content: `Error: Server "${config?.name || serverId}" disconnected before tool call could be approved.`,
                   toolCallInfo: errorInfo,
                 }
               : m,
@@ -765,14 +956,15 @@ export const approveToolCallAtom = atom(
     }
 
     console.log(
-      `[MCP Approve] User approved tool call ${pendingMessage.toolCallInfo.callId}`,
+      `[MCP Approve] User approved tool call ${pendingToolCallInfo.callId} (${pendingToolCallInfo.toolName} on ${serverId})`,
     );
+    // Pass the correct client instance
     await executeToolCall(
       get,
       set,
       chatId,
       pendingMessageId,
-      pendingMessage.toolCallInfo,
+      pendingToolCallInfo,
       state.client,
     );
   },
@@ -783,29 +975,42 @@ export const denyToolCallAtom = atom(
   null,
   (get, set, pendingMessageId: string) => {
     const chatId = get(activeChatIdAtom);
-    if (!chatId) return;
+    if (!chatId) {
+      console.error('[MCP Deny] No active chat ID found.');
+      toast.error('Cannot deny tool call: No active chat selected.');
+      return;
+    }
 
     const chat = get(chatsAtom)[chatId];
-    const pendingMessage = chat?.messages.find(
+    // Find the specific message using its ID
+    const pendingMessageIndex = chat?.messages.findIndex(
       (m) => m.id === pendingMessageId && m.toolCallInfo?.type === 'pending',
     );
 
     if (
-      !pendingMessage ||
-      !pendingMessage.toolCallInfo ||
-      pendingMessage.toolCallInfo.type !== 'pending'
+      pendingMessageIndex === undefined ||
+      pendingMessageIndex === -1 ||
+      !chat
     ) {
       console.error(
-        `[MCP Deny] Could not find pending message with ID ${pendingMessageId}`,
+        `[MCP Deny] Could not find pending message with ID ${pendingMessageId} in active chat ${chatId}`,
+      );
+      toast.warning(
+        'Could not find the tool call request to deny (it might have been processed or removed).',
       );
       return;
     }
 
+    const pendingMessage = chat.messages[pendingMessageIndex];
+    const pendingToolCallInfo =
+      pendingMessage.toolCallInfo as PendingToolCallInfo; // Type assertion
+
     const deniedInfo: ToolCallInfo = {
-      ...pendingMessage.toolCallInfo,
+      ...pendingToolCallInfo,
       type: 'denied',
     };
-    const deniedContent = `Tool call **${pendingMessage.toolCallInfo.toolName}** denied by user.`;
+    // Use more specific content for the update
+    const deniedContent = `User denied the request to use tool **${pendingToolCallInfo.toolName}** on **${pendingToolCallInfo.serverName}**.`;
 
     // Update the original pending message to show it was denied
     set(chatsAtom, (prev) =>
@@ -819,17 +1024,21 @@ export const denyToolCallAtom = atom(
     );
 
     console.log(
-      `[MCP Deny] User denied tool call ${pendingMessage.toolCallInfo.callId}`,
+      `[MCP Deny] User denied tool call ${pendingToolCallInfo.callId} (${pendingToolCallInfo.toolName})`,
     );
-    toast.info(`Tool call "${pendingMessage.toolCallInfo.toolName}" denied.`);
+    toast.info(`Tool call "${pendingToolCallInfo.toolName}" denied.`);
 
     // Optionally inform the AI about the denial
-    // Create user message indicating denial
+    // Create user message indicating denial (could also be role 'tool' depending on model API)
     const denialFeedbackMessage: Message = {
       id: uuidv4(),
-      role: 'user', // Send as user context back to AI
-      content: `(User denied the request to run tool: ${pendingMessage.toolCallInfo.toolName})`,
+      // Consider using 'user' or potentially 'tool' if the API supports it better.
+      // Using 'user' makes it look like user input clarifying the situation.
+      role: 'user',
+      content: `(Instruction: The previous request to use the tool "${pendingToolCallInfo.toolName}" on server "${pendingToolCallInfo.serverName}" was denied by the user. Please proceed without using this tool.)`,
       timestamp: Date.now(),
+      // If using OpenAI tool calls, might need tool_call_id here corresponding to the original request
+      // tool_call_id: pendingToolCallInfo.callId, // Example
     };
     set(chatsAtom, (prev) =>
       updateMessagesInChat(prev, chatId, (msgs) => [
@@ -838,24 +1047,25 @@ export const denyToolCallAtom = atom(
       ]),
     );
 
-    // Re-trigger AI call with denial info? (similar to feeding back results)
+    // Re-trigger AI call with denial info
     triggerAICallWithUpdatedHistory(get, set, chatId);
   },
 );
 
+// Internal function to execute the call (used by approveToolCallAtom and handleMcpToolCallAtom)
 async function executeToolCall(
   get: Getter,
   set: Setter,
   chatId: string,
-  pendingMessageId: string, // The ID of the message that started as pending/running
-  toolCallInfo: PendingToolCallInfo,
-  client: Client,
+  pendingMessageId: string, // The ID of the message that shows the pending/running state
+  toolCallInfo: PendingToolCallInfo, // Contains callId, serverName, toolName, args
+  client: Client, // Pass the actual client instance
 ) {
   const { callId, serverName, toolName, args } = toolCallInfo;
 
-  // 1. Update pending message to "running" state
+  // 1. Update message to "running" state
   const runningInfo: ToolCallInfo = { ...toolCallInfo, type: 'running' };
-  const runningContent = `Running tool: **${toolName}** on **${serverName}**...`;
+  const runningContent = `Running tool: **${toolName}** on **${serverName}**... (ID: ${callId.substring(0, 8)})`; // Add partial ID for clarity
   set(chatsAtom, (prev) =>
     updateMessagesInChat(prev, chatId, (msgs) =>
       msgs.map((m) =>
@@ -867,103 +1077,133 @@ async function executeToolCall(
   );
 
   try {
-    // 2. Execute the tool call
-    console.log(`[MCP Execute] Calling tool ${toolName} with args:`, args);
+    // 2. Execute the tool call via the provided client instance
+    console.log(
+      `[MCP Execute] Calling tool ${toolName} on ${serverName} (Call ID: ${callId}) with args:`,
+      args,
+    );
     const result = (await client.callTool({
       name: toolName,
       arguments: args,
-    })) as CallToolResult;
-    console.log(`[MCP Execute] Tool ${toolName} result:`, result);
+      callId: callId, // Pass callId if the SDK/protocol supports it for tracing
+    })) as CallToolResult; // Assume result has { isError: boolean, content: [...] }
+    console.log(
+      `[MCP Execute] Tool ${toolName} (Call ID: ${callId}) result:`,
+      result,
+    );
 
-    // 3. Process SUCCESS result - Update the original message
+    // 3. Process SUCCESS result - Update the message
     const resultContent = formatToolResultContent(result);
-    const resultInfo: ToolCallInfo = {
-      callId,
-      toolName,
+    const resultInfo: ResultToolCallInfo = {
+      // Carry over necessary info from pending/running state
+      callId: callId,
+      toolName: toolName,
+      serverId: toolCallInfo.serverId,
+      serverName: serverName,
+      args: toolCallInfo.args, // Keep args for display/context if needed
+      // Result specific fields
       type: 'result',
-      isError: false,
-      // Include serverId/serverName if needed for display consistency
-      // serverId,
-      // serverName,
+      isError: false, // Explicitly false for success
+      // Store raw result if needed later?
+      // rawResult: result,
     };
+    // Update the *same message* that was pending/running
     set(chatsAtom, (prev) =>
       updateMessagesInChat(prev, chatId, (msgs) =>
         msgs.map((m) =>
-          m.id === pendingMessageId // Find the original message
-            ? { ...m, content: resultContent, toolCallInfo: resultInfo } // Update its content and info
+          m.id === pendingMessageId
+            ? { ...m, content: resultContent, toolCallInfo: resultInfo }
             : m,
         ),
       ),
     );
 
     // 4. Feed result back to AI (Add a NEW message for this purpose)
-    // This message might be hidden or styled differently in the UI,
-    // or simply exist in the history for the AI's context.
+    // This message provides context for the AI's next turn.
+    // Format depends on the AI model's expected input for tool results.
+    // Using role 'user' as a generic way to provide feedback.
     const resultForAI = formatToolResultForAI(result);
     const feedbackMessage: Message = {
       id: uuidv4(),
-      role: 'user', // Or 'tool' if required by the specific model/API
-      content: `(Tool ${toolName} finished with result: ${resultForAI})`,
+      role: 'user', // Or 'tool' if using specific API like OpenAI's
+      // Provide clear context about which tool call this result belongs to.
+      content: `(Instruction: The tool "${toolName}" on server "${serverName}" (Call ID: ${callId.substring(0, 8)}) finished execution. Result: ${resultForAI})`,
       timestamp: Date.now(),
-      // Optional: Add toolCallId or other metadata if the model needs it
-      // tool_call_id: callId, // Example if using OpenAI's tool role
+      // If using role 'tool', might need tool_call_id and potentially name
+      // tool_call_id: callId,
+      // name: toolName, // Example if needed by the model
     };
     set(chatsAtom, (prev) =>
       updateMessagesInChat(prev, chatId, (msgs) => [...msgs, feedbackMessage]),
     );
 
-    // 5. Trigger AI again with the updated history
+    // 5. Trigger AI again with the updated history including the result feedback
     triggerAICallWithUpdatedHistory(get, set, chatId);
   } catch (error: any) {
     // 3. Process ERROR result - Update the original message
-    console.error(`[MCP Execute] Tool call ${toolName} failed:`, error);
-    const errorContent = `Tool **${toolName}** on **${serverName}** failed: ${error.message || 'Unknown error'}`;
+    console.error(
+      `[MCP Execute] Tool call ${toolName} (Call ID: ${callId}) failed:`,
+      error,
+    );
+    const errorMessage =
+      error?.message ||
+      (typeof error === 'string' ? error : 'Unknown execution error');
+    const errorContent = `Tool **${toolName}** on **${serverName}** failed: ${errorMessage}`;
     const errorInfo: ToolCallInfo = {
-      callId,
-      toolName,
+      // Carry over necessary info
+      callId: callId,
+      toolName: toolName,
+      serverId: toolCallInfo.serverId,
+      serverName: serverName,
+      args: toolCallInfo.args,
+      // Error specific fields
       type: 'error',
       isError: true,
-      // Include serverId/serverName if needed for display consistency
-      // serverId,
-      // serverName,
+      errorMessage: errorMessage, // Store the error message
     };
+    // Update the *same message* that was pending/running
     set(chatsAtom, (prev) =>
       updateMessagesInChat(prev, chatId, (msgs) =>
         msgs.map((m) =>
-          m.id === pendingMessageId // Find the original message
-            ? { ...m, content: errorContent, toolCallInfo: errorInfo } // Update its content and info
+          m.id === pendingMessageId
+            ? { ...m, content: errorContent, toolCallInfo: errorInfo }
             : m,
         ),
       ),
     );
 
-    // Display error to the user
-    toast.error(
-      `Tool "${toolName}" failed: ${error.message || 'Unknown error'}`,
-    );
+    // Display error toast to the user
+    toast.error(`Tool "${toolName}" failed: ${errorMessage}`);
 
     // Decide whether to re-trigger AI after an error.
-    // Current logic: Do not trigger AI again on error. This seems reasonable.
-    // If you wanted to feed the error back, you'd add a feedback message here too.
+    // Option 1: Don't re-trigger (current behavior). User needs to prompt again.
+    // Option 2: Feed error back to AI (similar to success).
     /*
-        const errorForAI = `Tool ${toolName} failed: ${error.message || 'Unknown error'}`;
-        const errorFeedbackMessage: Message = { ... };
-        set(chatsAtom, ...);
-        triggerAICallWithUpdatedHistory(get, set, chatId); // Optional: if you want AI to react to the error
-        */
-  } finally {
-    // No specific action needed in finally anymore, as the message update
-    // happens within the try/catch blocks.
+        const errorForAI = `(Instruction: The tool "${toolName}" on server "${serverName}" (Call ID: ${callId.substring(0,8)}) failed to execute. Error: ${errorMessage}. Please inform the user or try a different approach.)`;
+        const errorFeedbackMessage: Message = {
+             id: uuidv4(),
+             role: 'user', // Or 'tool'
+             content: errorForAI,
+             timestamp: Date.now(),
+             // tool_call_id: callId, // If needed
+        };
+        set(chatsAtom, (prev) => updateMessagesInChat(prev, chatId, (msgs) => [...msgs, errorFeedbackMessage]));
+        triggerAICallWithUpdatedHistory(get, set, chatId); // Re-trigger AI to react to the error
+     */
+    // For now, sticking with Option 1: No automatic re-trigger on error.
   }
+  // No finally block needed as state updates happen within try/catch
 }
 
 // Helper to re-trigger the AI call after a tool result or denial
+// (Ensure this uses the latest messages after updates)
 function triggerAICallWithUpdatedHistory(
   get: Getter,
   set: Setter,
   chatId: string,
 ) {
-  const chat = get(chatsAtom)[chatId];
+  // Read the *latest* state right before preparing the API call
+  const chat = get(chatsAtom)[chatId]; // Read latest chat state
   if (!chat) {
     console.error(
       '[MCP Trigger AI] Chat not found after tool call/denial:',
@@ -973,29 +1213,38 @@ function triggerAICallWithUpdatedHistory(
   }
 
   const maxHistory = chat.maxHistory ?? get(defaultMaxHistoryAtom);
+  // Pass the latest messages from the chat state
   const messagesToSend = getHistoryForApi(
-    get, // Pass get
-    chat.messages, // Use the latest messages
+    get,
+    chat.messages, // Use the up-to-date messages from the chat atom
     maxHistory,
-    chat.systemPrompt,
+    chat.systemPrompt, // Include system prompt
+    // No need to include latest MCP prompt injection because getHistoryForApi handle that
   );
 
-  // Check if there's anything to send besides system prompt
+  // Check if there's meaningful content to send
   const hasUserOrAssistantContent = messagesToSend.some(
     (msg) => msg.role === 'user' || msg.role === 'assistant',
   );
-  if (!hasUserOrAssistantContent && messagesToSend.length <= 1) {
-    // Allow system prompt only
+  // Allow re-triggering even if only system/tool messages exist,
+  // as the tool result/denial itself is the new context.
+  if (
+    messagesToSend.length === 0 ||
+    (messagesToSend.length === 1 &&
+      messagesToSend[0].role === 'system' &&
+      !get(mcpPromptInjectionAtom))
+  ) {
     console.warn(
-      '[MCP Trigger AI] Not enough context to re-trigger AI after tool call/denial.',
+      '[MCP Trigger AI] No messages or only empty system prompt to send. Aborting re-trigger.',
     );
     return;
   }
 
   console.log(
-    '[MCP Trigger AI] Re-triggering AI call with updated history including tool result/denial.',
+    `[MCP Trigger AI] Re-triggering AI call for chat ${chatId} with updated history (${messagesToSend.length} messages).`,
   );
 
-  // Call the main API logic function, passing get and set
-  callOpenAIStreamLogic(get, set, messagesToSend);
+  // Call the main API logic function, passing get and set for Jotai context
+  // Ensure callOpenAIStreamLogic correctly handles message stream updates
+  callOpenAIStreamLogic(get, set, messagesToSend); // Pass chatId if needed by the stream logic
 }

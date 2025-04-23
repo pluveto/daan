@@ -79,7 +79,7 @@ const mcpServerFormSchema = z
     id: z.string().optional(), // Present when editing
     name: z.string().min(1, 'Server name is required'),
     description: z.string().optional(),
-    type: z.enum(['builtin-pseudo', 'sse-client'], {
+    type: z.enum(['sse-client'], {
       required_error: 'Server type is required',
     }),
     url: z.string().optional(),
@@ -130,6 +130,10 @@ export const McpSettingsTab: React.FC = () => {
   });
 
   const handleOpenForm = (server: McpServerConfig | null = null) => {
+    if (server?.type == 'builtin-pseudo') {
+      return false; // Don't allow editing built-in server
+    }
+
     setEditingServer(server);
     if (server) {
       form.reset({
