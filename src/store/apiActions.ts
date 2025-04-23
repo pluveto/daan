@@ -159,7 +159,16 @@ export async function callOpenAIStreamLogic(
         // Check for the tool call tag in the accumulated content
         const match = accumulatedContent.match(toolCallRegex);
         if (match) {
-          const remainOutput = accumulatedContent.replace(toolCallRegex, '');
+          const stripEnd = (s: string, find: string) => {
+            if (s.endsWith(find)) {
+              return s.slice(0, -find.length);
+            }
+          };
+          const remainOutput = stripEnd(
+            accumulatedContent.replace(toolCallRegex, ''),
+            '</',
+          );
+
           toolCallDetected = true;
           const [, serverId, toolName, argsString] = match;
           const rawTag = match[0];
