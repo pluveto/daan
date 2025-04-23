@@ -1223,9 +1223,9 @@ function triggerAICallWithUpdatedHistory(
   );
 
   // Check if there's meaningful content to send
-  const hasUserOrAssistantContent = messagesToSend.some(
-    (msg) => msg.role === 'user' || msg.role === 'assistant',
-  );
+  // const hasUserOrAssistantContent = messagesToSend.some(
+  //   (msg) => msg.role === 'user' || msg.role === 'assistant',
+  // );
   // Allow re-triggering even if only system/tool messages exist,
   // as the tool result/denial itself is the new context.
   if (
