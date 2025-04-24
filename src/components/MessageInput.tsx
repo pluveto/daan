@@ -28,6 +28,8 @@ import React, {
 // Added LuPlug icon
 import {
   LuChartBar,
+  LuDelete,
+  LuPaintbrush,
   LuPlug,
   LuRefreshCw,
   LuSend,
@@ -182,7 +184,28 @@ export const MessageInput: React.FC = () => {
       )}
     >
       {/* Top Toolbar Area */}
-      <div className="flex items-center space-x-2 pb-2">
+      <div className="flex items-center space-x-1 pb-2">
+        {/* Clear History Button */}
+        <Button
+          aria-label="Clear chat history"
+          className={cn(
+            'flex-shrink-0',
+            activeChat && activeChat.messages.length > 0 && 'text-destructive',
+          )}
+          disabled={
+            !activeChat || isLoading || activeChat.messages.length === 0
+          }
+          onClick={() => {
+            if (activeChat) {
+              updateChat({ id: activeChat.id, messages: [] });
+            }
+          }}
+          size="xs"
+          variant="ghost"
+          title="Clear chat history"
+        >
+          <LuPaintbrush className="h-4 w-4" />
+        </Button>
         {/* Regenerate Button */}
         <Button
           aria-label="Regenerate last response"
@@ -198,7 +221,6 @@ export const MessageInput: React.FC = () => {
         >
           <LuRefreshCw className="h-4 w-4" />
         </Button>
-
         {/* MCP Tools Popover Trigger */}
         {hasConnectedMcpServers && ( // Only show if servers are connected
           <Popover open={isMcpPopoverOpen} onOpenChange={setIsMcpPopoverOpen}>
