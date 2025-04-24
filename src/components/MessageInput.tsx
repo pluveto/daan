@@ -15,7 +15,6 @@ import {
   mcpServerStatesAtom,
   selectedMcpServerIdsAtom,
 } from '@/store/mcp';
-// Import MCP atoms
 import { useAtom, useAtomValue, useSetAtom } from 'jotai';
 import _ from 'lodash';
 import React, {
@@ -25,10 +24,8 @@ import React, {
   useRef,
   useState,
 } from 'react';
-// Added LuPlug icon
 import {
   LuChartBar,
-  LuDelete,
   LuPaintbrush,
   LuPlug,
   LuRefreshCw,
@@ -283,8 +280,6 @@ export const MessageInput: React.FC = () => {
                 ? "Type message or '---' to clear context..."
                 : 'Select or create a chat first'
           }
-          // Assuming Textarea variant handles styling
-          // variant="flat"
         />
         <Button
           aria-label={isLoading ? 'Stop generation' : 'Send message'}
