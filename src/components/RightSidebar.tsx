@@ -105,10 +105,12 @@ export const RightSidebar: React.FC = () => {
             | 'maxHistory'
           >
         >,
+        onUpdated?: () => void,
       ) => {
         if (activeChat) {
           console.log('Updating chat overrides:', updates);
           updateChat({ id: activeChat.id, ...updates });
+          onUpdated?.();
         }
       },
       DEBOUNCE_SAVE_DELAY,
@@ -178,16 +180,21 @@ export const RightSidebar: React.FC = () => {
         ? null
         : parsedMaxHistory;
 
-    debouncedUpdateChat({
-      name: name.trim() || 'Untitled Chat',
-      icon: icon || '💬',
-      model: model, // Save the selected NamespacedModelId
-      systemPrompt,
-      maxHistory: finalMaxHistory,
-      temperature,
-      maxTokens,
-      topP,
-    });
+    debouncedUpdateChat(
+      {
+        name: name.trim() || 'Untitled Chat',
+        icon: icon || '💬',
+        model: model, // Save the selected NamespacedModelId
+        systemPrompt,
+        maxHistory: finalMaxHistory,
+        temperature,
+        maxTokens,
+        topP,
+      },
+      () => {
+        toast.success('Chat settings saved.');
+      },
+    );
   };
   const handleEmojiSelect = (selectedEmoji: string) => setIcon(selectedEmoji);
 
