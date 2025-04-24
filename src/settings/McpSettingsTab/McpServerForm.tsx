@@ -283,6 +283,10 @@ export const McpServerForm: React.FC<McpServerFormProps> = ({
                   <FormDescription>
                     The command or executable to run (must be in PATH or
                     absolute).
+                    {/* https://github.com/modelcontextprotocol/servers/issues/1526#issuecomment-2819858033 */}
+                    {isDesktopEnv() &&
+                      "NOTE: on Windows, you may need to use 'cmd.exe' as the command, " +
+                        "and put '/c' ... other args in the 'Arguments' field."}
                   </FormDescription>
                   <FormMessage />
                 </FormItem>
