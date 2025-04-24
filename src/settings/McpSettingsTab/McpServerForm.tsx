@@ -29,7 +29,6 @@ import { isDesktopEnv } from '@/lib/env';
 import { cn } from '@/lib/utils';
 import { McpServerConfig } from '@/store/mcp';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { isEmpty } from 'lodash';
 import React, { useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { McpServerFormData, mcpServerFormSchema } from './schema';
@@ -109,11 +108,6 @@ export const McpServerForm: React.FC<McpServerFormProps> = ({
   const handleFormSubmit = (data: McpServerFormData) => {
     onSubmit(data); // Pass validated data up
     onOpenChange(false); // Close dialog
-  };
-
-  // Helper to get args as string for display in input/textarea
-  const getArgsAsString = (args: string[] | undefined): string => {
-    return Array.isArray(args) ? args.join(', ') : '';
   };
 
   return (
@@ -197,6 +191,10 @@ export const McpServerForm: React.FC<McpServerFormProps> = ({
             render={({ field }) => (
               <FormItem>
                 <FormLabel>Server Type</FormLabel>
+                <FormDescription>
+                  {!isDesktopEnv() &&
+                    'Note: Stdio type is only available in Desktop apps.'}
+                </FormDescription>
                 <Select
                   onValueChange={(value) => {
                     field.onChange(value);
