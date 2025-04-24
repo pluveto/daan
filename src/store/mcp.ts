@@ -1,4 +1,5 @@
 // src/store/mcp.ts
+import { TauriStdioTransport } from '@/lib/transport';
 import { atomWithSafeStorage } from '@/lib/utils';
 import { createBuiltinExprEvaluatorServer } from '@/mcp/builtinExprEvaluator';
 import { createBuiltinTimeServer } from '@/mcp/builtinTime'; // Import the time server creator
@@ -12,6 +13,7 @@ import { Client } from '@moinfra/mcp-client-sdk/client/index.js';
 import { PseudoTransport } from '@moinfra/mcp-client-sdk/client/pseudo.js';
 import { SSEClientTransport } from '@moinfra/mcp-client-sdk/client/sse.js';
 import { McpServer } from '@moinfra/mcp-client-sdk/server/mcp.js';
+import { Transport } from '@moinfra/mcp-client-sdk/shared/transport.js';
 import { CallToolResult } from '@moinfra/mcp-client-sdk/types.js';
 import { atom, Getter, Setter } from 'jotai';
 import { toast } from 'sonner';
@@ -24,16 +26,37 @@ import { defaultMaxHistoryAtom } from './settings';
 
 const formatJsonSchema = (schema: any) => JSON.stringify(schema, null, 2);
 
-// --- Types --- (Keep existing definitions)
-export interface McpServerConfig {
-  id: string;
+interface McpServerConfigBase {
+  id: string; // Unique identifier
   name: string;
-  description: string;
-  enabled: boolean;
-  type: 'builtin-pseudo' | 'sse';
-  url?: string; // Required for sse
-  autoApproveTools: boolean;
+  description?: string;
+  enabled: boolean; // Whether the user wants this connection active
+  autoApproveTools: boolean; // Skip confirmation for tool calls
 }
+
+// Configuration for SSE (Server-Sent Events) type
+export interface McpServerConfigSse extends McpServerConfigBase {
+  type: 'sse';
+  url: string; // URL for the SSE endpoint
+}
+
+// Configuration for Stdio (Standard I/O) type - Tauri only
+export interface McpServerConfigStdio extends McpServerConfigBase {
+  type: 'stdio';
+  command: string; // The command/executable to run
+  args: string[]; // Arguments to pass to the command
+}
+
+// Configuration for the built-in pseudo server (if applicable)
+export interface McpServerConfigBuiltin extends McpServerConfigBase {
+  type: 'builtin-pseudo';
+  // No specific connection params needed for built-in
+}
+
+export type McpServerConfig =
+  | McpServerConfigSse
+  | McpServerConfigStdio
+  | McpServerConfigBuiltin;
 
 export interface McpDiscoveredCapabilities {
   tools?: { name: string; description?: string; inputSchema?: any }[];
@@ -47,7 +70,7 @@ export interface McpServerState {
   isConnected: boolean;
   error: string | null;
   client: Client | null;
-  transport: PseudoTransport | SSEClientTransport | null;
+  transport: Transport | null;
   capabilities: McpDiscoveredCapabilities | null;
 }
 
@@ -120,9 +143,18 @@ export const addMcpServerAtom = atom(
   (
     get,
     set,
-    config: Omit<McpServerConfig, 'id' | 'enabled' | 'type'> & {
-      type: 'sse';
-    },
+    config: Omit<McpServerConfig, 'id' | 'enabled' | 'type'> &
+      (
+        | {
+            type: 'sse';
+            url: string;
+          }
+        | {
+            type: 'stdio';
+            command: string;
+            args: string[];
+          }
+      ),
   ) => {
     // Restrict adding only custom SSE for now
     // Prevent adding new 'builtin-pseudo' types via UI
@@ -150,28 +182,51 @@ export const updateMcpServerConfigAtom = atom(
     let needsReconnect = false;
 
     // Prevent changing the type or ID of built-in servers
-    if (update.id.startsWith('builtin::')) {
-      if (update.type && update.type !== 'builtin-pseudo') {
-        toast.error('Cannot change the type of a built-in server.');
-        // Don't apply the type change
-        delete update.type;
-      }
+    if (update.type === 'builtin-pseudo') {
+      // *** For built-in, ONLY update autoApproveTools ***
+      return {
+        ...update, // Keep all original fields
+        // Only apply the change from updatedConfig if it exists
+        autoApproveTools: update.autoApproveTools ?? false,
+      };
     }
 
     set(mcpServersAtom, (prev) =>
       prev.map((server) => {
         if (server.id === update.id) {
           serverName = update.name ?? server.name; // Get name for toast
-          // Check if URL or Type changed for non-builtin servers
-          if (
-            (!server.id.startsWith('builtin::') &&
-              update.url !== undefined &&
-              update.url !== server.url) ||
-            (update.type !== undefined && update.type !== server.type)
-          ) {
+
+          // Check if type is changing
+          const typeChanged =
+            update.type !== undefined && update.type !== server.type;
+
+          // Check URL change only for SSE servers
+          const urlChanged =
+            !server.id.startsWith('builtin::') &&
+            server.type === 'sse' &&
+            (update as Partial<McpServerConfigSse>).url !== undefined &&
+            (update as Partial<McpServerConfigSse>).url !==
+              (server as McpServerConfigSse).url;
+
+          const commandOrArgsChanged =
+            !server.id.startsWith('builtin::') &&
+            server.type === 'stdio' &&
+            (update as Partial<McpServerConfigStdio>).command !== undefined &&
+            (update as Partial<McpServerConfigStdio>).args !== undefined &&
+            (update as Partial<McpServerConfigStdio>).command !==
+              (server as McpServerConfigStdio).command &&
+            (update as Partial<McpServerConfigStdio>).args !==
+              (server as McpServerConfigStdio).args;
+
+          if (typeChanged || urlChanged || commandOrArgsChanged) {
             needsReconnect = true;
           }
-          return { ...server, ...update };
+
+          // Create updated server config while preserving type safety
+          const updatedServer = { ...server };
+          // Apply updates while maintaining discriminated union
+          Object.assign(updatedServer, update);
+          return updatedServer;
         }
         return server;
       }),
@@ -304,7 +359,7 @@ export const connectMcpServerAtom = atom(
     toast.info(`Connecting to MCP server "${config.name}"...`);
 
     let client: Client | null = null;
-    let transport: PseudoTransport | SSEClientTransport | null = null;
+    let transport: Transport | null = null;
 
     try {
       client = new Client({ name: 'Daan MCP Client', version: '1.0.0' }); // Basic client info
@@ -327,6 +382,11 @@ export const connectMcpServerAtom = atom(
       } else if (config.type === 'sse' && config.url) {
         console.log(`[MCP Connect] Using SSEClientTransport for ${config.id}`);
         transport = new SSEClientTransport(new URL(config.url));
+      } else if (config.type === 'stdio' && config.command && config.args) {
+        console.log(
+          `[MCP Connect] Using StdioClientTransport for ${config.id}`,
+        );
+        transport = new TauriStdioTransport(config.command, config.args);
       } else {
         throw new Error(
           `Invalid server type (${config.type}) or missing URL for ${config.id}`,
