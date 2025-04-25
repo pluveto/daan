@@ -27,6 +27,7 @@ import { VisuallyHidden } from 'radix-ui';
 import { useEffect } from 'react';
 import FastImport from './components/FastImport';
 import { Toaster } from './components/ui/Toaster';
+import { useMiniappPersistence } from './miniapps/persistence';
 import { SystemSettingsDialog } from './SystemSettingsDialog'; // Import the new Dialog
 
 const appName = import.meta.env.VITE_APP_NAME || 'Daan';
@@ -41,6 +42,16 @@ function App() {
 
   const isMobile = useMediaQuery('(max-width: 1023px)');
   const isDesktop = !isMobile;
+
+  // --- Activate Miniapp Persistence ---
+  // Call the hook to load data and set up saving effects.
+  // We might use isLoaded later if needed for global loading state.
+  const { isLoaded: miniappsLoaded } = useMiniappPersistence();
+  useEffect(() => {
+    if (miniappsLoaded) {
+      console.log('App: Miniapp persistence initialized.');
+    }
+  }, [miniappsLoaded]);
 
   useEffect(() => {
     resetStreamingStates();
@@ -69,7 +80,7 @@ function App() {
     >
       <ConversationSearchDialog />
       <CharacterEditor />
-      <Toaster />
+      <Toaster richColors />
       <FastImport />
       <SystemSettingsDialog />
 

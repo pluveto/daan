@@ -163,3 +163,39 @@ export interface CustomCharacter {
 }
 
 export type PartialCharacter = Partial<CustomCharacter>;
+
+export interface MiniappDefinition {
+  id: string; // UUID recommended
+  name: string;
+  description?: string;
+  htmlContent: string;
+  // Optional: JSON schema object for validation/UI generation
+  configSchema?: Record<string, any>;
+  // Optional: Default values for the config
+  defaultConfig?: Record<string, any>;
+  enabled: boolean; // Controls if it *can* be activated
+  dependencies?: string[];
+  requiredApis?: string[]; // For future permission checks
+  createdAt: number; // timestamp
+  updatedAt: number; // timestamp
+}
+
+// Represents the actual stored configuration for a Miniapp instance
+export interface MiniappConfig {
+  [key: string]: any;
+}
+
+export interface MiniappPermissions {
+  // Can it read config of other Miniapps? List allowed target IDs or true for all.
+  readConfig?: string[] | boolean;
+  // Can it call functions on other Miniapps? List allowed target IDs or true for all.
+  callMiniapp?: string[] | boolean;
+  // Which Tauri commands can it invoke?
+  allowedTauriCommands?: string[];
+  // Can it use the generic storage API? (Default true usually)
+  useStorage?: boolean;
+}
+
+export interface MiniappDefinition {
+  permissions?: MiniappPermissions;
+}

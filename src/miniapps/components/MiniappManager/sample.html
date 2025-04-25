@@ -1,0 +1,132 @@
+<!doctype html>
+<html>
+  <head>
+    <title>My Miniapp</title>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <style>
+      body {
+        font-family: sans-serif;
+        padding: 10px;
+        background-color: #f0f0f0;
+      }
+
+      h1 {
+        color: #333;
+      }
+    </style>
+  </head>
+
+  <body>
+    <h1>Hello from Miniapp!</h1>
+    <p>My config: <code id="config-display"></code></p>
+    <button id="load-config-btn">Load Config</button>
+    <button id="set-config-btn">Set Timestamp</button>
+    <hr />
+    <h2>Data Storage Demo</h2>
+    <input type="text" id="data-key" placeholder="Data Key" />
+    <input type="text" id="data-value" placeholder="Data Value" />
+    <button id="save-data-btn">Save Data</button>
+    <button id="load-data-btn">Load Data</button>
+    <button id="delete-data-btn">Delete Data</button>
+    <button id="list-keys-btn">List Keys</button>
+    <pre id="data-output"></pre>
+    <script>
+      // IMPORTANT: hostApi bridge is available globally
+      const configDisplay = document.getElementById('config-display');
+      const loadCfgBtn = document.getElementById('load-config-btn');
+      const setCfgBtn = document.getElementById('set-config-btn');
+
+      async function displayConfig() {
+        try {
+          console.log('Miniapp: Requesting own config...');
+          const config = await hostApi.getOwnConfig();
+          console.log('Miniapp: Received config', config);
+          configDisplay.textContent = JSON.stringify(config);
+        } catch (error) {
+          console.error('Miniapp: Error getting config:', error);
+          configDisplay.textContent = 'Error loading config';
+        }
+      }
+
+      async function setTimestampConfig() {
+        try {
+          const currentConfig = await hostApi.getOwnConfig();
+          const newConfig = {
+            ...currentConfig,
+            lastSet: new Date().toISOString(),
+          };
+          console.log('Miniapp: Setting config:', newConfig);
+          await hostApi.setOwnConfig(newConfig);
+          console.log('Miniapp: Config set successfully.');
+          await displayConfig(); // Refresh display
+        } catch (error) {
+          console.error('Miniapp: Error setting config:', error);
+        }
+      }
+
+      loadCfgBtn.addEventListener('click', displayConfig);
+      setCfgBtn.addEventListener('click', setTimestampConfig);
+
+      // Initial load
+      displayConfig();
+
+      // Example: Log to host console
+      hostApi.log('Miniapp script loaded.');
+
+      saveBtn.addEventListener('click', async () => {
+        const key = keyInput.value.trim();
+        const value = valueInput.value; // Store as string, or parse if needed (e.g., JSON.parse)
+        if (!key) return alert('Please enter a key.');
+        try {
+          dataOutput.textContent = `Saving '${key}'...`;
+          await hostApi.storage.setItem(key, value);
+          dataOutput.textContent = `Saved '${key}' successfully.`;
+          keyInput.value = '';
+          valueInput.value = '';
+        } catch (e) {
+          console.error('Storage Error:', e);
+          dataOutput.textContent = `Error saving: ${e.message}`;
+        }
+      });
+
+      loadCfgBtn.addEventListener('click', async () => {
+        const key = keyInput.value.trim();
+        if (!key) return alert('Please enter a key to load.');
+        try {
+          dataOutput.textContent = `Loading '${key}'...`;
+          const value = await hostApi.storage.getItem(key);
+          dataOutput.textContent = `Value for '${key}':\n${JSON.stringify(value, null, 2)}`;
+        } catch (e) {
+          console.error('Storage Error:', e);
+          dataOutput.textContent = `Error loading: ${e.message}`;
+        }
+      });
+
+      deleteBtn.addEventListener('click', async () => {
+        const key = keyInput.value.trim();
+        if (!key) return alert('Please enter a key to delete.');
+        try {
+          dataOutput.textContent = `Deleting '${key}'...`;
+          await hostApi.storage.removeItem(key);
+          dataOutput.textContent = `Deleted '${key}'.`;
+          keyInput.value = '';
+        } catch (e) {
+          console.error('Storage Error:', e);
+          dataOutput.textContent = `Error deleting: ${e.message}`;
+        }
+      });
+
+      listBtn.addEventListener('click', async () => {
+        try {
+          dataOutput.textContent = `Loading keys...`;
+          const keys = await hostApi.storage.getAllKeys();
+          dataOutput.textContent = `Stored Keys:\n${JSON.stringify(keys, null, 2)}`;
+        } catch (e) {
+          console.error('Storage Error:', e);
+          dataOutput.textContent = `Error listing keys: ${e.message}`;
+        }
+      });
+    </script>
+  </body>
+</html>

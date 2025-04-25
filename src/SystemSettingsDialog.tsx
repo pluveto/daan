@@ -10,11 +10,18 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/Tabs';
 import { isSystemSettingsDialogOpenAtom } from '@/store/uiState';
 import { useAtom } from 'jotai';
 import React, { useState } from 'react';
-import { LuCog, LuFlaskConical, LuOrbit, LuPalette } from 'react-icons/lu';
+import {
+  LuBlocks,
+  LuCog,
+  LuFlaskConical,
+  LuOrbit,
+  LuPalette,
+} from 'react-icons/lu';
 // Import Tab components
 import { ApiSettingsTab } from './settings/ApiSettingsTab';
 import { FunctionSettingsTab } from './settings/FunctionSettingsTab';
 import { McpSettingsTab } from './settings/McpSettingsTab';
+import { MiniappSettingsTab } from './settings/MiniappSettingsTab';
 import { UiSettingsTab } from './settings/UiSettingsTab';
 
 export const SystemSettingsDialog: React.FC = () => {
@@ -48,6 +55,13 @@ export const SystemSettingsDialog: React.FC = () => {
             >
               <LuFlaskConical className="mr-2 h-4 w-4" /> MCP
             </TabsTrigger>
+
+            <TabsTrigger
+              className="flex-1 py-3 data-[state=active]:shadow-none"
+              value="miniapp"
+            >
+              <LuBlocks className="mr-2 h-4 w-4" /> Miniapp
+            </TabsTrigger>
             <TabsTrigger
               className="flex-1 py-3 data-[state=active]:shadow-none"
               value="ui"
@@ -75,6 +89,12 @@ export const SystemSettingsDialog: React.FC = () => {
               value="mcp"
             >
               <McpSettingsTab />
+            </TabsContent>
+            <TabsContent
+              className="mt-0 h-full focus-visible:ring-0 focus-visible:ring-offset-0"
+              value="miniapp"
+            >
+              <MiniappSettingsTab />
             </TabsContent>
             <TabsContent
               className="mt-0 h-full focus-visible:ring-0 focus-visible:ring-offset-0"

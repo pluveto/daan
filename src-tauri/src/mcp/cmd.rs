@@ -1,5 +1,5 @@
 use crate::{
-    mcp::{emit_event, handle_stdout, monitor_process, ManagedProcess},
+    mcp::control::{emit_event, handle_stdout, monitor_process, ManagedProcess},
     ProcessRegistry,
 };
 use tauri::AppHandle;

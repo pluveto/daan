@@ -14,5 +14,6 @@ export * from './apiActions';
 export * from './regeneration';
 export * from './chatFlowActions';
 export * from './mcp';
+export * from './miniapp';
 // Optionally re-export specific helpers if they are needed directly by UI components
 // export { getHistoryForApi } from './regeneration'; // Example
