@@ -7,9 +7,12 @@ import {
   DialogTitle,
 } from '@/components/ui/Dialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/Tabs';
-import { isSystemSettingsDialogOpenAtom } from '@/store/uiState';
+import {
+  isSystemSettingsDialogOpenAtom,
+  systemSettingsDialogActiveTabAtom,
+} from '@/store/uiState';
 import { useAtom } from 'jotai';
-import React, { useState } from 'react';
+import React from 'react';
 import { LuCog, LuFlaskConical, LuOrbit, LuPalette } from 'react-icons/lu';
 // Import Tab components
 import { ApiSettingsTab } from './settings/ApiSettingsTab';
@@ -19,7 +22,7 @@ import { UiSettingsTab } from './settings/UiSettingsTab';
 
 export const SystemSettingsDialog: React.FC = () => {
   const [isOpen, setIsOpen] = useAtom(isSystemSettingsDialogOpenAtom);
-  const [activeTab, setActiveTab] = useState('api'); // Default tab
+  const [activeTab, setActiveTab] = useAtom(systemSettingsDialogActiveTabAtom); // Default tab
 
   return (
     <Dialog open={isOpen} onOpenChange={setIsOpen}>

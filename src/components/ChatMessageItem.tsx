@@ -45,26 +45,63 @@ const formatTimestamp = (timestamp: number): string => {
 };
 
 // msgPostProcess (unchanged)
-const msgPostProcess = (content: string) => {
+const msgPostProcess = ({ isStreaming, content }: Message) => {
   let tmp = content;
-  let isThinking = tmp.search(/<\/think>/) === -1;
-  let iconThoughts = `<div class="relative w-5 h-5 flex items-center justify-center rounded-full bg-green-200 dark:bg-green-600"><svg class="w-4 h-4 text-green-500 dark:text-green-200" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg></div>`;
-  let iconThinking = `<div class="relative w-5 h-5"><div class="animate-spin rounded-full h-5 w-5 border-t-2 border-b-2 border-purple-500"></div></div>`;
-  tmp = tmp.replace(
-    /<think>/g,
+
+  const thinkStartRegex = /<(think|thinking)>/;
+  const thinkEndRegex = /<\/(think|thinking)>/;
+  const hasThinkStartTag = thinkStartRegex.test(tmp);
+  const hasThinkCloseTag = thinkEndRegex.test(tmp);
+
+  let isEmptyThinkContent = false;
+  if (hasThinkStartTag && hasThinkCloseTag) {
+    const thinkBlockRegex = /<(think|thinking)>(.*?)<\/\1>/gs;
+    const matches = [...tmp.matchAll(thinkBlockRegex)];
+    if (matches.length > 0) {
+      isEmptyThinkContent = matches.every((match) => match[2].trim() === '');
+    }
+  }
+
+  let isThinking = isStreaming && hasThinkStartTag && !hasThinkCloseTag;
+
+  const iconThoughts = `<div class="relative w-5 h-5 flex items-center justify-center rounded-full bg-green-200 dark:bg-green-600"><svg class="w-4 h-4 text-green-500 dark:text-green-200" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg></div>`;
+  const iconThinking = `<div class="relative w-5 h-5"><div class="animate-spin rounded-full h-4 w-4 border-t-2 border-b-2 border-purple-500"></div></div>`;
+
+  const thoughtBlockHeader =
     '<div class="thought">' +
-      `<div class="flex gap-2 items-center my-1">
+    `<div class="flex gap-2 items-center my-1 pt-1">
         ${isThinking ? iconThinking : iconThoughts}
         <span class="font-bold text-neutral-500 dark:text-neutral-400">${isThinking ? 'Thinking' : 'Thoughts'}</span>
-        </div>`,
-  );
-  if (isThinking) {
-    tmp += '</div>';
+        </div>`;
+
+  if (isEmptyThinkContent) {
+    tmp = tmp.replace(
+      /<(think|thinking)>\s*<\/\1>/gs,
+      thoughtBlockHeader + '<div class="empty-think">No thoughts.</div></div>', // 替换为头部、提示和结束标签
+    );
   } else {
-    tmp = tmp.replace(/<\/think>/g, '</div>');
+    // 否则，正常替换开始和结束标签
+    tmp = tmp.replace(/<(think|thinking)>/g, thoughtBlockHeader);
+
+    if (isThinking) {
+    } else {
+      tmp = tmp.replace(/<\/(think|thinking)>/g, '</div>');
+    }
+  }
+
+  if (
+    !isStreaming &&
+    hasThinkStartTag &&
+    !hasThinkCloseTag &&
+    !isEmptyThinkContent
+  ) {
+    if (!tmp.endsWith('</div>')) {
+      tmp += '</div>';
+    }
   }
 
   tmp = normalizeMath(tmp);
+
   return tmp;
 };
 
@@ -168,8 +205,13 @@ const _ChatMessageItem: React.FC<ChatMessageItemProps> = ({
   }, [message.content, showEstimatedTokens]);
 
   const processedContent = useMemo(() => {
-    // Only process if not editing, avoid processing during typing
-    return !isEditing ? msgPostProcess(message.content) : '';
+    if (isEditing) {
+      return message.content;
+    }
+    if (message.role === 'assistant') {
+      return msgPostProcess(message);
+    }
+    return message.content;
   }, [message.content, isEditing]); // Depend on isEditing too
 
   // --- Effect to Initialize and Focus Editor ---
@@ -372,6 +414,10 @@ const _ChatMessageItem: React.FC<ChatMessageItemProps> = ({
             <ReactMarkdown
               components={{
                 code: CodeBlock,
+                // @ts-ignore
+                hidden: ({ children }) => (
+                  <div className="invisible">{children}</div>
+                ),
                 p: ({ children }) => <>{children}</>,
               }}
             >
@@ -433,6 +479,10 @@ const _ChatMessageItem: React.FC<ChatMessageItemProps> = ({
                   // Ensure p doesn't add excessive margins if prose styles handle it
                   p: ({ children }) => (
                     <div className="mb-2 last:mb-0">{children}</div>
+                  ),
+                  // @ts-ignore
+                  hidden: ({ children }) => (
+                    <div className="invisible">{children}</div>
                   ),
                 }}
                 remarkPlugins={[remarkGfm, remarkMath]}

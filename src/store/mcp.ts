@@ -130,10 +130,15 @@ export const mcpServerStatesAtom = atom<Map<string, McpServerState>>(new Map());
 export const isMcpToolsPopoverOpenAtom = atom(false);
 
 /** Stores the IDs of the MCP tools *selected by the user* for injection into the current chat. */
-export const selectedMcpServerIdsAtom = atomWithSafeStorage<string[]>(
-  'selectedMcpServerIds',
-  [],
-);
+export const selectedMcpServerIdsAtom = atom<string[]>([]);
+
+/** Derived atom that returns the conncected MCP server ids. */
+export const connectedMcpServerIdsAtom = atom((get) => {
+  const states = get(mcpServerStatesAtom);
+  return Array.from(states.entries())
+    .filter(([, state]) => state.isConnected)
+    .map(([id]) => id);
+});
 
 // --- MCP Action Atoms ---
 
@@ -406,7 +411,7 @@ export const connectMcpServerAtom = atom(
         toolsResult = await client.listTools();
         console.log(`[MCP Connect] Tools for ${serverId}:`, toolsResult);
       } catch (error) {
-        console.error(
+        console.warn(
           `[MCP Connect] Failed to list tools for ${serverId}:`,
           error,
         );
@@ -421,7 +426,7 @@ export const connectMcpServerAtom = atom(
           resourcesResult,
         );
       } catch (error) {
-        console.error(
+        console.warn(
           `[MCP Connect] Failed to list resources for ${serverId}:`,
           error,
         );
@@ -433,7 +438,7 @@ export const connectMcpServerAtom = atom(
         promptsResult = await client.listPrompts(); // Assuming listPrompts exists
         console.log(`[MCP Connect] Prompts for ${serverId}:`, promptsResult);
       } catch (error) {
-        console.error(
+        console.warn(
           `[MCP Connect] Failed to list prompts for ${serverId}:`,
           error,
         );
@@ -631,10 +636,14 @@ export const disconnectAllMcpServersAtom = atom(null, (get, set) => {
   set(selectedMcpServerIdsAtom, []);
 });
 
-/** Derived atom to generate the system prompt instruction for enabled/selected MCP tools. */
+/**
+ * Derived atom to generate the system prompt instruction for enabled/selected MCP tools,
+ * using the ```json:mcp-tool-call code block format.
+ */
 export const mcpPromptInjectionAtom = atom<string>((get) => {
   const selectedIds = get(selectedMcpServerIdsAtom);
   const states = get(mcpServerStatesAtom);
+  const servers = get(mcpServersAtom); // Get all server configs
   let injection = '';
 
   if (selectedIds.length === 0) {
@@ -645,61 +654,89 @@ export const mcpPromptInjectionAtom = atom<string>((get) => {
 
   selectedIds.forEach((serverId) => {
     const state = states.get(serverId);
-    const config = get(mcpServersAtom).find((c) => c.id === serverId);
+    const config = servers.find((c) => c.id === serverId);
 
     // Check if server is selected, connected, and has capabilities
     if (state?.isConnected && state.capabilities && config) {
       const tools = state.capabilities.tools || [];
-      // const resources = state.capabilities.resources || []; // Add if needed later
-      // const prompts = state.capabilities.prompts || []; // Add if needed later
 
       if (tools.length > 0) {
         const toolDescriptions = tools
           .map((tool) => {
-            // Format the JSON schema nicely
-            const schemaString = tool.inputSchema
-              ? JSON.stringify(
-                  formatJsonSchema(tool.inputSchema as any),
-                  null,
-                  2,
-                )
-              : '{}';
+            // Format the JSON schema nicely (ensure formatJsonSchema handles potential issues)
+            let schemaString = '{}'; // Default to empty object
+            try {
+              schemaString = tool.inputSchema
+                ? JSON.stringify(
+                    formatJsonSchema(tool.inputSchema as any), // Use helper carefully
+                    null,
+                    2,
+                  )
+                : '{}';
+            } catch (e) {
+              console.warn(
+                `Failed to stringify/format schema for tool ${tool.name} on server ${serverId}`,
+                e,
+              );
+              schemaString = '/* Error formatting schema */';
+            }
 
             // Use triple backticks for the code block
             return `- Tool: \`${tool.name}\`\n  Description: ${tool.description || 'No description'}\n  Input JSON Schema:\n\`\`\`json\n${schemaString}\n\`\`\``;
           })
           .join('\n');
 
-        // Use backticks for server name and ID in the section header
+        // Use backticks for server name and ID
         availableToolsSections.push(
-          `Server: \`${config.name}\` (ID: \`${serverId}\`)
-${toolDescriptions}`,
+          `Server: \`${config.name}\` (ID: \`${serverId}\`)\n${toolDescriptions}`,
         );
       }
     }
   });
 
   if (availableToolsSections.length > 0) {
-    // Construct the final prompt section
-    // Added note about unique tool names per server but potential overlap across servers
-    // Clarified argument format emphasizing JSON string validity.
+    // Construct the final prompt section using the new code block format instructions
     injection = `
 ---------------- MCP Tools Available ----------------
-You have access to the following external tools provided by connected MCP servers. Tool names are unique *within* a single server, but the same tool name *might* exist on different servers. Always specify the correct SERVER_ID.
+You have access to external tools via connected MCP servers which allow bot to call external functions.
 
-To use a tool, respond *ONLY* with the following XML tag format, replacing placeholders precisely:
-<mcp-tool-call server="SERVER_ID" tool="TOOL_NAME" arguments='JSON_ARGUMENTS'></mcp-tool-call>
+To use a tool, follow these steps *strictly*:
+1.  Provide your normal conversational response text first (if any).
+2.  If you need to call a tool, place a **single JSON code block** at the **very end** of your response. Nothing must follow this block.
+3.  The code block MUST use the language identifier \`json:mcp-tool-call\`.
+4.  The JSON object inside the block MUST have the following structure:
+    \`\`\`json
+    {
+      "serverId": "SERVER_ID",
+      "toolName": "TOOL_NAME",
+      "arguments": { /* JSON object matching the tool's Input JSON Schema */ }
+    }
+    \`\`\`
+    - Replace \`SERVER_ID\` with the exact ID of the server providing the tool (e.g., "builtin::time", "custom::xyz").
+    - Replace \`TOOL_NAME\` with the exact name of the tool to call (e.g., "getCurrentTime", "eval").
+    - Replace the value of \`"arguments"\` with a valid JSON object containing the arguments needed for the tool, matching its schema.
+    - For tools with no arguments according to their schema, use an empty object: \`"arguments": {}\`.
 
-- Replace \`SERVER_ID\` with the ID of the server providing the tool (e.g., "builtin::time", "custom::xyz").
-- Replace \`TOOL_NAME\` with the exact name of the tool you want to call (e.g., "getCurrentTime", "eval").
-- Replace \`JSON_ARGUMENTS\` with a *single-quoted, valid JSON string* representing the arguments required by the tool's Input JSON Schema.
-    - Ensure the JSON string itself is valid (e.g., keys and strings inside the JSON use double quotes).
-    - If the JSON string contains single quotes, they must be escaped (e.g., '{"query": "What\\'s up?"}').
-    - For tools with no arguments, use '{}'.
-- Do not include any text outside the <mcp-tool-call>...</mcp-tool-call> tags.
+**Example Response (calling 'getCurrentTime' on server 'builtin::time'):**
 
-Available Tools:
+Okay, you want the current time. I can get that for you.
+\`\`\`json:mcp-tool-call
+{
+  "serverId": "builtin::time",
+  "toolName": "getCurrentTime",
+  "arguments": {}
+}
+\`\`\`
+
+**Important:**
+- Only one \`json:mcp-tool-call\` block is allowed per response.
+- The block MUST be the absolute last thing in your output. If you have thinking ability, stop thinking before calling tools.
+- Ensure the JSON inside the block is valid.
+- Tool names are unique *within* a single server, but might overlap across different servers. Always use the correct \`serverId\`.
+
+Available Tools START
 ${availableToolsSections.join('\n\n')}
+Available Tools END
 -----------------------------------------------------
 `;
   }
@@ -707,44 +744,18 @@ ${availableToolsSections.join('\n\n')}
   return injection.trim(); // Trim leading/trailing whitespace
 });
 
-// --- Tool Call Handling Logic ---
-
-// (Helper functions: safeParseArgs, formatToolResultContent, formatToolResultForAI remain the same)
-// Helper to safely parse arguments, returns null on error
-function safeParseArgs(argsString: string, toolName: string): any | null {
-  try {
-    // Basic unescape for JSON strings within the attribute - This might be too simple.
-    // JSON parsers usually handle standard escapes like \". Let's rely on JSON.parse
-    // and assume the input `argsString` is already a correctly formatted JSON string.
-    // If the string comes from an XML attribute enclosed in single quotes,
-    // double quotes inside should be fine. Issues might arise if the JSON *content*
-    // needs single quotes. The prompt now emphasizes using escaped single quotes if needed.
-    // const unescapedArgs = argsString.replace(/\\'/g, "'").replace(/\\"/g, '"'); // Probably remove this
-    return JSON.parse(argsString);
-  } catch (e) {
-    console.error(
-      `[MCP Tool Call] Failed to parse arguments for tool ${toolName}. Raw args: '${argsString}'. Error:`,
-      e,
-    );
-    toast.error(
-      `Invalid arguments JSON format for tool ${toolName}. Check syntax.`,
-    );
-    return null;
-  }
-}
-
 // Helper to format tool result for display
 function formatToolResultContent(result: CallToolResult): string {
   // Prioritize text content, handle errors, fallback for other types
   if (result.content && result.content.length > 0) {
-    const firstPart = result.content[0];
+    const resultPart = result.content[0]; // TODO: handle more than one part?
     if (result.isError) {
       // Assume error content is text
-      return `Error: ${firstPart?.text || '[Unknown Error Structure]'}`;
-    } else if (firstPart.type === 'text') {
-      return firstPart.text || '[Empty Text Result]';
+      return `Error: ${resultPart?.text || '[Unknown Error Structure]'}`;
+    } else if (resultPart.type === 'text') {
+      return resultPart.text || '""';
     }
-    // else if (firstPart.type === 'json') {
+    // else if (firstPart.type === 'json') { // now text cover this case
     //   try {
     //     // Pretty print JSON results
     //     return `\`\`\`json\n${JSON.stringify(firstPart.json, null, 2)}\n\`\`\``;
@@ -753,11 +764,10 @@ function formatToolResultContent(result: CallToolResult): string {
     //   }
     // }
     else {
-      // Fallback for other types (e.g., image) - just stringify simply for now
       try {
-        return `\`\`\`json\n${JSON.stringify(firstPart, null, 2)}\n\`\`\``; // Format as JSON block
+        return JSON.stringify(resultPart, null, 2);
       } catch {
-        return '[Unsupported Result Type]';
+        return '"<invalid data>"';
       }
     }
   }
@@ -801,19 +811,18 @@ export const handleMcpToolCallAtom = atom(
     get,
     set,
     toolCallData: {
+      callId: string;
       chatId: string;
       serverId: string;
       toolName: string;
-      argsString: string;
-      rawTag: string; // Keep rawTag if needed for debugging or potential future use
+      args: object;
+      rawBlock: string; // Keep rawBlock if needed for debugging or potential future use
     },
   ) => {
-    const { chatId, serverId, toolName, argsString } = toolCallData;
+    const { callId, chatId, serverId, toolName, args } = toolCallData;
     console.log(
-      `[MCP Handler] Processing tool call request: Server='${serverId}', Tool='${toolName}', Args='${argsString}'`,
+      `[MCP Handler] Processing tool call request: Server='${serverId}', Tool='${toolName}', Args='${JSON.stringify(args)}'`,
     );
-
-    const callId = uuidv4(); // Unique ID for this invocation
 
     // 1. Find Server Config & State *first*
     const config = get(mcpServersAtom).find((s) => s.id === serverId);
@@ -879,25 +888,7 @@ export const handleMcpToolCallAtom = atom(
       return;
     }
 
-    // 2. Parse Arguments (after finding server, so we know tool context)
-    const parsedArgs = safeParseArgs(argsString, toolName);
-    if (parsedArgs === null) {
-      // Error is handled by safeParseArgs (toast shown)
-      // Add error message to chat?
-      const errorContent = `MCP Error: Failed to parse arguments for tool "${toolName}" on server "${config.name}". Arguments provided: '${argsString}'. Please provide a valid JSON string.`;
-      set(chatsAtom, (prev) =>
-        updateMessagesInChat(prev, chatId, (msgs) => [
-          ...msgs,
-          {
-            id: uuidv4(),
-            role: 'system',
-            content: errorContent,
-            timestamp: Date.now(),
-          },
-        ]),
-      );
-      return;
-    }
+    // 2. Parse Arguments (done in apiAction)
 
     // 3. Create Pending Message
     const pendingToolCallInfo: PendingToolCallInfo = {
@@ -906,14 +897,14 @@ export const handleMcpToolCallAtom = atom(
       serverId,
       serverName: config.name, // Use display name
       toolName,
-      args: parsedArgs,
+      args,
       // Add schema for potential validation display later?
       // inputSchema: availableTool.inputSchema,
     };
     const pendingMessage: Message = {
       id: uuidv4(), // New message ID for the pending state display
       role: 'assistant', // Represents the AI's *request* to call the tool
-      content: `Wants to use tool: **${toolName}** on **${config.name}** with arguments: \`\`\`json\n${JSON.stringify(parsedArgs, null, 2)}\n\`\`\``,
+      content: `Wants to use tool: **${toolName}** on **${config.name}** with arguments: \`\`\`json\n${JSON.stringify(args, null, 2)}\n\`\`\``,
       timestamp: Date.now(),
       toolCallInfo: pendingToolCallInfo,
     };
@@ -946,9 +937,6 @@ export const handleMcpToolCallAtom = atom(
     }
   },
 );
-
-// (approveToolCallAtom, denyToolCallAtom, executeToolCall, triggerAICallWithUpdatedHistory remain largely the same,
-// ensuring they correctly use the chatId, pendingMessageId, toolCallInfo, and client passed to them)
 
 /** Action triggered when user approves a tool call */
 export const approveToolCallAtom = atom(
@@ -1097,8 +1085,6 @@ export const denyToolCallAtom = atom(
       role: 'user',
       content: `(Instruction: The previous request to use the tool "${pendingToolCallInfo.toolName}" on server "${pendingToolCallInfo.serverName}" was denied by the user. Please proceed without using this tool.)`,
       timestamp: Date.now(),
-      // If using OpenAI tool calls, might need tool_call_id here corresponding to the original request
-      // tool_call_id: pendingToolCallInfo.callId, // Example
     };
     set(chatsAtom, (prev) =>
       updateMessagesInChat(prev, chatId, (msgs) => [
@@ -1172,7 +1158,11 @@ async function executeToolCall(
       updateMessagesInChat(prev, chatId, (msgs) =>
         msgs.map((m) =>
           m.id === pendingMessageId
-            ? { ...m, content: resultContent, toolCallInfo: resultInfo }
+            ? {
+                ...m,
+                content: `\`\`\`json:mcp-tool-resp[call-id=${callId}]\n${resultContent}\n\`\`\``,
+                toolCallInfo: resultInfo,
+              }
             : m,
         ),
       ),
