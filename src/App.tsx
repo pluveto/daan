@@ -26,6 +26,8 @@ import { useAtom, useAtomValue } from 'jotai';
 import { VisuallyHidden } from 'radix-ui';
 import { useEffect } from 'react';
 import FastImport from './components/FastImport';
+import { MiniappSearchDialog } from './components/MiniappSearchDialog';
+import { MiniappWindowManager } from './components/MiniappWindowManager';
 import { Toaster } from './components/ui/Toaster';
 import { useMiniappPersistence } from './miniapps/persistence';
 import { SystemSettingsDialog } from './SystemSettingsDialog'; // Import the new Dialog
@@ -83,7 +85,7 @@ function App() {
       <Toaster richColors />
       <FastImport />
       <SystemSettingsDialog />
-
+      <MiniappSearchDialog />
       {/* Left Sidebar */}
       {isDesktop ? (
         <div
@@ -109,9 +111,9 @@ function App() {
       )}
 
       {/* Main Content */}
-      <div className="relative flex flex-1 flex-col overflow-hidden">
+      <main className="relative flex flex-1 flex-col overflow-hidden">
         <ChatInterface />
-      </div>
+      </main>
 
       {/* Right Sidebar */}
       {isDesktop ? (
@@ -142,6 +144,7 @@ function App() {
           </DrawerContent>
         </Drawer>
       )}
+      <MiniappWindowManager />
     </div>
   );
 }
