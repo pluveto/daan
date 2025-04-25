@@ -28,7 +28,6 @@ import React, {
 // Added LuPlug icon
 import {
   LuChartBar,
-  LuDelete,
   LuPaintbrush,
   LuPlug,
   LuRefreshCw,
