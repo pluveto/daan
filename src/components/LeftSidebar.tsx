@@ -12,15 +12,15 @@ import {
   togglePinChatAtom,
 } from '@/store/index';
 import { Chat, CustomCharacter } from '@/types';
-import { formatDateLabel } from '@/utils/dateUtils'; // Import the utility
+import { formatDateLabel } from '@/utils/dateUtils';
 import { useAtom, useAtomValue, useSetAtom } from 'jotai';
 import React, { useMemo } from 'react';
 import { CharacterSection } from './CharacterSection';
 import { ConversationList, GroupedChats } from './ConversationList';
 import { ConversationSearch } from './ConversationSearch';
+import { MiniappSection } from './MiniappSection';
 import { SidebarActions } from './SidebarActions';
 import { SidebarFooter } from './SidebarFooter';
-// Import the new child components
 import { SidebarHeader } from './SidebarHeader';
 
 // Get branding and config from environment variables or use defaults
@@ -138,18 +138,18 @@ export const LeftSidebar: React.FC = () => {
         logoUrl={logoUrl}
         onSettingsClick={handleSettingsClick}
       />
-
       <SidebarActions
         onNewChatClick={handleNewChatClick}
         onClearUnpinnedClick={handleClearUnpinnedClick}
       />
-
+      {/* Character Section */}
       <CharacterSection
         characters={characters}
         onAddCharacterClick={handleAddCharacterClick}
         onInstantiateCharacterClick={handleInstantiateCharacterClick}
       />
-
+      {/* MiniApp Section */}
+      <MiniappSection /> {/* Add the new section here */}
       {/* Conversation section now combines Search and List */}
       <div className="flex flex-1 flex-col overflow-hidden">
         {/* Added wrapper for flex-1 layout */}
@@ -162,7 +162,6 @@ export const LeftSidebar: React.FC = () => {
           onDeleteChat={handleDeleteChat}
         />
       </div>
-
       <SidebarFooter version={version} commitInfo={commitInfo} />
     </div>
   );
