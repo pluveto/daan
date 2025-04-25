@@ -42,4 +42,3 @@ export function CodeSection({ htmlContent, onHtmlChange }: CodeSectionProps) {
     </div>
   );
 }
-MiniApps;
