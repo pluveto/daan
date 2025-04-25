@@ -3,7 +3,7 @@ import { useMiniappBridge } from '@/miniapps/hooks/useMiniappBridge';
 import type { MiniappDefinition } from '@/types';
 import React, { Component, useEffect, useMemo, useRef, useState } from 'react';
 
-// --- Simple Error Boundary ---
+// --- Error Boundary ---
 interface ErrorBoundaryProps {
   children: React.ReactNode;
   miniappName: string; // To identify which miniapp failed
@@ -27,19 +27,19 @@ class MiniappErrorBoundary extends Component<
   }
 
   override componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
-    // You can also log the error to an error reporting service
+    // Log the error
     console.error(
       `Miniapp Runner Error Boundary caught error in "${this.props.miniappName}":`,
       error,
       errorInfo,
     );
-    // Optionally report to host using a dedicated logging function if available globally
-    // window.host?.logError(...)
+    // Optional: Use hostApi or context to report error to the main application UI if possible
+    // window.hostApi?.reportError({ message: error.message, stack: error.stack });
   }
 
   override render() {
     if (this.state.hasError) {
-      // You can render any custom fallback UI
+      // Fallback UI
       return (
         <div className="text-destructive bg-destructive/10 border-destructive flex h-full flex-col items-center justify-center rounded-md border p-4 text-center">
           <h4 className="mb-2 font-semibold">
@@ -48,7 +48,7 @@ class MiniappErrorBoundary extends Component<
           <p className="text-xs">
             {this.state.error?.message || 'An unknown error occurred.'}
           </p>
-          {/* You could add a button to try reloading */}
+          {/* You could add a button to try reloading the instance */}
         </div>
       );
     }
@@ -60,118 +60,123 @@ class MiniappErrorBoundary extends Component<
 // --- Runner Props ---
 interface MiniappRunnerProps {
   miniappDefinition: MiniappDefinition;
-  registerSendMessage: (
-    id: string,
-    sendMessage: (
-      type: string,
-      payload: any,
-      requestId?: string,
-      error?: string,
-    ) => void,
-  ) => void;
-  unregisterSendMessage: (id: string) => void;
-  getSendMessage: (
-    id: string,
-  ) =>
-    | ((type: string, payload: any, requestId?: string, error?: string) => void)
-    | undefined;
+  instanceId: string; // Unique ID for this running instance
 }
 
 // --- Runner Component ---
 export function MiniappRunner({
   miniappDefinition,
-  registerSendMessage,
-  unregisterSendMessage,
-  getSendMessage,
+  instanceId, // Receive instanceId
 }: MiniappRunnerProps) {
   const iframeRef = useRef<HTMLIFrameElement>(null);
-  const { id, name, htmlContent } = miniappDefinition;
-  const [isIframeLoaded, setIsIframeLoaded] = useState(false); // Track iframe load state
+  const { id: definitionId, name, htmlContent } = miniappDefinition; // Get definition ID here
+  const [isIframeLoaded, setIsIframeLoaded] = useState(false);
 
-  // Initialize the bridge hook
-  const { sendMessageToMiniapp } = useMiniappBridge(
-    iframeRef, // Pass the ref (type should be React.RefObject<HTMLIFrameElement>)
-    id,
-    registerSendMessage,
-    unregisterSendMessage,
-    getSendMessage,
-  );
+  // Initialize the bridge hook FOR THIS INSTANCE.
+  // This hook handles registering/unregistering the sendMessage function
+  // using the MiniappBridgeContext.
+  useMiniappBridge(iframeRef, instanceId, definitionId);
 
-  // Register the sendMessage function for this instance
-  // UseEffect runs *after* render, so iframeRef might be set
-  useEffect(() => {
-    // We could potentially wait for isIframeLoaded === true here if registration
-    // absolutely must happen *only* after onload, but often useEffect is sufficient.
-    console.log(`MiniappRunner: Registering sendMessage for ${id}`);
-    registerSendMessage(id, sendMessageToMiniapp);
-    return () => {
-      console.log(`MiniappRunner: Unregistering sendMessage for ${id}`);
-      unregisterSendMessage(id);
-    };
-    // Ensure dependencies cover all needed variables from props/state/hooks
-  }, [id, sendMessageToMiniapp, registerSendMessage, unregisterSendMessage]);
-
-  // Memoize iframe srcDoc content, potentially injecting CSP
+  // Memoize iframe srcDoc content, including CSP injection
   const iframeSrcDoc = useMemo(() => {
-    // --- Content Security Policy (CSP) Example ---
-    // Define a restrictive policy. Adjust based on Miniapp needs.
-    // 'unsafe-inline' is often needed for simple HTML/JS but reduces security.
-    // Consider using nonces or hashes if controlling script generation.
-    // Needs careful tuning!
+    // Content Security Policy (Adjust as needed, be restrictive)
     const csp = [
-      "default-src 'none'", // Start restrictive
-      "script-src 'unsafe-inline' /hostApi.js", // Allow inline scripts and scripts from your CDN (for hostApi.js)
-      "style-src 'unsafe-inline'", // Allow inline styles
-      'img-src data:', // Allow data URIs for images if needed
-      "font-src 'none'",
-      "connect-src 'none'", // Disallow XHR/fetch by default (communication via postMessage)
-      "frame-ancestors 'none'", // Prevent clickjacking (iframe cannot be embedded elsewhere)
-      "form-action 'none'", // Prevent form submissions to external targets
-      // Add other directives as needed (e.g., media-src)
+      "default-src 'none'",
+      // Allow scripts: inline for simple apps, self, and your hostApi.js path
+      "script-src 'unsafe-inline' 'self' /hostApi.js", // Ensure '/hostApi.js' path is correct
+      // Allow styles: inline, self, CDNs if necessary (e.g., Tailwind CDN)
+      "style-src 'unsafe-inline' 'self' https://cdn.tailwindcss.com",
+      // Allow images: data URIs, blobs, self
+      "img-src data: blob: 'self'",
+      // Allow fonts from self
+      "font-src 'self'",
+      // Disallow connect/fetch/XHR by default (use bridge)
+      "connect-src 'none'",
+      // Prevent framing by others
+      "frame-ancestors 'none'",
+      // Prevent form submissions to external targets
+      "form-action 'none'",
+      // Allow necessary media sources if applicable
+      // "media-src 'self'",
+      // Allow web workers if needed
+      // "worker-src 'self' blob:",
     ].join('; ');
 
-    // Inject CSP meta tag into the <head>
     const headTag = '<head>';
     const headIndex = htmlContent.toLowerCase().indexOf(headTag);
+    let injectedHtml = htmlContent;
+
+    // Inject CSP and instance ID meta tag into <head>
     if (headIndex !== -1) {
       const injectionPoint = headIndex + headTag.length;
-      return (
+      injectedHtml =
         htmlContent.slice(0, injectionPoint) +
         `<meta http-equiv="Content-Security-Policy" content="${csp}">` +
-        htmlContent.slice(injectionPoint)
-      );
+        `<meta name="miniapp-instance-id" content="${instanceId}">` + // For the app's internal use
+        htmlContent.slice(injectionPoint);
     } else {
-      // Fallback if <head> tag not found (less ideal)
+      // Fallback if <head> tag is missing
       console.warn(
-        `Miniapp "${name}" HTML missing <head> tag. Cannot inject CSP header.`,
+        `Miniapp "${name}" (Instance: ${instanceId}) HTML missing <head> tag. Injecting basic structure with CSP.`,
       );
-      return `<!DOCTYPE html><html><head><meta http-equiv="Content-Security-Policy" content="${csp}"></head><body>${htmlContent}</body></html>`; // Basic wrapper
+      // Wrap the content in basic HTML structure
+      injectedHtml = `<!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>${name}</title><meta http-equiv="Content-Security-Policy" content="${csp}"><meta name="miniapp-instance-id" content="${instanceId}"></head><body>${htmlContent}</body></html>`;
     }
-  }, [htmlContent, name]); // Depend on htmlContent and name (for warning)
+
+    // Ensure hostApi.js script is included (basic check)
+    // Ideally, the miniapp HTML definition should include this script itself.
+    const hostApiScriptTag = '<script src="/hostApi.js"></script>';
+    if (!injectedHtml.includes('src="/hostApi.js"')) {
+      // Check if the script tag exists
+      console.warn(
+        `Miniapp "${name}" (Instance: ${instanceId}) HTML appears to be missing ${hostApiScriptTag}. Attempting automatic injection before </body>.`,
+      );
+      const bodyEndIndex = injectedHtml.toLowerCase().lastIndexOf('</body>');
+      if (bodyEndIndex !== -1) {
+        // Inject before the closing body tag
+        injectedHtml =
+          injectedHtml.slice(0, bodyEndIndex) +
+          hostApiScriptTag +
+          injectedHtml.slice(bodyEndIndex);
+      } else {
+        // Append if no body tag found (less reliable)
+        injectedHtml += hostApiScriptTag;
+      }
+    }
+
+    return injectedHtml;
+  }, [htmlContent, name, instanceId]); // Re-generate if these change
 
   // Handle iframe load event
   const handleIframeLoad = () => {
-    console.log(`MiniappRunner: Iframe for "${name}" (ID: ${id}) has loaded.`);
+    console.log(
+      `MiniappRunner: Iframe for "${name}" (Instance: ${instanceId}) has loaded.`,
+    );
     setIsIframeLoaded(true);
-    // You could potentially signal readiness to the host here if needed
+    // Bridge initialization is handled by the useMiniappBridge hook effect
   };
 
   return (
     // Wrap component content in Error Boundary
-    <MiniappErrorBoundary miniappName={name || 'Untitled'}>
-      <div className="miniapp-instance bg-background flex h-full flex-col overflow-hidden">
-        {/* Ensure background color */}
-        {/* Optional Title Bar */}
-        {/* <div className="p-1 bg-muted text-muted-foreground text-xs border-b flex-shrink-0">{name} (ID: {id.substring(0, 6)})</div> */}
+    <MiniappErrorBoundary miniappName={name || 'Untitled Miniapp'}>
+      <div className="miniapp-instance bg-background flex h-full w-full flex-col overflow-hidden">
+        {/* Optional: Add a loading indicator until iframe loads */}
+        {/* {!isIframeLoaded && <div className="p-4 text-center text-muted-foreground">Loading {name}...</div>} */}
+
         {/* Iframe takes remaining space */}
         <iframe
           ref={iframeRef}
-          sandbox="allow-scripts allow-forms allow-popups" // Keep sandbox minimal; consider removing allow-forms/popups if not needed
-          srcDoc={iframeSrcDoc}
-          title={name}
+          // Security Sandbox (adjust as needed, keep minimal)
+          // allow-modals: Needed for alert(), confirm(), prompt()
+          // allow-popups: Needed for window.open() (use with caution)
+          // allow-downloads: If the app needs to trigger downloads
+          sandbox="allow-scripts allow-forms allow-modals allow-popups"
+          srcDoc={iframeSrcDoc} // Use srcDoc forsandboxing and CSP injection
+          title={name} // For accessibility
           className="h-full w-full flex-grow border-0" // Use flex-grow to fill space
           onLoad={handleIframeLoad} // Handle load event
-          // allow="clipboard-read; clipboard-write" // Grant specific permissions via 'allow' if required and trusted
+          // Feature Policy / Permissions Policy (Optional, more granular control)
+          allow="clipboard-read; clipboard-write; microphone *; camera *;"
         />
       </div>
     </MiniappErrorBoundary>

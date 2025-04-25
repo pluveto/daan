@@ -1,247 +1,252 @@
 // src/miniapps/components/MiniappManager/MiniappEditor.tsx
 import { Button } from '@/components/ui/Button';
-import { Input } from '@/components/ui/Input';
-import { Label } from '@/components/ui/Label';
-import { Textarea } from '@/components/ui/Textarea';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/Tabs';
 import { miniappsDefinitionAtom } from '@/store/miniapp';
-import type { MiniappDefinition, MiniappPermissions } from '@/types'; // Make sure MiniappPermissions is imported
-import Editor from '@monaco-editor/react'; // Install: pnpm add @monaco-editor/react
+import type { MiniappDefinition, MiniappPermissions } from '@/types';
 import { useAtom } from 'jotai';
-import React, { useEffect, useState } from 'react';
-import { v4 as uuidv4 } from 'uuid'; // Install: pnpm add uuid @types/uuid
+import React, { useCallback, useEffect, useState } from 'react';
+import { toast } from 'sonner';
+import { v4 as uuidv4 } from 'uuid';
+import { z } from 'zod'; // For validation
+import { CodeSection } from './CodeSection';
+import { ConfigurationSection } from './ConfigurationSection';
+import { DependenciesSection } from './DependenciesSection';
+import { GeneralInfoSection } from './GeneralInfoSection';
+import { PermissionsSection } from './PermissionsSection';
+import DEFAULT_HTML from './sample.html?raw'; // Import raw content
+
+// --- Zod Schema for Validation (Example) ---
+const miniappDefinitionSchema = z.object({
+  id: z.string(),
+  name: z.string().min(1, 'Miniapp name is required.'),
+  icon: z.string().optional(),
+  description: z.string().optional(),
+  htmlContent: z.string().min(1, 'HTML content cannot be empty.'),
+  configSchema: z.record(z.any()).optional().default({}),
+  defaultConfig: z.record(z.any()).optional().default({}),
+  permissions: z.record(z.any()).optional().default({}), // Could be more specific
+  enabled: z.boolean(),
+  createdAt: z.number(),
+  updatedAt: z.number(),
+  dependencies: z.array(z.string()).optional().default([]),
+});
+// --- End Validation ---
 
 interface MiniappEditorProps {
   miniappId: string | null; // null for create mode
-  onSaveSuccess: () => void; // To close the dialog/signal success
+  onSaveSuccess: () => void;
+  onCancel: () => void; // Add cancel handler
 }
 
-const DEFAULT_HTML = (await import(`./sample.html?raw`)).default;
+// Define a type for the editable state, making complex fields potentially null initially
+type EditableMiniappState = Omit<
+  Partial<MiniappDefinition>,
+  'configSchema' | 'defaultConfig' | 'permissions'
+> & {
+  configSchema: Record<string, any> | null;
+  defaultConfig: Record<string, any> | null;
+  permissions: MiniappPermissions | null; // Use the specific type
+};
 
 export function MiniappEditor({
   miniappId,
   onSaveSuccess,
+  onCancel,
 }: MiniappEditorProps) {
   const [definitions, setDefinitions] = useAtom(miniappsDefinitionAtom);
+  const [isLoading, setIsLoading] = useState(true);
+  const [activeTab, setActiveTab] = useState('general');
 
-  // State for form fields
-  const [name, setName] = useState('');
-  const [description, setDescription] = useState('');
-  const [htmlContent, setHtmlContent] = useState(DEFAULT_HTML);
-  const [configSchemaStr, setConfigSchemaStr] = useState('{}');
-  const [defaultConfigStr, setDefaultConfigStr] = useState('{}');
-  const [permissionsStr, setPermissionsStr] = useState('{}');
-  const [jsonError, setJsonError] = useState<string | null>(null);
+  // State to hold the miniapp definition being edited
+  const [editableState, setEditableState] =
+    useState<EditableMiniappState | null>(null);
 
   const isCreateMode = miniappId === null;
 
-  // Load existing data when editing
+  // Load existing data or initialize for create mode
   useEffect(() => {
-    setJsonError(null); // Reset JSON error on ID change
-    if (miniappId) {
+    setIsLoading(true);
+    let initialState: EditableMiniappState;
+    if (isCreateMode) {
+      initialState = {
+        name: '',
+        icon: '📦', // Default icon
+        description: '',
+        htmlContent: DEFAULT_HTML,
+        configSchema: {},
+        defaultConfig: {},
+        permissions: { useStorage: true }, // Sensible default permissions
+        enabled: false,
+        dependencies: [],
+      };
+    } else {
       const existing = definitions.find((d) => d.id === miniappId);
       if (existing) {
-        setName(existing.name);
-        setDescription(existing.description || '');
-        setHtmlContent(existing.htmlContent);
-        setConfigSchemaStr(
-          JSON.stringify(existing.configSchema || {}, null, 2),
-        );
-        setDefaultConfigStr(
-          JSON.stringify(existing.defaultConfig || {}, null, 2),
-        );
-        setPermissionsStr(JSON.stringify(existing.permissions || {}, null, 2));
+        initialState = {
+          ...existing,
+          // Ensure complex types are objects, default if undefined/null
+          configSchema: existing.configSchema ?? {},
+          defaultConfig: existing.defaultConfig ?? {},
+          permissions: existing.permissions ?? { useStorage: true },
+          dependencies: existing.dependencies ?? [],
+        };
       } else {
-        console.error(`Miniapp with ID ${miniappId} not found for editing.`);
-        // Optionally reset form or show an error message to the user
-        onSaveSuccess(); // Close dialog if record is gone
+        console.error(`Miniapp with ID ${miniappId} not found.`);
+        toast.error('Miniapp not found.');
+        onCancel(); // Close if not found
+        return; // Stop execution
       }
-    } else {
-      // Reset form for new miniapp
-      setName('');
-      setDescription('');
-      setHtmlContent(DEFAULT_HTML);
-      setConfigSchemaStr('{}');
-      setDefaultConfigStr('{}');
-      setPermissionsStr('{}');
     }
-  }, [miniappId, definitions, onSaveSuccess]);
+    setEditableState(initialState);
+    setIsLoading(false);
+  }, [miniappId, isCreateMode, definitions, toast, onCancel]);
 
-  // Handle saving (Create or Update)
+  // Generic handler to update parts of the state
+  const handleStateChange = useCallback(
+    <K extends keyof EditableMiniappState>(
+      key: K,
+      value: EditableMiniappState[K],
+    ) => {
+      setEditableState((prev) => (prev ? { ...prev, [key]: value } : null));
+    },
+    [],
+  );
+
+  // Handle saving
   const handleSave = () => {
-    if (!name.trim()) {
-      alert('Miniapp name is required.');
-      return;
-    }
-
-    let configSchema: Record<string, any> | undefined;
-    let defaultConfig: Record<string, any> | undefined;
-    let permissions: MiniappPermissions | undefined;
-
-    // Validate and parse JSON fields
-    try {
-      setJsonError(null); // Clear previous error
-
-      configSchema = JSON.parse(configSchemaStr || '{}');
-      if (
-        typeof configSchema !== 'object' ||
-        configSchema === null ||
-        Array.isArray(configSchema)
-      ) {
-        throw new Error('Config Schema must be a valid JSON object.');
-      }
-
-      defaultConfig = JSON.parse(defaultConfigStr || '{}');
-      if (
-        typeof defaultConfig !== 'object' ||
-        defaultConfig === null ||
-        Array.isArray(defaultConfig)
-      ) {
-        throw new Error('Default Config must be a valid JSON object.');
-      }
-
-      permissions = JSON.parse(permissionsStr || '{}');
-      if (
-        typeof permissions !== 'object' ||
-        permissions === null ||
-        Array.isArray(permissions)
-      ) {
-        throw new Error('Permissions must be a valid JSON object.');
-      }
-      // Optional: Add more specific validation for the permissions structure here if needed
-    } catch (e: any) {
-      setJsonError(`Invalid JSON: ${e.message}`);
-      console.error('JSON parsing error during save:', e);
-      return; // Prevent saving with invalid JSON
-    }
+    if (!editableState) return; // Should not happen if loaded
 
     const now = Date.now();
+    const definitionToSave: Partial<MiniappDefinition> & { id?: string } = {
+      ...editableState,
+      // Ensure required fields have defaults if somehow null/undefined
+      configSchema: editableState.configSchema ?? {},
+      defaultConfig: editableState.defaultConfig ?? {},
+      permissions: editableState.permissions ?? { useStorage: true },
+      dependencies: editableState.dependencies ?? [],
+      updatedAt: now,
+    };
 
-    if (miniappId) {
-      // Update existing Miniapp definition
-      setDefinitions((prev) =>
-        prev.map((d) =>
-          d.id === miniappId
-            ? {
-                ...d, // Spread existing data first
-                name,
-                description,
-                htmlContent,
-                configSchema,
-                defaultConfig,
-                permissions,
-                updatedAt: now,
-              }
-            : d,
-        ),
-      );
-      console.log(`Updated Miniapp: ${miniappId}`);
+    if (isCreateMode) {
+      definitionToSave.id = uuidv4();
+      definitionToSave.createdAt = now;
+      definitionToSave.enabled = definitionToSave.enabled ?? false; // Ensure boolean
     } else {
-      // Create new Miniapp definition
-      const newDefinition: MiniappDefinition = {
-        id: uuidv4(),
-        name,
-        description,
-        htmlContent,
-        configSchema,
-        defaultConfig,
-        permissions,
-        enabled: false, // Default to disabled
-        createdAt: now,
-        updatedAt: now,
-        // dependencies: [], // Initialize if needed
-        // requiredApis: [], // Initialize if needed
-      };
-      setDefinitions((prev) => [...prev, newDefinition]);
-      console.log(`Created new Miniapp: ${newDefinition.id}`);
+      definitionToSave.id = miniappId as string; // We know it's not null here
+      // Preserve original createdAt if editing
+      const original = definitions.find((d) => d.id === miniappId);
+      definitionToSave.createdAt = original?.createdAt ?? now; // Fallback just in case
     }
-    onSaveSuccess(); // Signal success (e.g., close dialog)
+
+    // --- Validation ---
+    try {
+      // Validate against the Zod schema before saving
+      const validatedData = miniappDefinitionSchema.parse(definitionToSave);
+
+      // Update or Add the definition
+      if (isCreateMode) {
+        setDefinitions((prev) => [...prev, validatedData as MiniappDefinition]); // Add new
+        toast.success(`Miniapp "${validatedData.name}" created.`);
+      } else {
+        setDefinitions(
+          (prev) =>
+            prev.map((d) =>
+              d.id === miniappId ? (validatedData as MiniappDefinition) : d,
+            ), // Update existing
+        );
+        toast.success(`Miniapp "${validatedData.name}" updated.`);
+      }
+      onSaveSuccess(); // Close dialog/signal success
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        console.error('Validation Error:', error.errors);
+        // Show specific validation errors to the user
+        const errorMessages = error.errors
+          .map((err) => `${err.path.join('.')}: ${err.message}`)
+          .join('\n');
+        toast.error('Validation Failed', {
+          description: (
+            <pre className="bg-background mt-2 w-[340px] rounded-md p-4">
+              <code className="text-foreground">{errorMessages}</code>
+            </pre>
+          ),
+          duration: 10000,
+        });
+      } else {
+        console.error('Save Error:', error);
+        toast.error('Failed to save Miniapp.');
+      }
+    }
+    // --- End Validation ---
   };
 
+  if (isLoading || !editableState) {
+    // Optional: Add a spinner or loading indicator
+    return <div className="p-6 text-center">Loading Editor...</div>;
+  }
+
   return (
-    // Added max height and scroll for potentially long forms/editors
-    <div className="max-h-[85vh] space-y-4 overflow-y-auto p-1">
-      {/* Added padding to the scrollable container if needed, or keep on parent */}
-      <div className="space-y-4 p-4">
-        <div className="space-y-2">
-          <Label htmlFor="miniapp-name">
-            Name <span className="text-destructive">*</span>
-          </Label>
-          <Input
-            id="miniapp-name"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            required
-          />
-        </div>
-        <div className="space-y-2">
-          <Label htmlFor="miniapp-desc">Description</Label>
-          <Textarea
-            id="miniapp-desc"
-            value={description}
-            onChange={(e) => setDescription(e.target.value)}
-            rows={2}
-          />
-        </div>
-        <div className="space-y-2">
-          <Label>HTML Content</Label>
-          <div
-            className="overflow-hidden rounded-md border"
-            style={{ height: '350px' }}
-          >
-            {/* Adjusted height */}
-            <Editor
-              height="100%"
-              language="html"
-              theme="vs-dark" // Or 'light' based on your app theme
-              value={htmlContent}
-              onChange={(value) => setHtmlContent(value || '')}
-              options={{ minimap: { enabled: false }, wordWrap: 'on' }}
-            />
-          </div>
-        </div>
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-          <div className="space-y-2">
-            <Label htmlFor="miniapp-schema">Config Schema (JSON)</Label>
-            <Textarea
-              id="miniapp-schema"
-              value={configSchemaStr}
-              onChange={(e) => setConfigSchemaStr(e.target.value)}
-              rows={8}
-              className="font-mono text-sm" // Monospace and smaller font for code
-            />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="miniapp-defaults">Default Config (JSON)</Label>
-            <Textarea
-              id="miniapp-defaults"
-              value={defaultConfigStr}
-              onChange={(e) => setDefaultConfigStr(e.target.value)}
-              rows={8}
-              className="font-mono text-sm"
-            />
-          </div>
-        </div>
-        <div className="space-y-2">
-          <Label htmlFor="miniapp-permissions">Permissions (JSON)</Label>
-          <Textarea
-            id="miniapp-permissions"
-            value={permissionsStr}
-            onChange={(e) => setPermissionsStr(e.target.value)}
-            rows={6}
-            className="font-mono text-sm"
-          />
-          <p className="text-muted-foreground mt-1 text-xs">
-            Ex:
-            {`{"readConfig": ["id1", "id2"], "callMiniapp": true, "allowedTauriCommands": ["cmd1"]}`}
-          </p>
-        </div>
+    // Removed max-h and overflow, DialogContent should handle scrolling if needed
+    <div className="flex h-full flex-col">
+      <Tabs value={activeTab} onValueChange={setActiveTab}>
+        <TabsList>
+          <TabsTrigger value="general">General</TabsTrigger>
+          <TabsTrigger value="code">Code</TabsTrigger>
+          <TabsTrigger value="config">Configuration</TabsTrigger>
+          <TabsTrigger value="permissions">Permissions</TabsTrigger>
+          <TabsTrigger value="dependencies">Dependencies</TabsTrigger>
+        </TabsList>
 
-        {/* Display JSON parsing errors */}
-        {jsonError && (
-          <p className="text-destructive text-sm font-medium">{jsonError}</p>
-        )}
+        {/* Wrap content in a scrollable area if needed, DialogContent often handles this */}
+        <div className="">
+          <TabsContent value="general">
+            <GeneralInfoSection
+              name={editableState.name ?? ''}
+              icon={editableState.icon ?? ''}
+              description={editableState.description ?? ''}
+              enabled={editableState.enabled ?? false}
+              onStateChange={(k, v: any) => handleStateChange(k, v)}
+            />
+          </TabsContent>
+          <TabsContent value="code">
+            <CodeSection
+              htmlContent={editableState.htmlContent ?? ''}
+              onHtmlChange={(html) => handleStateChange('htmlContent', html)}
+            />
+          </TabsContent>
+          <TabsContent value="config">
+            <ConfigurationSection
+              configSchema={editableState.configSchema}
+              defaultConfig={editableState.defaultConfig}
+              onStateChange={handleStateChange}
+            />
+          </TabsContent>
+          <TabsContent value="permissions">
+            <PermissionsSection
+              permissions={editableState.permissions}
+              onPermissionsChange={(perms) =>
+                handleStateChange('permissions', perms)
+              }
+            />
+          </TabsContent>
+          <TabsContent value="dependencies">
+            <DependenciesSection
+              dependencies={editableState.dependencies ?? []}
+              currentMiniappId={miniappId} // Pass current ID to exclude self
+              onDependenciesChange={(deps) =>
+                handleStateChange('dependencies', deps)
+              }
+            />
+          </TabsContent>
+        </div>
+      </Tabs>
 
-        <Button onClick={handleSave} disabled={!name.trim()}>
+      {/* Footer with Actions */}
+      <div className="flex flex-shrink-0 justify-end space-x-2 border-t p-4">
+        <Button variant="outline" onClick={onCancel}>
+          Cancel
+        </Button>
+        <Button onClick={handleSave} disabled={!editableState?.name?.trim()}>
           {isCreateMode ? 'Create Miniapp' : 'Save Changes'}
         </Button>
       </div>

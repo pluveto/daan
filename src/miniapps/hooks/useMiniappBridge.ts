@@ -6,12 +6,17 @@ import {
   saveMiniappConfig,
   setMiniappDataItem,
 } from '@/miniapps/persistence';
-import { miniappsConfigAtom, miniappsDefinitionAtom } from '@/store/miniapp';
+import {
+  activeMiniappInstancesAtom,
+  miniappsConfigAtom,
+  miniappsDefinitionAtom,
+} from '@/store/miniapp';
 import { MiniappPermissions } from '@/types';
 import { invoke } from '@tauri-apps/api/core';
 import Ajv from 'ajv';
-import { useAtom } from 'jotai';
+import { useAtom, useAtomValue } from 'jotai';
 import { useCallback, useEffect, useRef } from 'react';
+import { useMiniappBridgeContext } from '../components/MiniappBridgeContext';
 
 // Type for pending requests from Miniapp to Host
 interface PendingRequest {
@@ -35,55 +40,52 @@ const ajv = new Ajv();
 
 export function useMiniappBridge(
   iframeRef: React.RefObject<HTMLIFrameElement | null>,
-  miniappId: string,
-  // Functions to interact with the central registry of active sendMessage functions
-  registerSendMessage: (
-    id: string,
-    sendMessage: (type: string, payload: any, requestId?: string) => void,
-  ) => void,
-  unregisterSendMessage: (id: string) => void,
-  getSendMessage: (
-    id: string,
-  ) => ((type: string, payload: any, requestId?: string) => void) | undefined,
+  instanceId: string, // Use the unique instance ID
+  definitionId: string, // Keep definition ID for config/schema lookup
 ) {
-  const [configs, setConfigs] = useAtom(miniappsConfigAtom);
-  const [definitions] = useAtom(miniappsDefinitionAtom); // Get definitions for permissions/schema/defaults
+  const {
+    registerSendMessage,
+    unregisterSendMessage,
+    getSendMessage,
+    // broadcastToMiniapps, // Not directly used by the bridge logic itself
+  } = useMiniappBridgeContext(); // Get functions from context
+
+  // Note: We don't use setConfigs here anymore, config saving happens via persistence
+  const configs = useAtomValue(miniappsConfigAtom);
+  const definitions = useAtomValue(miniappsDefinitionAtom);
 
   // Store promises waiting for responses from *this* Miniapp (for inter-app calls)
   const pendingInterAppRequests = useRef<Map<string, PendingInterAppRequest>>(
     new Map(),
   );
-  // Store promises waiting for responses from the *Host* API (initiated by this Miniapp)
-  // This map actually lives inside the Miniapp's hostApi script.
+
+  // Get the specific definition for this instance
+  const miniappDefinition = definitions.find((def) => def.id === definitionId);
+  const activeInstances = useAtomValue(activeMiniappInstancesAtom); // Need jotai get() if inside atom write, or useAtomValue otherwise
 
   // Function to send messages TO this specific iframe
   const sendMessageToMiniapp = useCallback(
     (type: string, payload: any, requestId?: string, error?: string) => {
       if (iframeRef.current?.contentWindow) {
-        // IMPORTANT: Replace '*' with the specific origin if possible, although tricky with srcdoc/blob URLs.
-        // For srcdoc, the origin is often the host's origin. For blobs, it's unique. '*' is common but less secure.
-        // Consider checking the origin in the iframe's message listener as well.
         iframeRef.current.contentWindow.postMessage(
           { type, payload, requestId, error },
-          '*',
+          '*', // Still '*' for srcDoc/blob, ensure origin check in listener
         );
       } else {
         console.warn(
-          `Cannot send message to Miniapp ${miniappId}, contentWindow not available.`,
+          `Cannot send message to Miniapp Instance ${instanceId}, contentWindow not available.`,
         );
       }
     },
-    [iframeRef, miniappId],
+    [iframeRef, instanceId], // Depend on instanceId for logging
   );
 
+  // Permission Checking Logic (remains largely the same, uses miniappDefinition)
   const checkApiCallPermission = useCallback(
-    (apiName: string, args: any, sourceMiniappId: string) => {
-      const sourceDefinition = definitions.find(
-        (def) => def.id === sourceMiniappId,
-      );
-      const permissions = sourceDefinition?.permissions;
+    (apiName: string, args: any) => {
+      // Removed sourceMiniappId, it's always 'this' miniapp
+      const permissions = miniappDefinition?.permissions;
 
-      // API calls that generally don't need specific permissions (can be called by any active miniapp)
       const noCheckNeeded = [
         'getOwnConfig',
         'setOwnConfig',
@@ -91,11 +93,8 @@ export function useMiniappBridge(
         'log',
         'reportError',
       ];
-      if (noCheckNeeded.includes(apiName)) {
-        return; // Permission granted implicitly
-      }
+      if (noCheckNeeded.includes(apiName)) return;
 
-      // API calls requiring storage permission
       const storageApis = [
         'storageSetItem',
         'storageGetItem',
@@ -111,26 +110,25 @@ export function useMiniappBridge(
         return;
       }
 
-      // API calls requiring specific target permissions
       switch (apiName) {
         case 'getConfig': {
-          const targetId = args?.miniappId;
+          const targetId = args?.miniappId; // target definition ID
           if (!targetId || typeof targetId !== 'string')
             throw new Error('Invalid arguments for getConfig');
           if (!checkPermission('readConfig', permissions, targetId)) {
             throw new Error(
-              `Permission denied: Cannot read config of Miniapp '${targetId}'.`,
+              `Permission denied: Cannot read config of Miniapp Definition '${targetId}'.`,
             );
           }
           return;
         }
         case 'callMiniapp': {
-          const targetId = args?.targetId;
+          const targetId = args?.targetId; // target definition ID
           if (!targetId || typeof targetId !== 'string')
             throw new Error('Invalid arguments for callMiniapp');
           if (!checkPermission('callMiniapp', permissions, targetId)) {
             throw new Error(
-              `Permission denied: Cannot call Miniapp '${targetId}'.`,
+              `Permission denied: Cannot call Miniapp Definition '${targetId}'.`,
             );
           }
           return;
@@ -144,102 +142,72 @@ export function useMiniappBridge(
               `Permission denied: Tauri command '${command}' is not allowed.`,
             );
           }
-          // Also check against the global hardcoded allow list for extra safety
           if (!ALLOWED_TAURI_COMMANDS_FOR_MINIAPPS.has(command)) {
             console.warn(
-              `Host Bridge (${sourceMiniappId}): Blocked disallowed Tauri command '${command}' (Global List Check)`,
+              `Host Bridge (${instanceId}): Blocked disallowed Tauri command '${command}' (Global List Check)`,
             );
             throw new Error(`Tauri command '${command}' is not allowed.`);
           }
           return;
         }
         default:
-          // If we reach here, it's an unknown API or one missed in the checks
           throw new Error(
-            `Permission check not implemented or failed for unknown API: ${apiName}`,
+            `Permission check not implemented or failed for API: ${apiName}`,
           );
       }
     },
-    [definitions],
-  ); // Depends on definitions
-  // API Request Processor Function (called when message received FROM iframe)
+    [miniappDefinition, instanceId], // Depend on definition and instanceId
+  );
 
+  // API Request Processor Function
   const processApiRequest = useCallback(
     async (
       apiName: string,
       args: any,
       requestId: string | undefined,
-      sourceMiniappId: string,
+      // sourceMiniappId: string, // No longer needed, it's always 'this' instance
     ): Promise<any> => {
       console.log(
-        `Host Bridge (<span class="math-inline">\{sourceMiniappId\}\)\: Processing API request '</span>{apiName}'`,
+        `Host Bridge (${instanceId}): Processing API request '${apiName}'`,
         args,
       );
-      const sourceDefinition = definitions.find(
-        (def) => def.id === sourceMiniappId,
-      );
-      checkApiCallPermission(apiName, args, sourceMiniappId);
+      // Use the definition associated with this hook instance
+      const sourceDefinition = miniappDefinition;
+
+      // Check permissions for *this* miniapp instance
+      checkApiCallPermission(apiName, args);
 
       switch (apiName) {
-        // --- NEW Storage APIs ---
+        // --- Storage APIs --- (Use definitionId for storage partitioning)
         case 'storageSetItem': {
           const key = args?.key;
-          const value = args?.value; // Value can be anything structured-clonable
-          if (typeof key !== 'string' || key.length === 0) {
-            throw new Error(
-              "Invalid 'key' argument for storageSetItem. Must be a non-empty string.",
-            );
-          }
-          // Value validation could be added here if needed (e.g., size limits)
-          await setMiniappDataItem(sourceMiniappId, key, value);
+          const value = args?.value;
+          if (typeof key !== 'string' || key.length === 0)
+            throw new Error("Invalid 'key'");
+          await setMiniappDataItem(definitionId, key, value); // Use definitionId
           return { success: true };
         }
         case 'storageGetItem': {
           const key = args?.key;
-          if (typeof key !== 'string' || key.length === 0) {
-            throw new Error(
-              "Invalid 'key' argument for storageGetItem. Must be a non-empty string.",
-            );
-          }
-          const value = await getMiniappDataItem(sourceMiniappId, key);
-          return value; // Returns the value or undefined
+          if (typeof key !== 'string' || key.length === 0)
+            throw new Error("Invalid 'key'");
+          return await getMiniappDataItem(definitionId, key); // Use definitionId
         }
         case 'storageRemoveItem': {
           const key = args?.key;
-          if (typeof key !== 'string' || key.length === 0) {
-            throw new Error(
-              "Invalid 'key' argument for storageRemoveItem. Must be a non-empty string.",
-            );
-          }
-          await removeMiniappDataItem(sourceMiniappId, key);
+          if (typeof key !== 'string' || key.length === 0)
+            throw new Error("Invalid 'key'");
+          await removeMiniappDataItem(definitionId, key); // Use definitionId
           return { success: true };
         }
         case 'storageGetAllKeys': {
-          const keys = await getAllMiniappDataKeys(sourceMiniappId);
-          return keys;
+          return await getAllMiniappDataKeys(definitionId); // Use definitionId
         }
-        // --- End Storage APIs ---
+        // --- Config APIs --- (Use definitionId for config lookup/saving)
         case 'getOwnConfig': {
-          const savedConfig = configs[sourceMiniappId] || {};
+          const savedConfig = configs[definitionId] || {};
           const defaults = sourceDefinition?.defaultConfig || {};
           return { ...defaults, ...savedConfig };
-        }
-        case 'getConfig': {
-          const targetId = args?.miniappId;
-          if (!targetId || typeof targetId !== 'string') {
-            throw new Error(
-              "Missing or invalid 'miniappId' argument for getConfig",
-            );
-          }
-          // SECURITY CHECK (Example): Only allow accessing dependencies' config? Or global read?
-          // const sourceDef = definitions.find(d => d.id === sourceMiniappId); // Need definitions atom access
-          // if (!sourceDef?.dependencies?.includes(targetId)) {
-          //   throw new Error(`Miniapp ${sourceMiniappId} cannot access config of ${targetId}`);
-          // }
-          console.log(
-            `Host Bridge (${sourceMiniappId}): Reading config for ${targetId}`,
-          );
-          return configs[targetId] || {}; // Return target config or default
         }
         case 'setOwnConfig': {
           const newConfig = args?.config;
@@ -256,214 +224,233 @@ export function useMiniappBridge(
               throw new Error(`Invalid config schema: ${schemaError.message}`);
             }
           }
-          setConfigs((prev) => ({ ...prev, [sourceMiniappId]: newConfig }));
-          saveMiniappConfig(sourceMiniappId, newConfig); // Fire and forget persistence
+          // Save config via persistence function (don't update atom directly)
+          await saveMiniappConfig(definitionId, newConfig); // Fire and forget persistence
+          // TODO: Consider if the configsAtom *should* be updated here for immediate reflection in other parts of the UI that might read it.
+          // setConfigs(prev => ({ ...prev, [definitionId]: newConfig })); // Optionally update atom
           return { success: true };
         }
         case 'getOwnSchema': {
           return sourceDefinition?.configSchema || {};
         }
-        case 'log': {
-          // Use console.log in the host for debugging Miniapp messages
+        // --- Other APIs ---
+        case 'getConfig': {
+          // Get config of *another* miniapp definition
+          const targetDefinitionId = args?.miniappId;
+          if (!targetDefinitionId || typeof targetDefinitionId !== 'string')
+            throw new Error("Missing 'miniappId'");
           console.log(
-            `[Miniapp: ${sourceMiniappId}]`,
+            `Host Bridge (${instanceId}): Reading config for definition ${targetDefinitionId}`,
+          );
+          const targetDefinition = definitions.find(
+            (d) => d.id === targetDefinitionId,
+          );
+          const savedConfig = configs[targetDefinitionId] || {};
+          const defaults = targetDefinition?.defaultConfig || {};
+          return { ...defaults, ...savedConfig }; // Return target config merged with defaults
+        }
+        case 'log': {
+          console.log(
+            `[Miniapp: ${instanceId}]`,
             ...(Array.isArray(args) ? args : [args]),
           );
-          return true; // Acknowledge
+          return true;
         }
         case 'callMiniapp': {
-          const { targetId, functionName, args: callArgs } = args;
+          const {
+            targetId: targetDefinitionId,
+            functionName,
+            args: callArgs,
+          } = args;
 
           if (
-            !targetId ||
-            typeof targetId !== 'string' ||
+            !targetDefinitionId ||
+            typeof targetDefinitionId !== 'string' ||
             !functionName ||
             typeof functionName !== 'string'
           ) {
-            throw new Error(
-              'Invalid arguments for callMiniapp. Requires targetId, functionName.',
-            );
+            throw new Error('Invalid args for callMiniapp.');
           }
 
-          // Find the sendMessage function for the target Miniapp
-          const targetSendMessage = getSendMessage(targetId);
-
-          if (!targetSendMessage) {
-            // Check if the target Miniapp is defined but just not active
-            // const allDefinitions = get(miniappsDefinitionAtom); // Need access if checking definitions
-            // if (allDefinitions.some(def => def.id === targetId)) {
-            //    throw new Error(`Target Miniapp '${targetId}' is defined but not currently active.`);
-            // } else {
-            throw new Error(
-              `Target Miniapp '${targetId}' not found or not active.`,
-            );
-            // }
-          }
-
-          // Generate a unique ID for this inter-app request
-          const interAppRequestId = `interApp_${sourceMiniappId.substring(0, 4)}-><span class="math-inline">\{targetId\.substring\(0,4\)\}\_</span>{Date.now()}`;
-          console.log(
-            `Host Bridge (<span class="math-inline">\{sourceMiniappId\}\)\: Relaying call '</span>{functionName}' to ${targetId} (ReqID: ${interAppRequestId})`,
+          // Find *any* running instance of the target definition
+          const targetInstance = activeInstances.find(
+            (inst) => inst.definitionId === targetDefinitionId,
           );
 
-          // Return a promise that will be resolved/rejected when the target responds
+          if (!targetInstance) {
+            // Check if definition exists but no instance is running
+            const targetDefExists = definitions.some(
+              (def) => def.id === targetDefinitionId,
+            );
+            if (targetDefExists) {
+              throw new Error(
+                `Target Miniapp Definition '${targetDefinitionId}' exists but has no active instance.`,
+              );
+            } else {
+              throw new Error(
+                `Target Miniapp Definition '${targetDefinitionId}' not found.`,
+              );
+            }
+          }
+
+          const targetSendMessage = getSendMessage(targetInstance.instanceId); // Use the INSTANCE ID to get the sender
+
+          if (!targetSendMessage) {
+            throw new Error(
+              `Could not find sendMessage function for active instance '${targetInstance.instanceId}' of definition '${targetDefinitionId}'. Bridge registry issue?`,
+            );
+          }
+
+          const interAppRequestId = `interApp_${instanceId.substring(17, 21)}->${targetInstance.instanceId.substring(17, 21)}_${Date.now()}`; // Use instance IDs
+          console.log(
+            `Host Bridge (${instanceId}): Relaying call '${functionName}' to Instance ${targetInstance.instanceId} (Def: ${targetDefinitionId}, ReqID: ${interAppRequestId})`,
+          );
+
           return new Promise((resolve, reject) => {
-            // Store the resolve/reject functions along with original request info
             pendingInterAppRequests.current.set(interAppRequestId, {
               resolve,
               reject,
-              sourceMiniappId: sourceMiniappId,
-              originalRequestId: requestId, // The ID from the initial callHost in the source miniapp
+              sourceMiniappId: instanceId, // Source is this instance
+              originalRequestId: requestId,
             });
 
-            // Send the 'executeFunction' request to the target Miniapp
             targetSendMessage(
               'executeFunction',
               { functionName, args: callArgs },
               interAppRequestId,
             );
 
-            // Set a timeout for the inter-app call
             setTimeout(() => {
               if (pendingInterAppRequests.current.has(interAppRequestId)) {
-                console.warn(
-                  `Host Bridge: Inter-app call ${interAppRequestId} timed out.`,
+                const reqInfo =
+                  pendingInterAppRequests.current.get(interAppRequestId);
+                reqInfo?.reject(
+                  new Error(
+                    `Call to Instance '${targetInstance.instanceId}' (Def: '${targetDefinitionId}') timed out.`,
+                  ),
                 );
-                pendingInterAppRequests.current
-                  .get(interAppRequestId)
-                  ?.reject(
-                    new Error(`Call to Miniapp '${targetId}' timed out.`),
-                  );
                 pendingInterAppRequests.current.delete(interAppRequestId);
               }
-            }, 15000); // 15 second timeout
+            }, 15000); // Timeout
           });
         }
         case 'invokeTauri': {
-          // 1. Check if running in Tauri environment
-          // Use optional chaining for safety, though __TAURI__ is usually defined globally or not at all
-          if (!window?.__TAURI__) {
-            throw new Error('Tauri API is not available in this environment.');
-          }
+          if (!window?.__TAURI__) throw new Error('Tauri API not available.');
+          const { command, args: commandArgs } = args || {};
+          if (!command || typeof command !== 'string')
+            throw new Error("Invalid 'command'");
 
-          const { command, args: commandArgs } = args || {}; // Extract command and its arguments
-
-          // 2. Validate command argument
-          if (!command || typeof command !== 'string') {
-            throw new Error(
-              "Invalid or missing 'command' argument for invokeTauri.",
-            );
-          }
-
-          // 3. SECURITY CHECK: Allow-list
-          if (!ALLOWED_TAURI_COMMANDS_FOR_MINIAPPS.has(command)) {
-            console.warn(
-              `Host Bridge (<span class="math-inline">\{sourceMiniappId\}\)\: Blocked disallowed Tauri command '</span>{command}'`,
-            );
-            throw new Error(
-              `Tauri command '${command}' is not allowed for Miniapps.`,
-            );
-          }
+          // Permission check already done by checkApiCallPermission
 
           console.log(
-            `Host Bridge (<span class="math-inline">\{sourceMiniappId\}\)\: Invoking Tauri command '</span>{command}' with args:`,
+            `Host Bridge (${instanceId}): Invoking Tauri command '${command}'`,
             commandArgs,
           );
           try {
-            // 4. Invoke the Tauri command
-            // Pass arguments object. If commandArgs is null/undefined, pass empty object or handle as needed by command.
             const result = await invoke(command, commandArgs || {});
             console.log(
-              `Host Bridge (<span class="math-inline">\{sourceMiniappId\}\)\: Tauri command '</span>{command}' result:`,
+              `Host Bridge (${instanceId}): Tauri command '${command}' result:`,
               result,
             );
-            // 5. Return the result
             return result;
           } catch (error: any) {
-            // 6. Handle errors during invocation
             console.error(
-              `Host Bridge (<span class="math-inline">\{sourceMiniappId\}\)\: Error invoking Tauri command '</span>{command}':`,
+              `Host Bridge (${instanceId}): Error invoking Tauri command '${command}':`,
               error,
             );
-            // Try to return a meaningful error message
-            let errorMessage = `Tauri command '${command}' failed.`;
-            if (error instanceof Error) {
-              errorMessage += ` Error: ${error.message}`;
-            } else if (typeof error === 'string') {
-              errorMessage += ` Error: ${error}`;
-            }
-            throw new Error(errorMessage);
+            throw new Error(
+              `Tauri command '${command}' failed: ${error.message || error}`,
+            );
           }
         }
-        // --- Error Reporting API ---
         case 'reportError': {
           const { message, stack } = args || {};
-          console.error(`[Miniapp Error: ${sourceMiniappId}]`, {
-            message: message || 'No message provided',
-            stack: stack || 'No stack trace provided',
+          console.error(`[Miniapp Error: ${instanceId}]`, {
+            message: message || 'N/A',
+            stack: stack || 'N/A',
           });
-          // Optional: Send to a logging service or display in a Host debug panel
-          return { success: true }; // Acknowledge receipt
+          return { success: true };
         }
-        // End invokeTauri case
         default: {
-          console.error(
-            `Host Bridge (${sourceMiniappId}): Unknown API method requested: ${apiName}`,
-          );
           throw new Error(`Unknown Host API method: ${apiName}`);
         }
       }
     },
-    [configs, setConfigs, definitions, getSendMessage, checkApiCallPermission],
+    [
+      configs,
+      definitions,
+      miniappDefinition,
+      instanceId,
+      definitionId, // Needed for storage/config keys
+      checkApiCallPermission, // Uses definition
+      getSendMessage, // From context
+      iframeRef, // For sendMessageToMiniapp
+      // getAtomValue // Required if used inside useCallback
+    ],
   );
+
+  // Effect to register/unregister the sendMessage function for *this* instance
+  useEffect(() => {
+    console.log(`useMiniappBridge: Registering sendMessage for ${instanceId}`);
+    registerSendMessage(instanceId, sendMessageToMiniapp);
+
+    return () => {
+      console.log(
+        `useMiniappBridge: Unregistering sendMessage for ${instanceId}`,
+      );
+      unregisterSendMessage(instanceId);
+      // Clean up pending inter-app requests initiated *by this instance*
+      pendingInterAppRequests.current.forEach((req, reqId) => {
+        if (req.sourceMiniappId === instanceId) {
+          req.reject(new Error(`Source Miniapp ${instanceId} unloaded.`));
+          pendingInterAppRequests.current.delete(reqId);
+        }
+      });
+    };
+  }, [
+    instanceId,
+    registerSendMessage,
+    unregisterSendMessage,
+    sendMessageToMiniapp,
+  ]);
 
   // Effect to listen for messages FROM this iframe
   useEffect(() => {
     const handleMessage = (event: MessageEvent) => {
-      // SECURITY: Basic check - is the message source our iframe's contentWindow?
-      if (event.source !== iframeRef.current?.contentWindow) {
-        // console.warn("Host Bridge: Ignoring message from unexpected source", event.source, iframeRef.current?.contentWindow);
-        return;
-      }
-      // SECURITY: Origin check - uncomment and adapt if using blob URLs or known origins
-      // if (event.origin !== 'expected-origin-for-iframes') {
-      //   console.warn(`Host Bridge (${miniappId}): Ignored message from unexpected origin: ${event.origin}`);
-      //   return;
-      // }
+      if (event.source !== iframeRef.current?.contentWindow) return;
+      // Optional: Origin check
+      // if (event.origin !== 'expected-origin') return;
 
       const { type, payload, requestId, error } = event.data;
 
-      // Message from Miniapp requesting a Host API call
       if (type === 'apiRequest' && payload?.apiName) {
-        processApiRequest(payload.apiName, payload.args, requestId, miniappId)
+        // Process API request FROM this miniapp
+        processApiRequest(payload.apiName, payload.args, requestId)
           .then((result) => {
-            // Send success response back to Miniapp
             sendMessageToMiniapp('apiResponse', result, requestId);
           })
           .catch((err) => {
-            // Send error response back to Miniapp
             console.error(
-              `Host Bridge (<span class="math-inline">\{miniappId\}\)\: Error processing API request '</span>{payload.apiName}':`,
+              `Host Bridge (${instanceId}): Error processing API request '${payload.apiName}':`,
               err,
             );
             sendMessageToMiniapp(
               'apiResponse',
               null,
               requestId,
-              err.message || 'An unknown error occurred',
+              err.message || 'Unknown error',
             );
           });
-      }
-      // Message from Miniapp responding to an 'executeFunction' call (inter-app comms)
-      else if (
+      } else if (
         type === 'functionResponse' &&
         requestId &&
         pendingInterAppRequests.current.has(requestId)
       ) {
+        // Process a response TO an inter-app call *initiated by another miniapp* targeting this one
         const promiseFuncs = pendingInterAppRequests.current.get(requestId);
         if (promiseFuncs) {
           console.log(
-            `Host Bridge: Received response for inter-app call ${requestId}`,
+            `Host Bridge (${instanceId}): Received response for inter-app call ${requestId}`,
             payload,
             error,
           );
@@ -472,35 +459,28 @@ export function useMiniappBridge(
           } else {
             promiseFuncs.resolve(payload);
           }
-          pendingInterAppRequests.current.delete(requestId); // Clean up
+          pendingInterAppRequests.current.delete(requestId);
         }
-      }
-      // Handle other message types if needed
-      else {
+      } else {
         console.warn(
-          `Host Bridge (${miniappId}): Received unknown message type or format:`,
+          `Host Bridge (${instanceId}): Received unknown message type or format:`,
           event.data,
         );
       }
     };
 
     window.addEventListener('message', handleMessage);
-    console.log(`Host Bridge (${miniappId}): Message listener added.`);
-
-    // Cleanup listener on unmount
+    console.log(`Host Bridge (${instanceId}): Message listener added.`);
     return () => {
       window.removeEventListener('message', handleMessage);
-      console.log(`Host Bridge (${miniappId}): Message listener removed.`);
-      // Clean up any pending requests for this disappearing miniapp
-      pendingInterAppRequests.current.forEach((req, reqId) => {
-        req.reject(new Error(`Miniapp ${miniappId} unloaded.`));
-        pendingInterAppRequests.current.delete(reqId);
-      });
+      console.log(`Host Bridge (${instanceId}): Message listener removed.`);
+      // No need to clean up pendingInterAppRequests here, done in registration cleanup
     };
-  }, [iframeRef, miniappId, processApiRequest, sendMessageToMiniapp]); // Dependencies
+  }, [iframeRef, instanceId, processApiRequest, sendMessageToMiniapp]);
 
-  // Return the function needed by the Runner component
-  return { sendMessageToMiniapp };
+  // Return the function to send messages *to* this miniapp (might not be needed externally)
+  // The primary purpose of this hook is now setting up the listener and registering the sender.
+  // return { sendMessageToMiniapp }; // Can be removed if not used by the caller component
 }
 
 // Helper function to check permissions

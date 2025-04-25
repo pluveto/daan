@@ -166,6 +166,7 @@ export type PartialCharacter = Partial<CustomCharacter>;
 
 export interface MiniappDefinition {
   id: string; // UUID recommended
+  icon?: string;
   name: string;
   description?: string;
   htmlContent: string;
@@ -186,10 +187,10 @@ export interface MiniappConfig {
 }
 
 export interface MiniappPermissions {
-  // Can it read config of other Miniapps? List allowed target IDs or true for all.
-  readConfig?: string[] | boolean;
-  // Can it call functions on other Miniapps? List allowed target IDs or true for all.
-  callMiniapp?: string[] | boolean;
+  // Can it read config of other Miniapps? List allowed target IDs or undefined for all, empty for none.
+  readConfig?: string[];
+  // Can it call functions on other Miniapps? List allowed target IDs or undefined for all, empty for none.
+  callMiniapp?: string[];
   // Which Tauri commands can it invoke?
   allowedTauriCommands?: string[];
   // Can it use the generic storage API? (Default true usually)
@@ -198,4 +199,39 @@ export interface MiniappPermissions {
 
 export interface MiniappDefinition {
   permissions?: MiniappPermissions;
+}
+
+// State for a floating MiniApp window
+export interface MiniappWindowState {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  zIndex: number;
+  minimized: boolean;
+  // Add focus state? Can be derived from zIndex potentially
+}
+
+// Represents a running instance of a MiniApp
+export interface MiniappInstance {
+  instanceId: string; // Unique ID for this running instance
+  definitionId: string; // ID of the MiniappDefinition being run
+  windowState: MiniappWindowState;
+  // Consider adding definition directly if needed frequently, or derive it
+  // definition: MiniappDefinition;
+}
+
+// Structure for the Miniapp Bridge Context
+export type SendMessageFunc = (
+  type: string,
+  payload: any,
+  requestId?: string,
+  error?: string,
+) => void;
+
+export interface MiniappBridgeRegistry {
+  registerSendMessage: (id: string, func: SendMessageFunc) => void;
+  unregisterSendMessage: (id: string) => void;
+  getSendMessage: (id: string) => SendMessageFunc | undefined;
+  broadcastToMiniapps: (eventType: string, payload: any) => void;
 }

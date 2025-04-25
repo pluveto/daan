@@ -2,7 +2,10 @@
 import { Button } from '@/components/ui/Button';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/Tabs'; // Keep TabsList for navigation UI
 import { MiniappRunner } from '@/miniapps/components/MiniappRunner'; // Adjust path
-import { activeMiniappIdsAtom, miniappsDefinitionAtom } from '@/store/miniapp';
+import {
+  activeMiniappInstancesAtom,
+  miniappsDefinitionAtom,
+} from '@/store/miniapp';
 import { useAtom } from 'jotai';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
@@ -15,7 +18,7 @@ type SendMessageFunc = (
 ) => void;
 
 export function MiniappRuntimePanel() {
-  const [activeIds] = useAtom(activeMiniappIdsAtom);
+  const [activeInstances] = useAtom(activeMiniappInstancesAtom);
   const [definitions] = useAtom(miniappsDefinitionAtom);
   const [selectedTab, setSelectedTab] = useState<string | undefined>(undefined);
 
