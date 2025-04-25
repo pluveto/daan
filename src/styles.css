@@ -194,5 +194,5 @@ pre {
 }
 
 .thought {
-  @apply border-l-2 border-neutral-300 pl-4 text-neutral-500 dark:border-neutral-700 dark:text-neutral-400;
+  @apply mb-2 border-l-2 border-neutral-300 pl-4 text-neutral-500 dark:border-neutral-700 dark:text-neutral-400;
 }

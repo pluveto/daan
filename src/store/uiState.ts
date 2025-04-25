@@ -28,6 +28,7 @@ export const isConversationSearchOpenAtom = atom(false);
 
 /** Controls the visibility of the System Settings dialog. */
 export const isSystemSettingsDialogOpenAtom = atom(false); // Already here
+export const systemSettingsDialogActiveTabAtom = atom('api'); // Already here
 
 /** Atom to trigger focus on the main chat input. Increment the value to trigger focus. */
 export const focusInputAtom = atom(0);
