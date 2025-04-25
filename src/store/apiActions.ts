@@ -5,7 +5,6 @@ import { toast } from 'sonner';
 import { v4 as uuidv4 } from 'uuid';
 import { abortControllerAtom, isAssistantLoadingAtom } from './apiState';
 import { updateChatAtom } from './chatActions';
-import { activeChatIdAtom } from './chatData';
 import { activeChatAtom, getEffectiveChatParams } from './chatDerived';
 import { handleMcpToolCallAtom } from './mcp';
 import {
@@ -49,22 +48,22 @@ export const cancelGenerationAtom = atom(null, (get, set) => {
 
 /**
  * Core logic for calling the OpenAI Chat Completions API with streaming.
- * Handles state updates, cancellation, and MCP tool call detection.
+ * Handles state updates, cancellation, and MCP tool call detection using
+ * a ```json:mcp-tool-call code block at the end of the response.
  */
 export async function callOpenAIStreamLogic(
   get: Getter,
   set: Setter,
   messagesToSend: OpenAI.ChatCompletionMessageParam[],
 ) {
-  // --- Get Active Chat and its Effective Parameters ---
-  const activeChat = get(activeChatAtom); // Get the whole chat object
+  // --- Get Active Chat and its Effective Parameters (Same as before) ---
+  const activeChat = get(activeChatAtom);
   if (!activeChat) {
     console.error('Cannot call API: No active chat.');
     toast.error('Cannot process request: No active chat selected.');
     return;
   }
-  const modelId = activeChat.model; // Get model from the active chat
-  // Get effective parameters using the helper, considering chat overrides
+  const modelId = activeChat.model;
   const { temperature, maxTokens, topP } = getEffectiveChatParams(
     activeChat,
     get,
@@ -73,22 +72,13 @@ export async function callOpenAIStreamLogic(
     `[API Call] Effective Params for ${modelId}: Temp=${temperature}, MaxTokens=${maxTokens}, TopP=${topP}`,
   );
 
-  // --- Setup: Get settings, check API key, set loading state ---
+  // --- Setup: Get settings, check API key, set loading state (Same as before) ---
   const providers = get(apiProvidersAtom);
   const globalApiKey = get(apiKeyAtom);
   const globalApiBaseUrl = get(apiBaseUrlAtom);
+  const activeChatId = activeChat.id; // Use ID directly from activeChat
 
-  const activeChatId = get(activeChatIdAtom); // Get active chat ID for tool call handler
-
-  if (!activeChatId) {
-    console.error('Cannot call API: No active chat ID.');
-    toast.error('Cannot process request: No active chat selected.');
-    return; // Exit early if no active chat
-  }
-
-  // Determine provider config (same as before)
-  const providerId = modelId.split('::')[0];
-  const modelName = modelId.split('::')[1]; // Get the base model name for the API call
+  const [providerId, modelName] = modelId.split('::');
   const providerConfig = providers.find((p) => p.id === providerId);
 
   if (!providerConfig?.enabled) {
@@ -97,7 +87,6 @@ export async function callOpenAIStreamLogic(
     );
     return;
   }
-
   const apiKey = providerConfig.apiKey || globalApiKey;
   const apiBaseUrl = providerConfig.apiBaseUrl || globalApiBaseUrl;
 
@@ -113,7 +102,7 @@ export async function callOpenAIStreamLogic(
   const controller = new AbortController();
   set(abortControllerAtom, { controller, messageId: assistantMessageId });
 
-  // Add placeholder message (same as before)
+  // --- Add placeholder message (Same as before) ---
   const placeholderMessage: Message = {
     id: assistantMessageId,
     role: 'assistant',
@@ -123,30 +112,28 @@ export async function callOpenAIStreamLogic(
   };
   set(upsertMessageInActiveChatAtom, placeholderMessage);
 
-  // --- Tool Call Detection Logic ---
-  let accumulatedContent = ''; // Buffer to detect tag across chunks
-  let toolCallDetected = false;
-  const toolCallRegex =
-    /<mcp-tool-call\s+server="([^"]+)"\s+tool="([^"]+)"\s+arguments='([^']+)'>/; // Simple regex, might need refinement for escaped quotes in args
+  // --- Accumulate full response & Detect Tool Call at the END ---
+  let fullAssistantResponse = '';
+  let finalFinishReason: string | null | undefined = null;
+  let toolCallProcessed = false;
 
   try {
     const openai = new OpenAI({
       apiKey,
       baseURL: apiBaseUrl || undefined,
-      dangerouslyAllowBrowser: true,
+      dangerouslyAllowBrowser: true, // Ensure this is acceptable for your security context
     });
 
-    console.log(
-      `Sending ${messagesToSend.length} messages to model ${modelId}...`,
-    );
     const stream = await openai.chat.completions.create(
       {
         messages: messagesToSend,
-        model: modelName, // Use the base model name
+        model: modelName,
         temperature: temperature ?? undefined,
         max_tokens: maxTokens ?? undefined,
         top_p: topP ?? undefined,
         stream: true,
+        // Potentially add 'tool_choice: "none"' if you ONLY want MCP calls
+        // and want to discourage native tool use, though prompt is usually sufficient.
       },
       { signal: controller.signal },
     );
@@ -154,114 +141,231 @@ export async function callOpenAIStreamLogic(
     for await (const chunk of stream) {
       const contentChunk = chunk.choices[0]?.delta?.content || '';
       if (contentChunk) {
-        accumulatedContent += contentChunk;
-
-        // Check for the tool call tag in the accumulated content
-        const match = accumulatedContent.match(toolCallRegex);
-        if (match) {
-          const stripEnd = (s: string, find: string) => {
-            if (s.endsWith(find)) {
-              return s.slice(0, -find.length);
-            }
-          };
-          const remainOutput = stripEnd(
-            accumulatedContent.replace(toolCallRegex, ''),
-            '</',
-          );
-
-          toolCallDetected = true;
-          const [, serverId, toolName, argsString] = match;
-          const rawTag = match[0];
-          console.log(
-            `[MCP Tool Call Detected] Server: ${serverId}, Tool: ${toolName}`,
-          );
-          toast.info(`Assistant wants to use tool: ${toolName}`);
-
-          // Trigger handler (pass activeChat.id)
-          set(handleMcpToolCallAtom, {
-            chatId: activeChat.id,
-            serverId,
-            toolName,
-            argsString,
-            rawTag,
-          });
-
-          // Update placeholder and finalize
-          set(updateMessageContentAtom, {
-            messageId: assistantMessageId,
-            newContent:
-              remainOutput + `\n\nAttempting to use tool: ${toolName}...`,
-          });
-          set(finalizeStreamingMessageAtom, assistantMessageId);
-          break; // Exit loop
-        }
-
-        // If no tool call detected yet, append content normally
+        fullAssistantResponse += contentChunk;
+        // Append content smoothly to the UI
         set(appendContentToMessageAtom, {
           contentChunk,
           messageId: assistantMessageId,
         });
       }
 
-      // Handle finish reasons (same as before)
-      const finishReason = chunk.choices[0]?.finish_reason;
-      if (finishReason && finishReason !== 'stop') {
-        console.warn(
-          `Stream finished with reason: ${finishReason} for message ${assistantMessageId}`,
+      // Store the finish reason when it arrives
+      if (chunk.choices[0]?.finish_reason) {
+        finalFinishReason = chunk.choices[0].finish_reason;
+        console.log(
+          `Stream finish reason received: ${finalFinishReason} for ${assistantMessageId}`,
         );
-        if (finishReason === 'length') {
-          toast.warning('Response may be truncated due to maximum length.', {
-            duration: 5000,
-          });
-        } else if (finishReason === 'content_filter') {
-          toast.error('Response stopped due to content filter.', {
-            duration: 5000,
-          });
-        } else if (finishReason === 'tool_calls') {
-          // This happens if the model itself uses OpenAI's native tool calling format
-          console.warn(
-            'Model used native tool_calls finish reason. Ensure MCP format is preferred.',
-          );
-          toast.warning('AI tried using a different tool format.');
-          // We might need to handle `chunk.choices[0]?.delta?.tool_calls` here if we want to support native calls too.
-        }
+      }
+
+      // Handle potential native tool calls if necessary (though we discourage them via prompt)
+      if (chunk.choices[0]?.delta?.tool_calls) {
+        console.warn(
+          `Native tool call delta detected for ${assistantMessageId}. Ignoring due to MCP preference.`,
+        );
+        // Potentially add logic here if you want fallback support for native calls
       }
     } // End stream loop
 
-    // Finalize normally ONLY if no tool call was detected
-    if (!toolCallDetected) {
+    // --- Post-Stream Processing: Check for MCP Tool Call Code Block ---
+    console.log(
+      `Stream finished for ${assistantMessageId}. Final Reason: ${finalFinishReason}. Full length: ${fullAssistantResponse.length}`,
+    );
+
+    // Regex to find the ```
+    // - (\n*)?: Optional leading newlines before the block.
+    // - ```json:mcp-tool-call\s*: Matches the opening fence with language specifier.
+    // - (\{[\s\S]*?\}): Captures the JSON object (non-greedy). Handles multi-line JSON.
+    // - \s*```
+    // - \s*$: Ensures this pattern is at the very end of the string (allowing trailing whitespace).
+    const mcpCodeBlockRegex =
+      /(\n*)?```json:mcp-tool-call\s*(\{[\s\S]*?\})\s*```s*$/;
+    const match = fullAssistantResponse.match(mcpCodeBlockRegex);
+
+    if (match) {
+      // const leadingNewlines = match[1] ?? ''; // Optional leading newlines before block
+      const jsonString = match[2]; // Captured JSON object as string
+      console.debug('matched json: \n', jsonString);
+      // const blockLength = match.length; // Full length of the matched block pattern
+
+      // Extract the conversational content BEFORE the block
+      // const conversationalContent = fullAssistantResponse.substring(
+      //   0,
+      //   fullAssistantResponse.length - blockLength
+      // ).trim(); // Trim trailing whitespace from conversational part
+
+      try {
+        const parsedArgs = JSON.parse(jsonString);
+
+        // Validate the structure (basic check)
+        if (
+          typeof parsedArgs === 'object' &&
+          parsedArgs !== null &&
+          typeof parsedArgs.serverId === 'string' &&
+          typeof parsedArgs.toolName === 'string' &&
+          // Allow 'arguments' to be missing or any type (validation happens later)
+          parsedArgs.hasOwnProperty('arguments')
+        ) {
+          console.log(
+            `[MCP Tool Call Detected] Server: ${parsedArgs.serverId}, Tool: ${parsedArgs.toolName}`,
+          );
+          toast.info(`Assistant wants to use tool: ${parsedArgs.toolName}`);
+
+          const callId = uuidv4();
+          // Update the message to *only* contain the conversational part
+          set(updateMessageContentAtom, {
+            messageId: assistantMessageId,
+            // newContent: conversationalContent, // Show only text before the block
+            newContent:
+              fullAssistantResponse + `\n<hidden>call-id: ${callId}</hidden>`, // Now show full because AI may misunderstand whether he has called a tool or not
+          });
+
+          // Trigger the handler with the parsed arguments object
+          set(handleMcpToolCallAtom, {
+            callId,
+            chatId: activeChatId,
+            serverId: parsedArgs.serverId,
+            toolName: parsedArgs.toolName,
+            // Pass the actual parsed arguments object, not a string
+            // The handler will validate against the schema
+            args: parsedArgs.arguments,
+            rawBlock: match[0], // Pass the raw block for potential logging/debugging
+          });
+
+          toolCallProcessed = true; // Mark as processed
+        } else {
+          // JSON structure is invalid
+          throw new Error(
+            'Invalid MCP tool call JSON structure. Missing required fields (serverId, toolName, arguments).',
+          );
+        }
+      } catch (parseError: any) {
+        console.error(
+          `[MCP Tool Call] Failed to parse JSON arguments for ${assistantMessageId}:`,
+          parseError,
+        );
+        toast.error(
+          `Tool call failed: AI returned invalid JSON format. (${parseError.message})`,
+        );
+        // Keep the full response (including the bad block) for debugging
+        set(updateMessageContentAtom, {
+          messageId: assistantMessageId,
+          newContent:
+            fullAssistantResponse +
+            `\n\n--- Error From LLM Client: Tool call format invalid ---\n\n` +
+            `MCP Error: Failed to parse arguments for tool call. Please provide a valid JSON string.`,
+        });
+        // Don't set toolCallProcessed = true
+      }
+    }
+
+    // --- Finalize Message State ---
+    // Finalize ONLY if a tool call wasn't successfully processed.
+    // If it was processed, the handler is now responsible for the flow.
+    // The message content is already updated to exclude the block.
+    if (!toolCallProcessed) {
       console.log(
-        `Stream finished normally for message ${assistantMessageId}.`,
+        `Finalizing message ${assistantMessageId} normally (no valid tool call detected/processed).`,
       );
       set(finalizeStreamingMessageAtom, assistantMessageId);
+    } else {
+      console.log(
+        `Skipping normal finalization for ${assistantMessageId} as MCP tool call was processed.`,
+      );
+      // Ensure loading state is reset EVEN IF tool call is processed,
+      // unless the tool call handler itself manages subsequent loading states.
+      // It's often better for the handler to manage this if it involves further async work.
+      // For now, let's assume the handler DOES NOT manage it, so we reset here.
+      // If the handler DOES manage it, remove this line.
+      set(isAssistantLoadingAtom, false);
+      set(abortControllerAtom, null); // Clear abort controller as this sequence is done.
+    }
+
+    // Handle finish reasons warnings (after potential tool call processing)
+    // We check this regardless of tool call, as truncation/filtering could still occur.
+    if (
+      finalFinishReason &&
+      finalFinishReason !== 'stop' &&
+      finalFinishReason !== 'tool_calls'
+    ) {
+      console.warn(
+        `Stream finished with non-standard reason: ${finalFinishReason} for message ${assistantMessageId}`,
+      );
+      if (finalFinishReason === 'length') {
+        toast.warning('Response may be truncated due to maximum length.', {
+          duration: 5000,
+        });
+        // Append warning to message *if* no tool call processed (otherwise it might look weird)
+        if (!toolCallProcessed) {
+          set(appendContentToMessageAtom, {
+            messageId: assistantMessageId,
+            contentChunk:
+              '\n\n[Warning: Response truncated due to length limit]',
+          });
+        }
+      } else if (finalFinishReason === 'content_filter') {
+        toast.error('Response stopped due to content filter.', {
+          duration: 5000,
+        });
+        if (!toolCallProcessed) {
+          set(appendContentToMessageAtom, {
+            messageId: assistantMessageId,
+            contentChunk: '\n\n[Error: Response stopped by content filter]',
+          });
+        }
+      }
+      // If finish_reason is 'tool_calls', it means the *native* OpenAI tool call mechanism was triggered.
+      // Our prompt discourages this, but if it happens, we log it.
+    } else if (finalFinishReason === 'tool_calls') {
+      console.warn(
+        `Model used native 'tool_calls' finish reason for ${assistantMessageId}, despite MCP instructions. Ignoring native call.`,
+      );
+      toast.warning(
+        'AI tried using a different tool format. MCP format preferred.',
+      );
     }
   } catch (error: any) {
     const isAbortError = error?.name === 'AbortError';
     console.error(`OpenAI API Error/Abort (${assistantMessageId}):`, error);
 
-    // Only show error toast/update message if it wasn't a deliberate tool call interruption or user cancel
-    if (!isAbortError && !toolCallDetected) {
+    // Only show error toast/update message if it wasn't a deliberate user cancel.
+    // Tool call processing happens *after* the stream, so errors during stream
+    // should generally be shown unless it's a user abort.
+    if (!isAbortError) {
       toast.error(`Error: ${error?.message ?? 'Failed to get response.'}`);
-      const errorMessageContent = `Error: ${error?.message ?? 'Failed to get response'}`;
-      // Use updateMessageContentAtom instead of upsert to avoid creating duplicates if placeholder exists
+      // Update the placeholder with the error message
       set(updateMessageContentAtom, {
         messageId: assistantMessageId,
-        newContent: errorMessageContent,
+        newContent: `Error: ${error?.message ?? 'Failed to get response'}`,
+        // Keep isStreaming false or let finalize handle it
       });
-    } else if (isAbortError) {
+    } else {
       console.log(
-        `Generation cancelled/aborted for message ${assistantMessageId}.`,
+        `Generation cancelled/aborted by user for message ${assistantMessageId}.`,
       );
-      // No error toast for user cancel or tool call handover
+      // Update message content to indicate cancellation
+      set(updateMessageContentAtom, {
+        messageId: assistantMessageId,
+        newContent: fullAssistantResponse + `\n\n[Generation cancelled]`,
+      });
     }
 
-    // Always finalize the stream state for the specific message ID,
-    // unless a tool call was detected (which finalized it already).
-    if (!toolCallDetected) {
-      set(finalizeStreamingMessageAtom, assistantMessageId);
-    }
+    // Always finalize the message state on error or abort, regardless of tool call attempts.
+    // This ensures isStreaming is set to false and loading indicators are reset.
+    console.log(
+      `Finalizing message ${assistantMessageId} due to error or abort.`,
+    );
+    set(finalizeStreamingMessageAtom, assistantMessageId);
+  } finally {
+    // Ensure loading state and abort controller are reset if not handled elsewhere
+    // (e.g., if finalizeStreamingMessageAtom doesn't handle these)
+    // Note: We reset loading/abort in the successful tool call case explicitly now.
+    // Finalize handles resetting these in normal success/error cases.
+    // Check if finalizeStreamingMessageAtom already resets these; if so, this might be redundant.
+    // set(isAssistantLoadingAtom, false); // Often handled by finalize
+    // set(abortControllerAtom, null);     // Often handled by finalize
   }
 }
+
 /** Generates a concise chat title based on the first user message using AI. */
 export async function generateChatTitle(
   set: Setter,

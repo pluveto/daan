@@ -3,7 +3,7 @@ import { cn } from '@/lib/utils';
 import {
   activeChatAtom,
   editingMessageIdAtom,
-  regenerateLastResponseAtom,
+  regenerateMessageAtom,
   showEstimatedTokensAtom,
   showTimestampsAtom,
   updateMessageContentAtom,
@@ -25,7 +25,7 @@ export const ChatHistory: React.FC<ChatHistoryProps> = ({ className }) => {
   const updateMessageContent = useSetAtom(updateMessageContentAtom);
   const showTimestamps = useAtomValue(showTimestampsAtom);
   const showEstimatedTokens = useAtomValue(showEstimatedTokensAtom);
-  const regenerateLastResponse = useSetAtom(regenerateLastResponseAtom); // Stable setter
+  const regenerateResponse = useSetAtom(regenerateMessageAtom); // Stable setter
 
   const scrollRef = useRef<HTMLDivElement>(null);
   const isNearBottomRef = useRef(true);
@@ -168,16 +168,11 @@ export const ChatHistory: React.FC<ChatHistoryProps> = ({ className }) => {
             key={message.id} // Essential for React list updates
             message={message}
             isEditing={message.id === editingId} // Determine if this item is the one being edited
-            // editContent={...} // REMOVED
-            // onEditContentChange={...} // REMOVED
             onSave={handleSaveEdit} // Pass the MODIFIED save handler
             onCancelEdit={handleCancelEdit} // Pass stable cancel handler
-            // onEditKeyDown={...} // REMOVED
             showTimestamps={showTimestamps}
             showEstimatedTokens={showEstimatedTokens}
-            onRegenerate={regenerateLastResponse} // Pass stable setter
-            // Pass setEditingId here ONLY if the edit button is inside ChatMessageItem
-            // setEditingId={setEditingId}
+            onRegenerate={() => regenerateResponse(message.id)} // Pass stable setter
           />
         );
       })}

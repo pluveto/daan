@@ -6,9 +6,11 @@ import {
   cancelGenerationAtom,
   focusInputAtom,
   isAssistantLoadingAtom,
+  isSystemSettingsDialogOpenAtom,
   regenerateLastResponseAtom,
   sendMessageActionAtom,
   showEstimatedTokensAtom,
+  systemSettingsDialogActiveTabAtom,
 } from '@/store/index';
 import {
   isMcpToolsPopoverOpenAtom,
@@ -176,6 +178,14 @@ export const MessageInput: React.FC = () => {
     [showEstimatedTokens, input],
   );
 
+  const setIsOpen = useSetAtom(isSystemSettingsDialogOpenAtom);
+  const setActiveTab = useSetAtom(systemSettingsDialogActiveTabAtom); // Default tab
+
+  const handleOpenMcpSettings = useCallback(() => {
+    setIsOpen(true);
+    setActiveTab('mcp');
+  }, [setIsOpen, setActiveTab]);
+
   return (
     <div
       className={cn(
@@ -221,6 +231,18 @@ export const MessageInput: React.FC = () => {
           <LuRefreshCw className="h-4 w-4" />
         </Button>
         {/* MCP Tools Popover Trigger */}
+        {!hasConnectedMcpServers && (
+          <Button
+            aria-label="Open MCP Settings"
+            size="xs"
+            variant="ghost"
+            title="Open MCP Settings"
+            className="flex-shrink-0"
+            onClick={handleOpenMcpSettings}
+          >
+            <LuPlug className="h-4 w-4" />
+          </Button>
+        )}
         {hasConnectedMcpServers && ( // Only show if servers are connected
           <Popover open={isMcpPopoverOpen} onOpenChange={setIsMcpPopoverOpen}>
             <PopoverTrigger asChild>

@@ -41,7 +41,7 @@ export const CodeBlock: React.FC<CodeBlockProps> = ({
   // For inline code, render differently
   if (inline || !className) {
     return (
-      <code className="rounded bg-neutral-100 px-1 py-0.5 font-mono text-sm dark:bg-neutral-700">
+      <code className="rounded bg-neutral-100 px-1 py-0.5 font-mono text-sm text-neutral-700 dark:bg-neutral-700 dark:text-neutral-300">
         {children}
       </code>
     );

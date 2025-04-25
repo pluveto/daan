@@ -69,8 +69,15 @@ export function getHistoryForApi(
 
   // Add the filtered history messages
   history.forEach((msg) => {
+    if (msg.toolCallInfo) {
+      console.log('Skipping tool message:', msg);
+      return; // Skip tool messages
+    }
+    const removeHidden = (content: string) =>
+      content.replace(/<hidden>.*?<\/hidden>/gs, '');
+    [1];
     messagesToSend.push({
-      content: msg.content,
+      content: removeHidden(msg.content),
       role: msg.role,
     });
   });
@@ -80,6 +87,7 @@ export function getHistoryForApi(
     console.log('[getHistoryForApi] Final System Prompt:\n', finalSystemPrompt);
   }
 
+  console.log('[getHistoryForApi] Final Message History:\n', messagesToSend);
   return messagesToSend;
 }
 
