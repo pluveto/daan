@@ -11,15 +11,9 @@ export const MiniappWindowManager: React.FC = () => {
   return (
     // Wrap the manager with the bridge provider
     <MiniappBridgeProvider>
-      <div
-        className="miniapp-window-manager fixed inset-0"
-        // Manager itself doesn't capture events, only the windows do
-        style={{ zIndex: 50 }} // Base z-index, windows will be higher
-      >
-        {activeInstances.map((instance) => (
-          <MiniappWindow key={instance.instanceId} instance={instance} />
-        ))}
-      </div>
+      {activeInstances.map((instance) => (
+        <MiniappWindow key={instance.instanceId} instance={instance} />
+      ))}
     </MiniappBridgeProvider>
   );
 };
