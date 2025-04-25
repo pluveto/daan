@@ -188,7 +188,6 @@ export function MiniappEditor({
             className="overflow-hidden rounded-md border"
             style={{ height: '350px' }}
           >
-            {' '}
             {/* Adjusted height */}
             <Editor
               height="100%"
@@ -232,7 +231,7 @@ export function MiniappEditor({
             className="font-mono text-sm"
           />
           <p className="text-muted-foreground mt-1 text-xs">
-            Ex:{' '}
+            Ex:
             {`{"readConfig": ["id1", "id2"], "callMiniapp": true, "allowedTauriCommands": ["cmd1"]}`}
           </p>
         </div>

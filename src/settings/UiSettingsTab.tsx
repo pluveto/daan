@@ -27,53 +27,53 @@ export const UiSettingsTab: React.FC = () => {
 
   return (
     <div className="space-y-4 p-4">
-            <h3 className="text-lg font-semibold">UI Settings</h3>     {' '}
+            <h3 className="text-lg font-semibold">UI Settings</h3>     
       <div className="space-y-3">
-                {/* Night Mode Toggle */}       {' '}
+                {/* Night Mode Toggle */}       
         <div className="flex items-center justify-between">
-                   {' '}
+                   
           <Label className="cursor-pointer" htmlFor="nightMode">
-                        Night Mode          {' '}
+                        Night Mode          
           </Label>
-                   {' '}
+                   
           <Switch
             checked={nightMode}
             id="nightMode"
             onCheckedChange={setNightMode}
           />
-                 {' '}
+                 
         </div>
-                {/* Show Timestamps Toggle */}       {' '}
+                {/* Show Timestamps Toggle */}       
         <div className="flex items-center justify-between">
-                   {' '}
+                   
           <Label className="cursor-pointer" htmlFor="showTimestamps">
-                        Show Timestamps          {' '}
+                        Show Timestamps          
           </Label>
-                   {' '}
+                   
           <Switch
             checked={showTimestamps}
             id="showTimestamps"
             onCheckedChange={setShowTimestamps}
           />
-                 {' '}
+                 
         </div>
-                {/* Show Estimated Tokens Toggle */}       {' '}
+                {/* Show Estimated Tokens Toggle */}       
         <div className="flex items-center justify-between">
-                   {' '}
+                   
           <Label className="cursor-pointer" htmlFor="showEstimatedTokens">
-                        Show Estimated Tokens          {' '}
+                        Show Estimated Tokens          
           </Label>
-                   {' '}
+                   
           <Switch
             checked={showEstimatedTokens}
             id="showEstimatedTokens"
             onCheckedChange={setShowEstimatedTokens}
           />
-                 {' '}
+                 
         </div>
-             {' '}
+             
       </div>
-         {' '}
+         
     </div>
   );
 };

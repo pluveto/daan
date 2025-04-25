@@ -49,7 +49,6 @@ export const McpToolsPopover: React.FC = () => {
         </p>
       ) : (
         <ScrollArea className="h-[200px] pr-3">
-          {' '}
           {/* Limit height and add scroll */}
           <div className="space-y-3">
             {availableServers.map((server) => (

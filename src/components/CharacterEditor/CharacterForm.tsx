@@ -178,7 +178,7 @@ export const CharacterForm: React.FC<CharacterFormProps> = ({
             render={({ field }) => (
               <FormItem>
                 <FormLabel>
-                  Description{' '}
+                  Description
                   <span className="text-muted-foreground text-xs">
                     (Optional)
                   </span>
@@ -257,7 +257,7 @@ export const CharacterForm: React.FC<CharacterFormProps> = ({
                           className="text-destructive" // Optional: Style unavailable item
                         >
                           {currentModelValue.split('::')[1] ||
-                            currentModelValue}{' '}
+                            currentModelValue}
                           {/* Show base name */}
                         </SelectItem>
                       </SelectGroup>
@@ -298,7 +298,7 @@ export const CharacterForm: React.FC<CharacterFormProps> = ({
               </FormItem>
             )}
           />
-        </div>{' '}
+        </div>
         {/* End Scrollable Area */}
         {/* Footer Buttons - sticky at bottom */}
         <div className="mt-auto flex flex-shrink-0 justify-end space-x-2 border-t pt-4">

@@ -228,7 +228,6 @@ export const ConversationActionsMenu: React.FC = () => {
         <DropdownMenuContent align="end" className="w-56">
           {/* Actions related to creating/modifying */}
           <DropdownMenuItem onClick={() => createNewChat()}>
-            {' '}
             {/* Direct call */}
             <LuCirclePlus className="mr-2 h-4 w-4" />
             <span>New Conversation</span>

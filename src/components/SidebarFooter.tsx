@@ -20,7 +20,7 @@ export const SidebarFooter: React.FC<SidebarFooterProps> = ({
       >
         <LuGithub className="h-4 w-4" />
         <div>
-          Daan {version}{' '}
+          Daan {version}
           {commitInfo !== 'N/A' ? `(${commitInfo.slice(0, 7)})` : ''}
         </div>
       </a>

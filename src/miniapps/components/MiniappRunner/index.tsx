@@ -160,7 +160,6 @@ export function MiniappRunner({
     // Wrap component content in Error Boundary
     <MiniappErrorBoundary miniappName={name || 'Untitled'}>
       <div className="miniapp-instance bg-background flex h-full flex-col overflow-hidden">
-        {' '}
         {/* Ensure background color */}
         {/* Optional Title Bar */}
         {/* <div className="p-1 bg-muted text-muted-foreground text-xs border-b flex-shrink-0">{name} (ID: {id.substring(0, 6)})</div> */}

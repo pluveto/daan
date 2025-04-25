@@ -141,7 +141,6 @@ export function MiniappList() {
         onOpenChange={(open) => !open && handleEditorClose()}
       >
         <DialogContent className="sm:max-w-[80vw] lg:max-w-[70vw] xl:max-w-[60vw]">
-          {' '}
           {/* Responsive Width */}
           <DialogHeader>
             <DialogTitle>

@@ -301,7 +301,7 @@ const _ChatMessageItem: React.FC<ChatMessageItemProps> = ({
           <p>
             Assistant wants to use tool:
             <br />
-            <strong>{toolCallInfo.toolName}</strong> on{' '}
+            <strong>{toolCallInfo.toolName}</strong> on
             <strong>{toolCallInfo.serverName}</strong>
           </p>
           <p>Arguments:</p>
@@ -467,7 +467,6 @@ const _ChatMessageItem: React.FC<ChatMessageItemProps> = ({
 
       {/* Message Content / Editor */}
       <div className={cn('mx-4 mb-2 flex-1', !isEditing && 'ml-8')}>
-        {' '}
         {/* Indent only if not editing */}
         {!isEditing ? (
           // --- Display View ---
@@ -511,7 +510,6 @@ const _ChatMessageItem: React.FC<ChatMessageItemProps> = ({
             />
             <div className="mt-4 flex justify-end space-x-2">
               <Button onClick={onCancelEdit} size="sm" variant="ghost">
-                {' '}
                 {/* Use prop */}
                 Cancel
               </Button>

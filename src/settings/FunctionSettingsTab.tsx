@@ -60,9 +60,8 @@ export const FunctionSettingsTab: React.FC = () => {
             }
           >
             <SelectTrigger className="w-[250px]" id="defaultModelSelect">
-              {' '}
               {/* Added ID and adjust width as needed */}
-              <SelectValue placeholder="Select default model" />{' '}
+              <SelectValue placeholder="Select default model" />
               {/* Placeholder text */}
             </SelectTrigger>
             <SelectContent>
@@ -71,11 +70,10 @@ export const FunctionSettingsTab: React.FC = () => {
                 // Map through grouped models, similar to RightSidebar[1]
                 groupedModels.map((group) => (
                   <SelectGroup key={group.providerName}>
-                    <SelectLabel>{group.providerName}</SelectLabel>{' '}
+                    <SelectLabel>{group.providerName}</SelectLabel>
                     {/* Display provider name */}
                     {group.models.map((m) => (
                       <SelectItem key={m.id} value={m.id}>
-                        {' '}
                         {/* Use model ID as value, display model name */}
                         {m.name}
                       </SelectItem>
@@ -106,9 +104,8 @@ export const FunctionSettingsTab: React.FC = () => {
             }
           >
             <SelectTrigger className="w-[250px]" id="defaultSummaryModelSelect">
-              {' '}
               {/* Added ID and adjust width as needed */}
-              <SelectValue placeholder="Select default model" />{' '}
+              <SelectValue placeholder="Select default model" />
               {/* Placeholder text */}
             </SelectTrigger>
             <SelectContent>
@@ -117,11 +114,10 @@ export const FunctionSettingsTab: React.FC = () => {
                 // Map through grouped models, similar to RightSidebar[1]
                 groupedModels.map((group) => (
                   <SelectGroup key={group.providerName}>
-                    <SelectLabel>{group.providerName}</SelectLabel>{' '}
+                    <SelectLabel>{group.providerName}</SelectLabel>
                     {/* Display provider name */}
                     {group.models.map((m) => (
                       <SelectItem key={m.id} value={m.id}>
-                        {' '}
                         {/* Use model ID as value, display model name */}
                         {m.name}
                       </SelectItem>

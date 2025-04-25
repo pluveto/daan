@@ -97,7 +97,6 @@ const ModelEditor = memo(
 
     return (
       <div className="bg-muted/30 hover:bg-muted/60 flex flex-col gap-4 rounded p-3 text-xs">
-        {' '}
         {/* Increased gap slightly */}
         {/* Model Name & ID Inputs using ValidatedInput */}
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
@@ -124,7 +123,6 @@ const ModelEditor = memo(
         </div>
         {/* Model Flags & Delete */}
         <div className="flex items-center justify-between gap-4 pt-1">
-          {' '}
           {/* Added slight top padding */}
           <div className="flex items-center gap-3">
             {/* File Upload Flag */}

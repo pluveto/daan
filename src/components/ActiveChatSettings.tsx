@@ -225,11 +225,11 @@ export const ActiveChatSettings: React.FC = () => {
             Active Model
           </Label>
           <p className="truncate font-medium" title={activeChat.model}>
-            {activeChat.model.split('::')[1] || activeChat.model}{' '}
+            {activeChat.model.split('::')[1] || activeChat.model}
             {/* Show base name */}
             <span className="text-muted-foreground ml-1 text-xs">
               ({activeChat.model.split('::')[0]})
-            </span>{' '}
+            </span>
             {/* Show provider */}
           </p>
         </div>
@@ -368,7 +368,7 @@ export const ActiveChatSettings: React.FC = () => {
             <div className="mb-2 flex items-center justify-between">
               <Label htmlFor="chat-temperature">Temperature</Label>
               <span className="bg-background text-muted-foreground w-12 rounded-md border px-2 py-0.5 text-right text-sm dark:bg-neutral-800">
-                {temperature !== null ? temperature.toFixed(1) : '-'}{' '}
+                {temperature !== null ? temperature.toFixed(1) : '-'}
                 {/* Display current or '-' */}
               </span>
             </div>

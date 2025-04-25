@@ -152,7 +152,6 @@ export const LeftSidebar: React.FC = () => {
 
       {/* Conversation section now combines Search and List */}
       <div className="flex flex-1 flex-col overflow-hidden">
-        {' '}
         {/* Added wrapper for flex-1 layout */}
         <ConversationSearch onSearchClick={handleSearchClick} />
         <ConversationList
