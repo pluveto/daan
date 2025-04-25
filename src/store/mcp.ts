@@ -420,7 +420,7 @@ export const connectMcpServerAtom = atom(
 
       let resourcesResult;
       try {
-        resourcesResult = await client.listResources(); // Assuming listResources exists
+        resourcesResult = await client.listResources();
         console.log(
           `[MCP Connect] Resources for ${serverId}:`,
           resourcesResult,
@@ -435,7 +435,7 @@ export const connectMcpServerAtom = atom(
 
       let promptsResult;
       try {
-        promptsResult = await client.listPrompts(); // Assuming listPrompts exists
+        promptsResult = await client.listPrompts();
         console.log(`[MCP Connect] Prompts for ${serverId}:`, promptsResult);
       } catch (error) {
         console.warn(

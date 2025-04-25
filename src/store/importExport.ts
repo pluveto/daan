@@ -17,7 +17,7 @@ const isValidChat = (obj: any): obj is Chat => {
     typeof obj.name === 'string' &&
     typeof obj.createdAt === 'number' &&
     typeof obj.updatedAt === 'number' &&
-    typeof obj.model === 'string' && // Assuming SupportedModels is string-based
+    typeof obj.model === 'string' &&
     typeof obj.systemPrompt === 'string' && // Allow empty string
     Array.isArray(obj.messages);
 

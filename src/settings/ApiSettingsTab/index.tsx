@@ -122,7 +122,7 @@ export const ApiSettingsTab: React.FC = () => {
   const handleSaveGlobalTemperature = useCallback(
     (value: number) => setGlobalTemperature(value),
     [setGlobalTemperature],
-  ); // Assuming parse returns number
+  );
   const handleSaveGlobalMaxTokens = useCallback(
     (value: number | null) => setGlobalMaxTokens(value),
     [setGlobalMaxTokens],

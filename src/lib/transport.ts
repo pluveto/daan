@@ -13,7 +13,7 @@ import { isDesktopEnv } from './env';
 export class TauriStdioTransport implements Transport {
   onclose?: () => void;
   onerror?: (error: Error) => void;
-  onmessage?: (message: JSONRPCMessage) => void; // Assuming JSONRPCMessage is the expected type
+  onmessage?: (message: JSONRPCMessage) => void;
 
   private processId: string | null = null;
   private command: string;
@@ -79,7 +79,6 @@ export class TauriStdioTransport implements Transport {
           event.payload,
         );
         try {
-          // Assuming the backend sends stringified JSON per line/message
           const message = JSON.parse(event.payload) as JSONRPCMessage;
           this.onmessage?.(message);
         } catch (e) {
@@ -220,7 +219,7 @@ export class TauriStdioTransport implements Transport {
 
 /*
 import { TauriStdioTransport } from './transport';
-import { YourMCPClient } from './your-mcp-library'; // Assuming you have a client class
+import { YourMCPClient } from './your-mcp-library';
 
 async function setupCommunication() {
     const command = 'path/to/your/external/program'; // Or just 'program_name' if in PATH

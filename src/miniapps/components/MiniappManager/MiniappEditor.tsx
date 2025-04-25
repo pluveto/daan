@@ -162,7 +162,7 @@ export function MiniappEditor({
     <div className="max-h-[85vh] space-y-4 overflow-y-auto p-1">
       {/* Added padding to the scrollable container if needed, or keep on parent */}
       <div className="space-y-4 p-4">
-        <div>
+        <div className="space-y-2">
           <Label htmlFor="miniapp-name">
             Name <span className="text-destructive">*</span>
           </Label>
@@ -173,7 +173,7 @@ export function MiniappEditor({
             required
           />
         </div>
-        <div>
+        <div className="space-y-2">
           <Label htmlFor="miniapp-desc">Description</Label>
           <Textarea
             id="miniapp-desc"
@@ -182,7 +182,7 @@ export function MiniappEditor({
             rows={2}
           />
         </div>
-        <div>
+        <div className="space-y-2">
           <Label>HTML Content</Label>
           <div
             className="overflow-hidden rounded-md border"
@@ -201,7 +201,7 @@ export function MiniappEditor({
           </div>
         </div>
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-          <div>
+          <div className="space-y-2">
             <Label htmlFor="miniapp-schema">Config Schema (JSON)</Label>
             <Textarea
               id="miniapp-schema"
@@ -211,7 +211,7 @@ export function MiniappEditor({
               className="font-mono text-sm" // Monospace and smaller font for code
             />
           </div>
-          <div>
+          <div className="space-y-2">
             <Label htmlFor="miniapp-defaults">Default Config (JSON)</Label>
             <Textarea
               id="miniapp-defaults"
@@ -222,7 +222,7 @@ export function MiniappEditor({
             />
           </div>
         </div>
-        <div>
+        <div className="space-y-2">
           <Label htmlFor="miniapp-permissions">Permissions (JSON)</Label>
           <Textarea
             id="miniapp-permissions"

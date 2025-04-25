@@ -120,7 +120,7 @@ export function MiniappRunner({
     // Needs careful tuning!
     const csp = [
       "default-src 'none'", // Start restrictive
-      "script-src 'unsafe-inline' YOUR_CDN_URL", // Allow inline scripts and scripts from your CDN (for hostApi.js)
+      "script-src 'unsafe-inline' /hostApi.js", // Allow inline scripts and scripts from your CDN (for hostApi.js)
       "style-src 'unsafe-inline'", // Allow inline styles
       'img-src data:', // Allow data URIs for images if needed
       "font-src 'none'",

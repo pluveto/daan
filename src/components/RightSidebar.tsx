@@ -9,7 +9,7 @@ import {
 } from '@/components/ui/TabsSlide';
 // --- Import the Miniapp Runtime Panel ---
 import { MiniappRuntimePanel } from '@/miniapps/components/MiniappRuntimePanel'; // Adjust path
-import { activeChatAtom, activeMiniappIdsAtom } from '@/store'; // Assuming activeMiniappIdsAtom is in index
+import { activeChatAtom, activeMiniappIdsAtom } from '@/store';
 import { useAtomValue } from 'jotai';
 import React from 'react'; // Ensure React is imported
 

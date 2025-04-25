@@ -17,7 +17,7 @@ export const characterSchema = z.object({
   icon: z.string().max(2).optional(), // Allow empty, max 2 chars (for potential single emoji + variation selector)
   description: z.string().optional(),
   prompt: z.string().optional(),
-  model: z.string().min(1, { message: 'Model selection is required' }), // Assuming a model must be selected
+  model: z.string().min(1, { message: 'Model selection is required' }),
   maxHistoryStr: optionalPositiveIntegerString.optional(), // Validate as string first
 });
 

@@ -109,7 +109,7 @@ pub async fn handle_stdout(
 ) {
     let mut line_buf = String::new();
     loop {
-        // Assuming newline-delimited JSON messages
+       
         match stdout.read_line(&mut line_buf).await {
             Ok(0) => {
                 // EOF reached

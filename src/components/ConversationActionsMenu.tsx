@@ -21,8 +21,8 @@ import {
   DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from '@/components/ui/DropdownMenu';
-import { downloadJson } from '@/lib/download'; // Assuming download helper exists
-import { readFileAsText } from '@/lib/file'; // Assuming file reader helper exists
+import { downloadJson } from '@/lib/download';
+import { readFileAsText } from '@/lib/file';
 import {
   activeChatAtom,
   chatsAtom,

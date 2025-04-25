@@ -164,7 +164,7 @@ pub async fn send_message_to_process(
     // --- Step 2: Perform async operation outside the lock ---
     if let Some(mut stdin) = stdin_handle.take() { // Take ownership of stdin from the Option
         let mut msg_with_newline = message;
-        msg_with_newline.push('\n'); // Assuming newline-delimited JSON
+        msg_with_newline.push('\n');
 
         let write_result = stdin.write_all(msg_with_newline.as_bytes()).await;
 

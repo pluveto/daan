@@ -1,0 +1,6 @@
+{
+  "files.watcherExclude": {
+    "**/target": true,
+    "**/node_modules": true
+  }
+}

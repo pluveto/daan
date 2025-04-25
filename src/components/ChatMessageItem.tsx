@@ -31,11 +31,11 @@ import rehypeKatex from 'rehype-katex';
 import rehypeRaw from 'rehype-raw';
 import remarkGfm from 'remark-gfm';
 import remarkMath from 'remark-math';
-import { approximateTokenSize } from 'tokenx'; // Assuming this library exists
+import { approximateTokenSize } from 'tokenx';
 import { MessageToolbar } from './MessageToolbar';
 import { Button } from './ui/Button';
 import { CodeBlock } from './ui/CodeBlock';
-import { Textarea } from './ui/Textarea'; // Assuming this is your Textarea component
+import { Textarea } from './ui/Textarea';
 
 // Helper function to format timestamp
 const formatTimestamp = (timestamp: number): string => {

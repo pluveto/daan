@@ -67,7 +67,6 @@ export const McpServerForm: React.FC<McpServerFormProps> = ({
     },
   });
 
-  console.log(form.formState);
   // Watch the 'type' field to conditionally render inputs
   const serverType = form.watch('type');
 
