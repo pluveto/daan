@@ -148,7 +148,7 @@ export const MiniappWindow: React.FC<MiniappWindowProps> = ({ instance }) => {
 
       {/* Content Area - Conditional Rendering */}
       {!windowState.minimized && (
-        <div className="flex-grow overflow-auto">
+        <div className="h-full w-full flex-grow overflow-auto">
           {' '}
           {/* Allow content to scroll */}
           <MiniappRunner

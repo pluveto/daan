@@ -12,7 +12,7 @@ export const MiniappWindowManager: React.FC = () => {
     // Wrap the manager with the bridge provider
     <MiniappBridgeProvider>
       <div
-        className="miniapp-window-manager pointer-events-none fixed inset-0"
+        className="miniapp-window-manager fixed inset-0"
         // Manager itself doesn't capture events, only the windows do
         style={{ zIndex: 50 }} // Base z-index, windows will be higher
       >
