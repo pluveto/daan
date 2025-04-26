@@ -3,7 +3,7 @@ import { Label } from '@/components/ui/Label';
 import Editor from '@monaco-editor/react';
 import Ajv from 'ajv'; // pnpm add ajv
 import { useTheme } from 'next-themes';
-import React, { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 
 const ajv = new Ajv();
 

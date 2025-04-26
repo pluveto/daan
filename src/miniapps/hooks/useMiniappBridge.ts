@@ -14,7 +14,7 @@ import {
 import { MiniappPermissions } from '@/types';
 import { invoke } from '@tauri-apps/api/core';
 import Ajv from 'ajv';
-import { useAtom, useAtomValue } from 'jotai';
+import { useAtomValue } from 'jotai';
 import { useCallback, useEffect, useRef } from 'react';
 import { useMiniappBridgeContext } from '../components/MiniappBridgeContext';
 

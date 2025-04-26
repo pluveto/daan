@@ -6,7 +6,6 @@ import { MultiSelect } from '@/components/ui/MultiSelect'; // Placeholder
 import { miniappsDefinitionAtom } from '@/store/miniapp';
 import { MiniappPermissions } from '@/types';
 import { useAtomValue } from 'jotai';
-import React from 'react';
 
 interface PermissionsSectionProps {
   permissions: MiniappPermissions | null;

@@ -4,7 +4,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/Tabs';
 import { miniappsDefinitionAtom } from '@/store/miniapp';
 import type { MiniappDefinition, MiniappPermissions } from '@/types';
 import { useAtom } from 'jotai';
-import React, { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import { v4 as uuidv4 } from 'uuid';
 import { z } from 'zod'; // For validation

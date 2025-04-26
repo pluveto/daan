@@ -13,9 +13,7 @@ import {
   activeMiniappsDefinitionAtom, // Use the atom that filters for *enabled* definitions
   isMiniappSearchOpenAtom,
   launchMiniappAtom,
-  miniappDefinitionsByIdAtom, // For getting definition details if needed later
 } from '@/store/miniapp';
-import { MiniappDefinition } from '@/types';
 import { useAtom, useAtomValue, useSetAtom } from 'jotai';
 import React, { useMemo, useState } from 'react';
 import { LuPackage, LuSearch, LuX } from 'react-icons/lu'; // LuPackage as default icon

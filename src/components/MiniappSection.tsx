@@ -31,7 +31,7 @@ import {
   useSortable,
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { useAtom, useAtomValue, useSetAtom } from 'jotai';
+import { useAtomValue, useSetAtom } from 'jotai';
 import React from 'react';
 import { LuPackage, LuPlus } from 'react-icons/lu'; // Default icon
 

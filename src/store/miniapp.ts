@@ -3,7 +3,6 @@ import type {
   MiniappConfig,
   MiniappDefinition,
   MiniappInstance,
-  // MiniappWindowState, // REMOVED
 } from '@/types';
 import { atom } from 'jotai';
 // import { selectAtom } from 'jotai/utils'; // Keep if used elsewhere

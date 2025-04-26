@@ -3,7 +3,6 @@ import { Input } from '@/components/ui/Input';
 import { Label } from '@/components/ui/Label';
 import { Switch } from '@/components/ui/Switch';
 import { Textarea } from '@/components/ui/Textarea';
-import React from 'react';
 import { IconInput } from './IconInput';
 
 interface GeneralInfoSectionProps {

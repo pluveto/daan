@@ -1,7 +1,7 @@
 // src/miniapps/components/MiniappRunner/index.tsx
 import { useMiniappBridge } from '@/miniapps/hooks/useMiniappBridge';
 import type { MiniappDefinition } from '@/types';
-import React, { Component, useEffect, useMemo, useRef, useState } from 'react';
+import React, { Component, useMemo, useRef, useState } from 'react';
 
 // --- Error Boundary ---
 interface ErrorBoundaryProps {

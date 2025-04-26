@@ -3,7 +3,7 @@ import { Label } from '@/components/ui/Label';
 import { MultiSelect } from '@/components/ui/MultiSelect'; // Placeholder
 import { miniappsDefinitionAtom } from '@/store/miniapp';
 import { useAtomValue } from 'jotai';
-import React, { useMemo } from 'react';
+import { useMemo } from 'react';
 
 interface DependenciesSectionProps {
   dependencies: string[];
