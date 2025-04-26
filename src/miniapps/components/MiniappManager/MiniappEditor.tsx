@@ -15,6 +15,11 @@ import { GeneralInfoSection } from './GeneralInfoSection';
 import { PermissionsSection } from './PermissionsSection';
 import DEFAULT_HTML from './sample.html?raw'; // Import raw content
 
+const sizeSchema = z.object({
+  width: z.number().min(1, 'Width must be greater than 0.'),
+  height: z.number().min(1, 'Height must be greater than 0.'),
+});
+
 // --- Zod Schema for Validation (Example) ---
 const miniappDefinitionSchema = z.object({
   id: z.string(),
@@ -24,6 +29,7 @@ const miniappDefinitionSchema = z.object({
   htmlContent: z.string().min(1, 'HTML content cannot be empty.'),
   configSchema: z.record(z.any()).optional().default({}),
   defaultConfig: z.record(z.any()).optional().default({}),
+  defaultWindowSize: sizeSchema.optional().default({ width: 800, height: 600 }),
   permissions: z.record(z.any()).optional().default({}), // Could be more specific
   enabled: z.boolean(),
   createdAt: z.number(),
@@ -45,6 +51,7 @@ type EditableMiniappState = Omit<
 > & {
   configSchema: Record<string, any> | null;
   defaultConfig: Record<string, any> | null;
+  defaultWindowSize: { width: number; height: number } | null;
   permissions: MiniappPermissions | null; // Use the specific type
 };
 
@@ -75,6 +82,7 @@ export function MiniappEditor({
         htmlContent: DEFAULT_HTML,
         configSchema: {},
         defaultConfig: {},
+        defaultWindowSize: { width: 800, height: 600 },
         permissions: { useStorage: true }, // Sensible default permissions
         enabled: false,
         dependencies: [],
@@ -87,6 +95,10 @@ export function MiniappEditor({
           // Ensure complex types are objects, default if undefined/null
           configSchema: existing.configSchema ?? {},
           defaultConfig: existing.defaultConfig ?? {},
+          defaultWindowSize: existing.defaultWindowSize ?? {
+            width: 800,
+            height: 600,
+          },
           permissions: existing.permissions ?? { useStorage: true },
           dependencies: existing.dependencies ?? [],
         };
@@ -122,6 +134,10 @@ export function MiniappEditor({
       // Ensure required fields have defaults if somehow null/undefined
       configSchema: editableState.configSchema ?? {},
       defaultConfig: editableState.defaultConfig ?? {},
+      defaultWindowSize: editableState.defaultWindowSize ?? {
+        width: 800,
+        height: 600,
+      },
       permissions: editableState.permissions ?? { useStorage: true },
       dependencies: editableState.dependencies ?? [],
       updatedAt: now,
@@ -205,6 +221,9 @@ export function MiniappEditor({
               icon={editableState.icon ?? ''}
               description={editableState.description ?? ''}
               enabled={editableState.enabled ?? false}
+              defaultWindowSize={
+                editableState.defaultWindowSize ?? { width: 800, height: 600 }
+              }
               onStateChange={(k, v: any) => handleStateChange(k, v)}
             />
           </TabsContent>

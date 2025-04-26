@@ -32,7 +32,8 @@ import {
   TooltipContent,
   TooltipProvider,
   TooltipTrigger,
-} from '@/components/ui/Tooltip'; // Import Tooltip
+} from '@/components/ui/Tooltip';
+// Import Tooltip
 import {
   activeMiniappInstancesAtom, // To check for running instances
   closeMiniappAtom, // To close running instances if needed
@@ -140,7 +141,6 @@ export function MiniappList() {
 
   return (
     <TooltipProvider>
-      {' '}
       {/* Wrap with TooltipProvider */}
       <div className="space-y-4 p-4">
         <div className="flex items-center justify-between">
@@ -183,11 +183,9 @@ export function MiniappList() {
                 <TableHead>Name</TableHead>
                 <TableHead className="hidden md:table-cell">
                   Description
-                </TableHead>{' '}
+                </TableHead>
                 {/* Hide on small screens */}
-                <TableHead className="hidden lg:table-cell">
-                  Updated
-                </TableHead>{' '}
+                <TableHead className="hidden lg:table-cell">Updated</TableHead>
                 {/* Hide on med screens */}
                 <TableHead className="w-[100px] text-center">Enabled</TableHead>
                 <TableHead className="w-[120px] pr-4 text-right">
@@ -294,13 +292,11 @@ export function MiniappList() {
                                 <AlertDialogDescription>
                                   This action cannot be undone. This will
                                   permanently delete the
-                                  <strong className="px-1">
-                                    {def.name}
-                                  </strong>{' '}
+                                  <strong className="px-1">{def.name}</strong>
                                   Miniapp definition.
                                   {isRunning && (
                                     <span className="text-destructive block pt-2 font-semibold">
-                                      Warning: {runningInstanceCount}{' '}
+                                      Warning: {runningInstanceCount}
                                       instance(s) of this Miniapp are currently
                                       running and will be closed.
                                     </span>

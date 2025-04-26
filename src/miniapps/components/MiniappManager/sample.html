@@ -1,122 +1,382 @@
 <!doctype html>
-<html>
+<html lang="en">
   <head>
-    <title>My Miniapp</title>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <script src="/hostApi.js"></script>
+    <title>Color Palette Miniapp</title>
+    <script>
+      document.addEventListener('DOMContentLoaded', () => {
+        // --- DOM Elements ---
+        const colorPicker = document.getElementById('color-picker');
+        const colorText = document.getElementById('color-text');
+        const addColorBtn = document.getElementById('add-color-btn');
+        const paletteContainer = document.getElementById('palette');
+        const loadingMessage = document.getElementById('loading-message');
+
+        // --- State ---
+        let colors = []; // Array to hold color hex codes
+        const STORAGE_KEY = 'miniAppColorPalette'; // Key for hostApi storage
+
+        // --- Host API Check ---
+        if (!window.hostApi || !window.hostApi.storage) {
+          console.error('Host API or Host API Storage is not available!');
+          paletteContainer.innerHTML =
+            '<p style="color: red;">Error: Host API not found. Cannot save/load colors.</p>';
+          // Disable controls if API is missing
+          colorPicker.disabled = true;
+          colorText.disabled = true;
+          addColorBtn.disabled = true;
+          return; // Stop execution if API is not present
+        }
+
+        // --- Functions ---
+
+        /**
+         * Renders the color swatches in the palette container.
+         */
+        function renderPalette() {
+          paletteContainer.innerHTML = ''; // Clear existing swatches
+
+          if (colors.length === 0) {
+            paletteContainer.innerHTML =
+              '<p id="no-colors-message">No colors saved yet. Add some!</p>';
+            return;
+          }
+
+          colors.forEach((color, index) => {
+            const swatch = document.createElement('div');
+            swatch.className = 'color-swatch';
+            swatch.style.backgroundColor = color;
+            swatch.dataset.color = color; // Store color data for deletion
+
+            const colorCode = document.createElement('span');
+            colorCode.className = 'color-code';
+            colorCode.textContent = color;
+
+            const deleteBtn = document.createElement('button');
+            deleteBtn.className = 'delete-btn';
+            deleteBtn.textContent = 'X'; // Simple delete indicator
+            deleteBtn.title = `Delete ${color}`;
+            deleteBtn.addEventListener('click', (event) => {
+              event.stopPropagation(); // Prevent triggering other events if needed
+              deleteColor(color);
+            });
+
+            swatch.appendChild(deleteBtn);
+            swatch.appendChild(colorCode);
+            paletteContainer.appendChild(swatch);
+          });
+        }
+
+        /**
+         * Saves the current colors array to host storage.
+         */
+        async function savePalette() {
+          try {
+            const jsonColors = JSON.stringify(colors);
+            await window.hostApi.storage.setItem(STORAGE_KEY, jsonColors);
+            console.log('Palette saved:', jsonColors);
+          } catch (error) {
+            console.error('Failed to save palette:', error);
+            window.hostApi.reportError(
+              new Error(`Failed to save palette: ${error.message}`),
+            );
+            // Optionally: Show an error message to the user
+            alert(`Error saving palette: ${error.message}`);
+          }
+        }
+
+        /**
+         * Loads colors from host storage.
+         */
+        async function loadPalette() {
+          try {
+            const storedColors =
+              await window.hostApi.storage.getItem(STORAGE_KEY);
+            if (storedColors) {
+              console.log('Palette loaded from storage:', storedColors);
+              // Basic validation: Check if it's likely a JSON array
+              if (
+                typeof storedColors === 'string' &&
+                storedColors.startsWith('[')
+              ) {
+                try {
+                  const parsedColors = JSON.parse(storedColors);
+                  // Further validation: Check if it's actually an array
+                  if (Array.isArray(parsedColors)) {
+                    // Optional: Validate individual color formats if needed
+                    colors = parsedColors.filter(
+                      (c) =>
+                        typeof c === 'string' &&
+                        /^#([A-Fa-f0-9]{6}|[A-Fa-f0-9]{3})$/.test(c),
+                    );
+                  } else {
+                    console.warn(
+                      'Stored data is not an array, resetting palette.',
+                    );
+                    colors = []; // Reset if data is invalid
+                  }
+                } catch (parseError) {
+                  console.error('Failed to parse stored colors:', parseError);
+                  window.hostApi.reportError(
+                    new Error(
+                      `Failed to parse stored palette: ${parseError.message}`,
+                    ),
+                  );
+                  colors = []; // Reset on parse error
+                }
+              } else {
+                console.warn(
+                  'Stored data is not in expected JSON array format, resetting palette.',
+                );
+                colors = []; // Reset if not a JSON array string
+              }
+            } else {
+              console.log('No saved palette found.');
+              colors = []; // Initialize as empty if nothing is stored
+            }
+          } catch (error) {
+            console.error('Failed to load palette:', error);
+            window.hostApi.reportError(
+              new Error(`Failed to load palette: ${error.message}`),
+            );
+            colors = []; // Initialize as empty on load error
+            alert(
+              `Error loading palette: ${error.message}. Starting with an empty palette.`,
+            );
+          } finally {
+            // Hide loading message even if there was an error
+            if (loadingMessage) {
+              loadingMessage.style.display = 'none';
+            }
+            renderPalette(); // Render the loaded or initial empty palette
+          }
+        }
+
+        /**
+         * Adds a new color to the palette.
+         */
+        function addColor() {
+          const newColor = colorText.value.trim().toLowerCase();
+
+          // Basic hex color validation
+          if (!/^#([a-f0-9]{6}|[a-f0-9]{3})$/.test(newColor)) {
+            alert('Invalid hex color format. Please use #rrggbb or #rgb.');
+            return;
+          }
+
+          if (colors.includes(newColor)) {
+            alert(`${newColor} is already in the palette.`);
+            return;
+          }
+
+          colors.push(newColor);
+          renderPalette();
+          savePalette(); // Save after adding
+        }
+
+        /**
+         * Deletes a color from the palette.
+         * @param {string} colorToDelete - The hex code of the color to delete.
+         */
+        function deleteColor(colorToDelete) {
+          colors = colors.filter((color) => color !== colorToDelete);
+          renderPalette();
+          savePalette(); // Save after deleting
+        }
+
+        // --- Event Listeners ---
+
+        // Sync color picker and text input
+        colorPicker.addEventListener('input', (event) => {
+          colorText.value = event.target.value;
+        });
+        colorText.addEventListener('input', (event) => {
+          // Update picker only if the text input is a valid hex color temporarily
+          if (/^#([a-f0-9]{6}|[a-f0-9]{3})$/i.test(event.target.value)) {
+            colorPicker.value = event.target.value;
+          }
+        });
+        colorText.addEventListener('change', (event) => {
+          // On final change (e.g., blur), force picker update if valid
+          if (/^#([a-f0-9]{6}|[a-f0-9]{3})$/i.test(event.target.value)) {
+            colorPicker.value = event.target.value;
+          } else {
+            // Optional: revert text input if invalid on blur/change
+            colorText.value = colorPicker.value;
+          }
+        });
+
+        // Add color button click
+        addColorBtn.addEventListener('click', addColor);
+
+        // --- Initialization ---
+        loadPalette(); // Load saved colors when the app starts
+      });
+    </script>
+    <style>
+      body {
+        font-family: sans-serif;
+        padding: 15px;
+        background-color: #f4f4f4;
+      }
+
+      h1,
+      h2 {
+        color: #333;
+      }
+
+      .controls {
+        margin-bottom: 20px;
+        background-color: #fff;
+        padding: 15px;
+        border-radius: 5px;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        /* Add space between elements */
+      }
+
+      .controls label {
+        font-weight: bold;
+      }
+
+      #color-picker {
+        height: 30px;
+        width: 50px;
+        /* Adjust width as needed */
+        border: 1px solid #ccc;
+        padding: 0;
+        /* Remove default padding */
+        cursor: pointer;
+      }
+
+      #color-text {
+        padding: 5px;
+        border: 1px solid #ccc;
+        border-radius: 3px;
+        width: 80px;
+        /* Adjust width */
+      }
+
+      #add-color-btn {
+        padding: 6px 12px;
+        background-color: #007bff;
+        color: white;
+        border: none;
+        border-radius: 3px;
+        cursor: pointer;
+        transition: background-color 0.2s;
+      }
+
+      #add-color-btn:hover {
+        background-color: #0056b3;
+      }
+
+      .palette-container {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        /* Spacing between swatches */
+        padding: 10px;
+        background-color: #fff;
+        border-radius: 5px;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        min-height: 50px;
+        /* Ensure container has some height even when empty */
+      }
+
+      .color-swatch {
+        width: 100px;
+        height: 100px;
+        border: 1px solid #ccc;
+        border-radius: 4px;
+        display: flex;
+        flex-direction: column;
+        justify-content: space-between;
+        align-items: center;
+        padding: 5px;
+        box-sizing: border-box;
+        /* Include padding and border in the element's total width and height */
+        position: relative;
+        /* For positioning the delete button */
+        overflow: hidden;
+        /* Hide overflowing parts of delete button */
+      }
+
+      .color-code {
+        background-color: rgba(255, 255, 255, 0.7);
+        /* Semi-transparent background for readability */
+        padding: 2px 4px;
+        border-radius: 3px;
+        font-size: 0.9em;
+        color: #333;
+        margin-top: auto;
+        /* Push to bottom */
+        text-align: center;
+        width: 100%;
+        /* Ensure it spans the swatch */
+        box-sizing: border-box;
+      }
+
+      .delete-btn {
+        position: absolute;
+        top: 3px;
+        right: 3px;
+        background-color: rgba(255, 0, 0, 0.7);
+        color: white;
+        border: none;
+        border-radius: 50%;
+        /* Make it circular */
+        cursor: pointer;
+        font-size: 0.8em;
+        width: 20px;
+        /* Fixed size */
+        height: 20px;
+        /* Fixed size */
+        line-height: 20px;
+        /* Center the 'X' vertically */
+        text-align: center;
+        opacity: 0;
+        /* Hidden by default */
+        transition: opacity 0.2s ease-in-out;
+      }
+
+      .color-swatch:hover .delete-btn {
+        opacity: 1;
+        /* Show on hover */
+      }
+
+      #loading-message,
+      #no-colors-message {
+        color: #666;
+        width: 100%;
+        /* Span full width */
+      }
+    </style>
   </head>
 
   <body>
-    <h1>Hello from Miniapp!</h1>
-    <p>My config: <code id="config-display"></code></p>
-    <button id="load-config-btn">Load Config</button>
-    <button id="set-config-btn">Set Timestamp</button>
-    <hr />
-    <h2>Data Storage Demo</h2>
-    <input type="text" id="data-key" placeholder="Data Key" />
-    <input type="text" id="data-value" placeholder="Data Value" />
-    <button id="save-data-btn">Save Data</button>
-    <button id="load-data-btn">Load Data</button>
-    <button id="delete-data-btn">Delete Data</button>
-    <button id="list-keys-btn">List Keys</button>
-    <pre id="data-output"></pre>
-    <script>
-      // IMPORTANT: hostApi bridge is available globally
-      const configDisplay = document.getElementById('config-display');
-      const loadCfgBtn = document.getElementById('load-config-btn');
-      const setCfgBtn = document.getElementById('set-config-btn');
+    <h1>My Color Palette</h1>
 
-      async function displayConfig() {
-        try {
-          console.log('Miniapp: Requesting own config...');
-          const config = await hostApi.getOwnConfig();
-          console.log('Miniapp: Received config', config);
-          configDisplay.textContent = JSON.stringify(config);
-        } catch (error) {
-          console.error('Miniapp: Error getting config:', error);
-          configDisplay.textContent = 'Error loading config';
-        }
-      }
+    <div class="controls">
+      <label for="color-picker">Choose color:</label>
+      <input type="color" id="color-picker" value="#aabbcc" />
+      <input
+        type="text"
+        id="color-text"
+        value="#aabbcc"
+        pattern="^#([A-Fa-f0-9]{6}|[A-Fa-f0-9]{3})$"
+      />
+      <button id="add-color-btn">Add Color</button>
+    </div>
 
-      async function setTimestampConfig() {
-        try {
-          const currentConfig = await hostApi.getOwnConfig();
-          const newConfig = {
-            ...currentConfig,
-            lastSet: new Date().toISOString(),
-          };
-          console.log('Miniapp: Setting config:', newConfig);
-          await hostApi.setOwnConfig(newConfig);
-          console.log('Miniapp: Config set successfully.');
-          await displayConfig(); // Refresh display
-        } catch (error) {
-          console.error('Miniapp: Error setting config:', error);
-        }
-      }
+    <h2>Saved Colors:</h2>
+    <div id="palette" class="palette-container">
+      <p id="loading-message">Loading colors...</p>
+    </div>
 
-      loadCfgBtn.addEventListener('click', displayConfig);
-      setCfgBtn.addEventListener('click', setTimestampConfig);
-
-      // Initial load
-      displayConfig();
-
-      // Example: Log to host console
-      hostApi.log('Miniapp script loaded.');
-
-      saveBtn.addEventListener('click', async () => {
-        const key = keyInput.value.trim();
-        const value = valueInput.value; // Store as string, or parse if needed (e.g., JSON.parse)
-        if (!key) return alert('Please enter a key.');
-        try {
-          dataOutput.textContent = `Saving '${key}'...`;
-          await hostApi.storage.setItem(key, value);
-          dataOutput.textContent = `Saved '${key}' successfully.`;
-          keyInput.value = '';
-          valueInput.value = '';
-        } catch (e) {
-          console.error('Storage Error:', e);
-          dataOutput.textContent = `Error saving: ${e.message}`;
-        }
-      });
-
-      loadCfgBtn.addEventListener('click', async () => {
-        const key = keyInput.value.trim();
-        if (!key) return alert('Please enter a key to load.');
-        try {
-          dataOutput.textContent = `Loading '${key}'...`;
-          const value = await hostApi.storage.getItem(key);
-          dataOutput.textContent = `Value for '${key}':\n${JSON.stringify(value, null, 2)}`;
-        } catch (e) {
-          console.error('Storage Error:', e);
-          dataOutput.textContent = `Error loading: ${e.message}`;
-        }
-      });
-
-      deleteBtn.addEventListener('click', async () => {
-        const key = keyInput.value.trim();
-        if (!key) return alert('Please enter a key to delete.');
-        try {
-          dataOutput.textContent = `Deleting '${key}'...`;
-          await hostApi.storage.removeItem(key);
-          dataOutput.textContent = `Deleted '${key}'.`;
-          keyInput.value = '';
-        } catch (e) {
-          console.error('Storage Error:', e);
-          dataOutput.textContent = `Error deleting: ${e.message}`;
-        }
-      });
-
-      listBtn.addEventListener('click', async () => {
-        try {
-          dataOutput.textContent = `Loading keys...`;
-          const keys = await hostApi.storage.getAllKeys();
-          dataOutput.textContent = `Stored Keys:\n${JSON.stringify(keys, null, 2)}`;
-        } catch (e) {
-          console.error('Storage Error:', e);
-          dataOutput.textContent = `Error listing keys: ${e.message}`;
-        }
-      });
-    </script>
+    <script src="script.js"></script>
   </body>
 </html>

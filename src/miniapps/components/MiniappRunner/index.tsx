@@ -63,6 +63,8 @@ interface MiniappRunnerProps {
   instanceId: string; // Unique ID for this running instance
 }
 
+const hostApiScript = (await import('@/hostApi.js?raw')).default;
+
 // --- Runner Component ---
 export function MiniappRunner({
   miniappDefinition,
@@ -125,22 +127,22 @@ export function MiniappRunner({
 
     // Ensure hostApi.js script is included (basic check)
     // Ideally, the miniapp HTML definition should include this script itself.
-    const hostApiScriptTag = '<script src="/hostApi.js"></script>';
-    if (!injectedHtml.includes('src="/hostApi.js"')) {
+    const hostApiScriptWrapped = `<script type="text/javascript">${hostApiScript}</script>`;
+    if (!injectedHtml.includes('window.hostApi = `')) {
       // Check if the script tag exists
       console.warn(
-        `Miniapp "${name}" (Instance: ${instanceId}) HTML appears to be missing ${hostApiScriptTag}. Attempting automatic injection before </body>.`,
+        `Miniapp "${name}" (Instance: ${instanceId}) HTML appears to be missing window.hostApi. Attempting automatic injection before </body>.`,
       );
       const bodyEndIndex = injectedHtml.toLowerCase().lastIndexOf('</body>');
       if (bodyEndIndex !== -1) {
         // Inject before the closing body tag
         injectedHtml =
           injectedHtml.slice(0, bodyEndIndex) +
-          hostApiScriptTag +
+          hostApiScriptWrapped +
           injectedHtml.slice(bodyEndIndex);
       } else {
         // Append if no body tag found (less reliable)
-        injectedHtml += hostApiScriptTag;
+        injectedHtml += hostApiScriptWrapped;
       }
     }
 

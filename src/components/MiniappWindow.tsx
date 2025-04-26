@@ -28,7 +28,6 @@ const WindowContent: React.FC<WindowContentProps> = memo(
     // Ensure content fills the WinBox body. Add padding if needed inside MiniappRunner.
     return (
       <div className="h-full w-full overflow-auto">
-        {' '}
         {/* Let WinBox handle outer flex/border */}
         <MiniappRunner
           key={instanceId} // Still useful if runner needs remounting on definition change
@@ -145,11 +144,9 @@ export const MiniappWindow: React.FC<MiniappWindowProps> = memo(
 
     // Called when window stops moving (x, y available in WinBox instance)
     const handleWinBoxMove = useCallback(
-      (winbox: any) => {
+      (x: number, y: number) => {
         // winbox instance is passed
-        console.log(
-          `WinBox Move end ${instanceId}: x=${winbox.x}, y=${winbox.y}`,
-        );
+        console.log(`WinBox Move end ${instanceId}`);
         // Persist position *if desired*, but not to the main global state atom
         // Could save to localStorage associated with instanceId, for example.
       },
@@ -158,11 +155,9 @@ export const MiniappWindow: React.FC<MiniappWindowProps> = memo(
 
     // Called when window stops resizing (width, height available in WinBox instance)
     const handleWinBoxResize = useCallback(
-      (winbox: any) => {
+      (width: number, height: number) => {
         // winbox instance is passed
-        console.log(
-          `WinBox Resize end ${instanceId}: w=${winbox.width}, h=${winbox.height}`,
-        );
+        console.log(`WinBox Resize end ${instanceId}`);
         // Persist size *if desired*, similar to position.
       },
       [instanceId],
@@ -181,8 +176,8 @@ export const MiniappWindow: React.FC<MiniappWindowProps> = memo(
       // Initial position/size (WinBox has good defaults like 'center')
       x: 'center',
       y: 'center',
-      width: MIN_WIDTH, // Example initial size
-      height: MIN_HEIGHT, // Example initial size
+      width: definition?.defaultWindowSize?.width || MIN_WIDTH,
+      height: definition?.defaultWindowSize?.height || MIN_HEIGHT,
       minWidth: MIN_WIDTH,
       minHeight: MIN_HEIGHT,
       // Restrict dragging/resizing within the body

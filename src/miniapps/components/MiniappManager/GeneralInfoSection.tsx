@@ -4,14 +4,17 @@ import { Label } from '@/components/ui/Label';
 import { Switch } from '@/components/ui/Switch';
 import { Textarea } from '@/components/ui/Textarea';
 import React from 'react';
-import { IconInput } from './IconInput'; // Assuming IconInput component exists
+import { IconInput } from './IconInput';
 
 interface GeneralInfoSectionProps {
   name: string;
   icon: string;
   description: string;
   enabled: boolean;
-  onStateChange: <K extends 'name' | 'icon' | 'description' | 'enabled'>(
+  defaultWindowSize: { width: number; height: number };
+  onStateChange: <
+    K extends 'name' | 'icon' | 'description' | 'enabled' | 'defaultWindowSize',
+  >(
     key: K,
     value: GeneralInfoSectionProps[K],
   ) => void;
@@ -22,6 +25,7 @@ export function GeneralInfoSection({
   icon,
   description,
   enabled,
+  defaultWindowSize,
   onStateChange,
 }: GeneralInfoSectionProps) {
   return (
@@ -60,6 +64,40 @@ export function GeneralInfoSection({
           placeholder="Briefly describe what this Miniapp does."
         />
       </div>
+
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <div>
+          <Label htmlFor="window-width">Default Window Width</Label>
+          <Input
+            id="window-width"
+            type="number"
+            value={defaultWindowSize.width}
+            onChange={(e) =>
+              onStateChange('defaultWindowSize', {
+                ...defaultWindowSize,
+                width: parseInt(e.target.value) || 0,
+              })
+            }
+            placeholder="Width in pixels"
+          />
+        </div>
+        <div>
+          <Label htmlFor="window-height">Default Window Height</Label>
+          <Input
+            id="window-height"
+            type="number"
+            value={defaultWindowSize.height}
+            onChange={(e) =>
+              onStateChange('defaultWindowSize', {
+                ...defaultWindowSize,
+                height: parseInt(e.target.value) || 0,
+              })
+            }
+            placeholder="Height in pixels"
+          />
+        </div>
+      </div>
+
       <div className="flex items-center space-x-2">
         <Switch
           id="miniapp-enabled"

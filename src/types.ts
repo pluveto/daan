@@ -174,6 +174,7 @@ export interface MiniappDefinition {
   configSchema?: Record<string, any>;
   // Optional: Default values for the config
   defaultConfig?: Record<string, any>;
+  defaultWindowSize?: { width: number; height: number };
   enabled: boolean; // Controls if it *can* be activated
   dependencies?: string[];
   requiredApis?: string[]; // For future permission checks
