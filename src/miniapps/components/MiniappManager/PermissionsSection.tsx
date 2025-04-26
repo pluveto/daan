@@ -91,6 +91,23 @@ export function PermissionsSection({
             </p>
           </Label>
         </div>
+        <div className="flex items-center space-x-3 pt-2">
+          <Checkbox
+            id="perm-llm"
+            checked={currentPermissions.llmAccess === true} // Default false
+            onCheckedChange={(checked) =>
+              handleBoolChange('llmAccess', !!checked)
+            }
+          />
+          <Label htmlFor="perm-llm" className="cursor-pointer font-normal">
+            Allow LLM Access (`hostApi.llm.*`)
+            <p className="text-xs text-muted-foreground">
+              Allows the Miniapp to make calls to configured Language Models via
+              the host. This may incur API costs and uses host-managed API keys.
+              Use with caution.
+            </p>
+          </Label>
+        </div>
         {/* Add more boolean permissions here (e.g., generic callMiniapp if desired) */}
       </div>
 

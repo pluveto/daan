@@ -6,10 +6,12 @@ import { atom } from 'jotai';
 export const isAssistantLoadingAtom = atom(false);
 
 /** Holds the AbortController for the current AI request, allowing cancellation. */
-export const abortControllerAtom = atom<{
+interface AbortInfo {
   controller: AbortController;
-  messageId: string; // Associate controller with the specific message being generated
-} | null>(null);
+  messageId: string | null; // Host message being streamed to
+  miniappRequestId?: string | null; // Originating request ID from miniapp
+}
+export const abortControllerAtom = atom<AbortInfo | null>(null);
 
 /** Indicates if the character auto-fill process is running. */
 export const isCharacterAutoFillingAtom = atom(false);
