@@ -1,10 +1,15 @@
 // src/miniapps/components/MiniappManager/MiniappEditor.tsx
 import { Button } from '@/components/ui/Button';
+import { Label } from '@/components/ui/Label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/Tabs';
+import { Textarea } from '@/components/ui/Textarea';
+import { generateOrModifyMiniappCode } from '@/lib/miniappAiHelper';
 import { miniappsDefinitionAtom } from '@/store/miniapp';
 import type { MiniappDefinition, MiniappPermissions } from '@/types';
 import { useAtom } from 'jotai';
+import { useAtomCallback } from 'jotai/utils';
 import { useCallback, useEffect, useState } from 'react';
+import { LuLoader, LuSparkles } from 'react-icons/lu';
 import { toast } from 'sonner';
 import { v4 as uuidv4 } from 'uuid';
 import { z } from 'zod'; // For validation
@@ -63,6 +68,8 @@ export function MiniappEditor({
   const [definitions, setDefinitions] = useAtom(miniappsDefinitionAtom);
   const [isLoading, setIsLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('general');
+  const [aiDescription, setAiDescription] = useState('');
+  const [isAiLoading, setIsAiLoading] = useState(false);
 
   // State to hold the miniapp definition being edited
   const [editableState, setEditableState] =
@@ -122,6 +129,36 @@ export function MiniappEditor({
       setEditableState((prev) => (prev ? { ...prev, [key]: value } : null));
     },
     [],
+  );
+
+  const handleAiGenerate = useAtomCallback(
+    useCallback(
+      async (get) => {
+        // `get` provided by useAtomCallback
+        if (!editableState || isAiLoading) return;
+
+        setIsAiLoading(true);
+        try {
+          // Use editableState directly, no need to get from atom here
+          const currentHtml = editableState.htmlContent ?? '';
+          const newHtml = await generateOrModifyMiniappCode(
+            aiDescription,
+            currentHtml,
+            get,
+          );
+          // Update the editor state directly
+          handleStateChange('htmlContent', newHtml);
+          // Optionally clear the description field after success
+          // setAiDescription('');
+        } catch (error) {
+          // Error toast is handled within the helper function
+          console.error('AI Generation failed in editor:', error);
+        } finally {
+          setIsAiLoading(false);
+        }
+      },
+      [editableState, aiDescription, isAiLoading, handleStateChange], // Dependencies for inner useCallback
+    ),
   );
 
   // Handle saving
@@ -207,7 +244,7 @@ export function MiniappEditor({
       <Tabs value={activeTab} onValueChange={setActiveTab}>
         <TabsList>
           <TabsTrigger value="general">General</TabsTrigger>
-          <TabsTrigger value="code">Code</TabsTrigger>
+          <TabsTrigger value="code">Code & AI</TabsTrigger>
           <TabsTrigger value="config">Configuration</TabsTrigger>
           <TabsTrigger value="permissions">Permissions</TabsTrigger>
           <TabsTrigger value="dependencies">Dependencies</TabsTrigger>
@@ -227,7 +264,46 @@ export function MiniappEditor({
               onStateChange={(k, v: any) => handleStateChange(k, v)}
             />
           </TabsContent>
-          <TabsContent value="code">
+          <TabsContent value="code" className="space-y-6">
+            {/* AI Generation Section */}
+            <div className="rounded-md border bg-muted/40 p-4">
+              <Label
+                htmlFor="ai-description"
+                className="text-base font-semibold"
+              >
+                Generate or Modify with AI
+              </Label>
+              <p className="text-muted-foreground mb-2 text-sm">
+                Describe the functionality you want to add or change in plain
+                language. The AI will attempt to generate or update the
+                HTML/CSS/JS code below.
+              </p>
+              <Textarea
+                id="ai-description"
+                placeholder="e.g., 'Create a simple counter app with increment/decrement buttons that saves the count using hostApi.storage', or 'Change the button color to blue and make it log the current config when clicked'"
+                value={aiDescription}
+                onChange={(e) => setAiDescription(e.target.value)}
+                rows={3}
+                disabled={isAiLoading}
+              />
+              <Button
+                onClick={handleAiGenerate}
+                disabled={!aiDescription.trim() || isAiLoading}
+                className="mt-2"
+                size="sm"
+              >
+                {isAiLoading ? (
+                  <LuLoader className="mr-2 h-4 w-4 animate-spin" />
+                ) : (
+                  <LuSparkles className="mr-2 h-4 w-4" />
+                )}
+                {editableState.htmlContent?.trim()
+                  ? 'Modify Code with AI'
+                  : 'Generate Code with AI'}
+              </Button>
+            </div>
+
+            {/* Existing Code Editor Section */}
             <CodeSection
               htmlContent={editableState.htmlContent ?? ''}
               onHtmlChange={(html) => handleStateChange('htmlContent', html)}
