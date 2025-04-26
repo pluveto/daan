@@ -152,37 +152,46 @@
 
 /* 全局滚动条样式 */
 ::-webkit-scrollbar {
-  width: 8px; /* 垂直滚动条宽度 */
-  height: 8px; /* 水平滚动条高度 */
+  /* 垂直滚动条宽度 */
+  width: 8px;
+  /* 水平滚动条高度 */
+  height: 8px;
 }
 
 /* 滚动条轨道 */
 ::-webkit-scrollbar-track {
-  background: #f1f1f1; /* 浅色模式轨道颜色 */
+  /* 浅色模式轨道颜色 */
+  background: #f1f1f1;
 }
 
 /* 滚动条滑块 */
 ::-webkit-scrollbar-thumb {
-  background: #888; /* 默认滑块颜色 */
-  border-radius: 4px; /* 圆角 */
+  /* 默认滑块颜色 */
+  background: #888;
+  /* 圆角 */
+  border-radius: 4px;
 }
 
 /* 滚动条滑块悬停效果 */
 ::-webkit-scrollbar-thumb:hover {
-  background: #555; /* 悬停时滑块颜色 */
+  /* 悬停时滑块颜色 */
+  background: #555;
 }
 
 /* 暗色模式适配 */
 .dark ::-webkit-scrollbar-track {
-  background: #2d2d2d; /* 暗色模式轨道颜色 */
+  /* 暗色模式轨道颜色 */
+  background: #2d2d2d;
 }
 
 .dark ::-webkit-scrollbar-thumb {
-  background: #555; /* 暗色模式滑块颜色 */
+  /* 暗色模式滑块颜色 */
+  background: #555;
 }
 
 .dark ::-webkit-scrollbar-thumb:hover {
-  background: #777; /* 暗色模式悬停滑块颜色 */
+  /* 暗色模式悬停滑块颜色 */
+  background: #777;
 }
 
 pre {
@@ -196,3 +205,567 @@ pre {
 .thought {
   @apply mb-2 border-l-2 border-neutral-300 pl-4 text-neutral-500 dark:border-neutral-700 dark:text-neutral-400;
 }
+
+/* ==========================================================================
+   Modern Winbox Styles (shadcn/ui inspired) with Dark Mode
+   ========================================================================== */
+
+/* -------------------------------------------------------------------------- */
+/* CSS Variables (Light Theme - Default)
+/* -------------------------------------------------------------------------- */
+:root {
+  /* Window background */
+  --wb-background: hsl(0 0% 100%);
+  /* Window text */
+  --wb-foreground: hsl(0 0% 3.9%);
+  --wb-border: hsl(0 0% 89.8%);
+  /* Window border */
+  /* Header background (slightly off-white) */
+  --wb-header-background: hsl(0 0% 98%);
+  --wb-header-foreground: hsl(0 0% 9%);
+  /* Header text */
+  /* Control icon color */
+  --wb-control-foreground: hsl(0 0% 45.1%);
+  /* Control hover background */
+  --wb-control-hover-background: hsl(0 0% 96.1%);
+  /* Subtle shadow */
+  --wb-shadow:
+    0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+  /* Rounded corners */
+  --wb-radius: 0.5rem;
+  /* Modal overlay background */
+  --wb-modal-overlay: hsla(0 0% 5% / 0.8);
+  /* Header height */
+  --wb-header-height: 40px;
+  /* Control button size */
+  --wb-control-size: 30px;
+  /* General padding (12px) */
+  --wb-padding: 0.75rem;
+}
+
+/* -------------------------------------------------------------------------- */
+/* Dark Theme Variables
+/* -------------------------------------------------------------------------- */
+/* Apply .dark class to body or html tag to enable dark mode */
+.dark {
+  --wb-background: hsl(0 0% 3.9%);
+  --wb-foreground: hsl(0 0% 98%);
+  --wb-border: hsl(0 0% 14.9%);
+  /* Darker header */
+  --wb-header-background: hsl(0 0% 5.9%);
+  --wb-header-foreground: hsl(0 0% 98%);
+  --wb-control-foreground: hsl(0 0% 63.9%);
+  --wb-control-hover-background: hsl(0 0% 14.9%);
+  /* Slightly stronger shadow for dark */
+  --wb-shadow:
+    0 4px 6px -1px rgba(0, 0, 0, 0.2), 0 2px 4px -1px rgba(0, 0, 0, 0.15);
+  --wb-modal-overlay: hsla(0 0% 5% / 0.85);
+}
+
+/* ==========================================================================
+   Base Winbox Styles
+   ========================================================================== */
+.winbox {
+  position: fixed;
+  left: 0;
+  top: 0;
+  background: var(--wb-background);
+  color: var(--wb-foreground);
+  border: 1px solid var(--wb-border);
+  box-shadow: var(--wb-shadow);
+  border-radius: var(--wb-radius);
+  transition:
+    width 0.3s,
+    height 0.3s,
+    left 0.3s,
+    top 0.3s;
+  transition-timing-function: cubic-bezier(0.3, 1, 0.3, 1);
+  contain: layout size;
+  text-align: left;
+  touch-action: none;
+  /* Ensures children conform to border-radius */
+  overflow: hidden;
+  font-family:
+    -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial,
+    sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol';
+  /* 14px */
+  font-size: 0.875rem;
+  /* 20px */
+  line-height: 1.25rem;
+}
+
+/* ==========================================================================
+   Header & Body
+   ========================================================================== */
+.wb-header {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 100%;
+  height: var(--wb-header-height);
+  line-height: var(--wb-header-height);
+  background-color: var(--wb-header-background);
+  color: var(--wb-header-foreground);
+  border-bottom: 1px solid var(--wb-border);
+  overflow: hidden;
+  z-index: 1;
+  /* Use flexbox for alignment */
+  display: flex;
+  flex-direction: row-reverse;
+  align-items: center;
+  box-sizing: border-box;
+  padding: 0 var(--wb-padding);
+}
+
+.wb-body {
+  position: absolute;
+  /* Match header height */
+  top: var(--wb-header-height);
+  left: 0;
+  right: 0;
+  bottom: 0;
+  overflow: auto;
+  -webkit-overflow-scrolling: touch;
+  /* Ensure body background matches */
+  background: var(--wb-background);
+  contain: strict;
+  z-index: 0;
+  /* Add padding to body content */
+  box-sizing: border-box;
+}
+
+/* ==========================================================================
+   Title & Drag Area
+   ========================================================================== */
+.wb-drag {
+  /* Allow drag area to fill space */
+  flex-grow: 1;
+  height: 100%;
+  cursor: move;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+}
+
+.wb-title {
+  /* 14px */
+  font-size: 0.875rem;
+  /* Slightly bolder */
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  /* Prevent text selection during drag */
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+/* Icon (Optional - if you add one) */
+.wb-icon {
+  /* Keep hidden or style if used */
+  display: none;
+  width: 20px;
+  /* Adjust size */
+  height: 20px;
+  margin-right: 8px;
+  /* Prevent icon from shrinking */
+  flex-shrink: 0;
+  background-repeat: no-repeat;
+  /* Use contain for better scaling */
+  background-size: contain;
+  background-position: center;
+}
+
+/* ==========================================================================
+   Resize Handles
+   ========================================================================== */
+/* Keep original resize handle styles, they are functional */
+.wb-n,
+.wb-e,
+.wb-s,
+.wb-w,
+.wb-nw,
+.wb-ne,
+.wb-sw,
+.wb-se {
+  position: absolute;
+  /* Ensure handles are above content */
+  z-index: 2;
+}
+
+.wb-n {
+  top: -5px;
+  left: 5px;
+  right: 5px;
+  height: 10px;
+  cursor: n-resize;
+}
+
+.wb-e {
+  top: 5px;
+  right: -5px;
+  bottom: 5px;
+  width: 10px;
+  cursor: e-resize;
+}
+
+.wb-s {
+  bottom: -5px;
+  left: 5px;
+  right: 5px;
+  height: 10px;
+  cursor: s-resize;
+}
+
+.wb-w {
+  top: 5px;
+  left: -5px;
+  bottom: 5px;
+  width: 10px;
+  cursor: w-resize;
+}
+
+.wb-nw {
+  top: -5px;
+  left: -5px;
+  width: 15px;
+  height: 15px;
+  cursor: nw-resize;
+}
+
+.wb-ne {
+  top: -5px;
+  right: -5px;
+  width: 15px;
+  height: 15px;
+  cursor: ne-resize;
+}
+
+.wb-sw {
+  bottom: -5px;
+  left: -5px;
+  width: 15px;
+  height: 15px;
+  cursor: sw-resize;
+}
+
+/* Corrected cursor */
+.wb-se {
+  bottom: -5px;
+  right: -5px;
+  width: 15px;
+  height: 15px;
+  cursor: se-resize;
+}
+
+/* Corrected cursor */
+
+/* ==========================================================================
+   Controls (Minimize, Maximize, Close, etc.)
+   ========================================================================== */
+.wb-control {
+  /* Remove float, handled by flexbox in header */
+  float: none;
+  display: flex;
+  align-items: center;
+  height: 100%;
+  /* Push controls to the right */
+  margin-left: auto;
+  /* Prevent controls from shrinking */
+  flex-shrink: 0;
+}
+
+.wb-control > * {
+  /* Style individual buttons */
+  /* Use flex for centering icon */
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--wb-control-size);
+  height: var(--wb-control-size);
+  /* Spacing between buttons */
+  margin-left: 4px;
+  border: none;
+  background-color: transparent;
+  color: var(--wb-control-foreground);
+  /* Slightly rounded buttons */
+  border-radius: calc(var(--wb-radius) * 0.5);
+  cursor: pointer;
+  transition:
+    background-color 0.2s ease-out,
+    color 0.2s ease-out;
+  /* Prevent shrinking on smaller screens */
+  flex-shrink: 0;
+
+  /* --- ICON STYLING --- */
+  /*
+     IMPORTANT: Replace background-image URLs with modern SVG icons.
+     Best practice: Embed SVGs directly in HTML or use an icon library.
+     For CSS-only, you can use SVG data URIs or CSS Masks with `background-color: currentColor`.
+
+     Placeholder Styling (using background-image from original for reference):
+     Remove the `background-color: grey;` below once you have icons.
+  */
+  background-repeat: no-repeat;
+  background-position: center center;
+  /* Example placeholder - remove this */
+  /* background-color: grey; */
+  /* Add your background-image rules back here or implement SVG */
+}
+
+.wb-control > *:hover {
+  background-color: var(--wb-control-hover-background);
+  /* Make icon darker/lighter on hover */
+  color: var(--wb-foreground);
+}
+
+/* Reference original icon styles (replace with your method) */
+.wb-min {
+  background-image: url('/assets/icon/min.svg');
+  background-size: 16px auto;
+}
+
+.wb-max {
+  background-image: url('/assets/icon/max.svg');
+  background-size: 16px auto;
+}
+
+.max .wb-max {
+  background-image: url('/assets/icon/restore.svg');
+  background-size: 16px auto;
+}
+
+.wb-close {
+  background-image: url('/assets/icon/close.svg');
+  background-size: 16px auto;
+}
+
+.wb-full {
+  background-image: url('/assets/icon/full.svg');
+  background-size: 16px auto;
+}
+
+/* ==========================================================================
+   Window States (Minimized, Maximized, Modal, etc.)
+   ========================================================================== */
+
+/* Maximized State */
+.winbox.max {
+  /* Sharp corners when maximized */
+  border-radius: 0;
+  /* Often no border when maximized */
+  border: none;
+  /* Remove shadow when maximized */
+  box-shadow: none;
+}
+
+.winbox.max .wb-drag {
+  cursor: default;
+}
+
+.winbox.max .wb-body~div,
+/* Disable resize handles */
+.winbox.max .wb-n,
+.winbox.max .wb-e,
+.winbox.max .wb-s,
+.winbox.max .wb-w,
+.winbox.max .wb-nw,
+.winbox.max .wb-ne,
+.winbox.max .wb-sw,
+.winbox.max .wb-se {
+  pointer-events: none;
+  /* Hide handles visually */
+  display: none;
+}
+
+/* Minimized State */
+.winbox.min .wb-body,
+.winbox.min .wb-body~div,
+/* Hide resize handles */
+.winbox.min .wb-n,
+.winbox.min .wb-e,
+.winbox.min .wb-s,
+.winbox.min .wb-w,
+.winbox.min .wb-nw,
+.winbox.min .wb-ne,
+.winbox.min .wb-sw,
+.winbox.min .wb-se,
+.winbox.min .wb-full,
+/* Hide fullscreen button */
+.winbox.min .wb-min {
+  /* Hide minimize button */
+  display: none;
+}
+
+.winbox.min .wb-drag {
+  cursor: default;
+}
+
+.winbox.min {
+  /* Optional: Define specific minimized appearance if needed */
+  /* e.g., height: var(--wb-header-height); */
+  /* Keep shadow when minimized */
+  box-shadow: var(--wb-shadow);
+}
+
+/* Hidden State */
+.winbox.hide {
+  display: none;
+}
+
+/* Modal State */
+.winbox.modal:before {
+  /* Optional: Style the overlay behind the modal within the window bounds if needed */
+  /* content: ''; ... */
+  /* background: inherit; border-radius: inherit; */
+  /* Typically not needed with the :after overlay */
+  display: none;
+}
+
+.winbox.modal:after {
+  /* The full-screen overlay */
+  content: '';
+  /* Use fixed to cover viewport */
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: var(--wb-modal-overlay);
+  animation: wb-fade-in 0.2s ease-out forwards;
+  /* Position behind the window */
+  z-index: -1;
+}
+
+.winbox.modal .wb-body~div,
+/* Disable resize handles */
+.winbox.modal .wb-n,
+.winbox.modal .wb-e,
+.winbox.modal .wb-s,
+.winbox.modal .wb-w,
+.winbox.modal .wb-nw,
+.winbox.modal .wb-ne,
+.winbox.modal .wb-sw,
+.winbox.modal .wb-se,
+.winbox.modal .wb-drag,
+/* Disable dragging */
+.winbox.modal .wb-min,
+/* Hide controls */
+.winbox.modal .wb-max,
+.winbox.modal .wb-full {
+  pointer-events: none;
+  /* Hide unnecessary elements */
+  display: none;
+}
+
+.winbox.modal .wb-close {
+  /* Ensure close button is visible */
+  display: inline-flex;
+  pointer-events: auto;
+}
+
+@keyframes wb-fade-in {
+  0% {
+    opacity: 0;
+  }
+
+  100% {
+    opacity: 1;
+  }
+
+  /* Overlay background has alpha, so just animate opacity to 1 */
+}
+
+/* ==========================================================================
+   Configuration Modifiers (no-header, no-resize, etc.)
+   ========================================================================== */
+.no-animation,
+.no-animation * {
+  transition: none !important;
+  animation: none !important;
+}
+
+.no-shadow {
+  box-shadow: none !important;
+}
+
+.no-header .wb-header {
+  display: none;
+}
+
+.no-header .wb-body {
+  top: 0;
+  /* Adjust radius when no header */
+  border-top-left-radius: var(--wb-radius);
+  border-top-right-radius: var(--wb-radius);
+}
+
+.no-min .wb-min {
+  display: none;
+}
+
+.no-max .wb-max {
+  display: none;
+}
+
+.no-full .wb-full {
+  display: none;
+}
+
+.no-close .wb-close {
+  display: none;
+}
+
+.no-resize .wb-body ~ div,
+.no-resize .wb-n,
+.no-resize .wb-e,
+.no-resize .wb-s,
+.no-resize .wb-w,
+.no-resize .wb-nw,
+.no-resize .wb-ne,
+.no-resize .wb-sw,
+.no-resize .wb-se {
+  /* Ensure they are hidden */
+  display: none !important;
+}
+
+.no-move:not(.min) .wb-drag {
+  cursor: default;
+  /* Disable dragging */
+  pointer-events: none;
+}
+
+.no-move:not(.min) .wb-title {
+  pointer-events: none;
+}
+
+/* ==========================================================================
+   Iframe & Body Lock
+   ========================================================================== */
+.winbox iframe {
+  position: absolute;
+  width: 100%;
+  height: 100%;
+  border: 0;
+  /* Ensure iframe background matches in dark mode if possible */
+  /* background-color: var(--wb-background); */
+  /* Might interfere with iframe content */
+}
+
+body.wb-lock .winbox {
+  will-change: left, top, width, height;
+  /* Disable transitions during drag/resize */
+  transition: none !important;
+}
+
+body.wb-lock iframe {
+  /* Prevent iframe interaction during drag/resize */
+  pointer-events: none;
+}
+
+/* Deprecated/Unused? Original comments mentioned these */
+/*
+.wb-body .wb-hide { display: none; }
+.wb-show { display: none; }
+.wb-body .wb-show { display: revert; }
+*/

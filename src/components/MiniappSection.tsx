@@ -61,12 +61,12 @@ const SortableMiniappIcon: React.FC<SortableMiniappIconProps> = ({
     opacity: isDragging ? 0.5 : 1,
     zIndex: isDragging ? 10 : 1, // Ensure dragged item is visually above others during drag
     // Add subtle scale effect on minimize?
-    scale: instance.windowState.minimized ? '0.9' : '1',
-    filter: instance.windowState.minimized ? 'grayscale(80%)' : 'none',
+    scale: instance.minimized ? '0.9' : '1',
+    filter: instance.minimized ? 'grayscale(80%)' : 'none',
   };
 
   const handleClick = () => {
-    if (instance.windowState.minimized) {
+    if (instance.minimized) {
       onToggleMinimize(instance.instanceId); // Unminimize also focuses via atom dependency
     } else {
       onFocus(instance.instanceId);
@@ -94,13 +94,11 @@ const SortableMiniappIcon: React.FC<SortableMiniappIconProps> = ({
             {...attributes}
             {...listeners}
             aria-label={`Focus ${appName}`}
-            className={`flex h-8 w-8 cursor-grab items-center justify-center rounded p-1 text-xl ${instance.windowState.minimized ? 'bg-neutral-300 dark:bg-neutral-700' : 'bg-neutral-200 dark:bg-neutral-800'} text-neutral-800 hover:bg-neutral-300 dark:text-neutral-200 dark:hover:bg-neutral-700`}
+            className={`flex h-8 w-8 cursor-grab items-center justify-center rounded p-1 text-xl ${instance.minimized ? 'bg-neutral-300 dark:bg-neutral-700' : 'bg-neutral-200 dark:bg-neutral-800'} text-neutral-800 hover:bg-neutral-300 dark:text-neutral-200 dark:hover:bg-neutral-700`}
             key={instance.instanceId}
             onClick={handleClick}
             onAuxClick={handleMiddleClick} // Handle middle click for minimize/unminimize
-            title={
-              appName + (instance.windowState.minimized ? ' (Minimized)' : '')
-            }
+            title={appName + (instance.minimized ? ' (Minimized)' : '')}
             size="icon"
             variant="ghost"
           >
@@ -116,7 +114,7 @@ const SortableMiniappIcon: React.FC<SortableMiniappIconProps> = ({
         <TooltipContent side="top" sideOffset={4}>
           <p>
             {appName}
-            {instance.windowState.minimized
+            {instance.minimized
               ? ' (Minimized - Middle-click to restore)'
               : ' (Middle-click to minimize)'}
           </p>

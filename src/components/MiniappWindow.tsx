@@ -1,38 +1,37 @@
 // src/components/MiniappWindow.tsx
 import { MiniappRunner } from '@/miniapps/components/MiniappRunner';
 import {
-  closeMiniappAtom,
-  focusMiniappWindowAtom,
+  activeMiniappInstancesAtom,
+  closeMiniappAtom, // Keep for closing action
   miniappDefinitionsByIdAtom,
-  toggleMinimizeMiniappAtom,
-  updateMiniappWindowStateAtom,
+  registerWinBoxInstance,
+  unregisterWinBoxInstance, // Keep for getting definition
 } from '@/store/miniapp';
 import { MiniappDefinition, MiniappInstance } from '@/types';
 import { atom, useAtomValue, useSetAtom } from 'jotai';
-import React, { memo, useCallback } from 'react'; // Import memo and useCallback
-import { LuMinus, LuPackage, LuX } from 'react-icons/lu';
-import { DraggableData, ResizableDelta, Rnd } from 'react-rnd';
-import { Button } from './ui/Button';
+import React, { memo, useCallback, useEffect, useRef } from 'react'; // Removed useState, useEffect
+import WinBox, { WinBoxPropType } from 'react-winbox'; // Import WinBox
+
+import '@/winbox.css';
 
 const MIN_WIDTH = 200;
-const MIN_HEIGHT = 150; // Includes title bar
-const TITLE_BAR_HEIGHT = 32; // Adjust as needed
+const MIN_HEIGHT = 150;
 
-// --- Helper: Window Content Component ---
-// This component renders the actual app content.
-// It's memoized to prevent re-renders when only window frame properties (like zIndex or position) change.
+// --- Helper: Window Content Component (Memoized - unchanged) ---
 interface WindowContentProps {
   definition: MiniappDefinition;
   instanceId: string;
 }
-
 const WindowContent: React.FC<WindowContentProps> = memo(
   ({ definition, instanceId }) => {
-    console.log(`Rendering WindowContent for ${instanceId}`); // Add log for debugging renders
+    console.log(`Rendering WindowContent for ${instanceId}`);
+    // Ensure content fills the WinBox body. Add padding if needed inside MiniappRunner.
     return (
-      <div className="h-full w-full flex-grow overflow-auto">
+      <div className="h-full w-full overflow-auto">
+        {' '}
+        {/* Let WinBox handle outer flex/border */}
         <MiniappRunner
-          key={instanceId} // Key remains important for potential definition changes or remount needs
+          key={instanceId} // Still useful if runner needs remounting on definition change
           miniappDefinition={definition}
           instanceId={instanceId}
         />
@@ -40,217 +39,190 @@ const WindowContent: React.FC<WindowContentProps> = memo(
     );
   },
 );
-WindowContent.displayName = 'WindowContent'; // For better debugging
+WindowContent.displayName = 'WindowContent';
 
-// --- Main Window Component ---
+const updateGlobalMinimizedStateAtom = atom(
+  null,
+  (get, set, payload: { instanceId: string; minimized: boolean }) => {
+    // Find the internal setter atom logic if needed, or directly update activeMiniappInstancesAtom
+    set(activeMiniappInstancesAtom, (prev) =>
+      prev.map((inst) =>
+        inst.instanceId === payload.instanceId
+          ? { ...inst, minimized: payload.minimized }
+          : inst,
+      ),
+    );
+  },
+);
+
+// --- Main Window Component (Memoized) ---
 interface MiniappWindowProps {
-  instance: MiniappInstance;
+  instance: MiniappInstance; // Instance no longer contains windowState
 }
 
-// Memoize MiniappWindow itself
 export const MiniappWindow: React.FC<MiniappWindowProps> = memo(
   ({ instance }) => {
-    const { instanceId, definitionId, windowState } = instance;
+    const { instanceId, definitionId, minimized } = instance; // Destructure updated instance
+    const winboxRef = useRef<WinBox | null>(null); // Ref to hold the WinBox instance
 
-    // Use atoms
-    const updateWindowState = useSetAtom(updateMiniappWindowStateAtom);
-    const focusWindow = useSetAtom(focusMiniappWindowAtom);
+    useEffect(() => {
+      // Register the WinBox instance with the global registry
+      const winboxInstance = winboxRef.current;
+      if (winboxInstance) {
+        registerWinBoxInstance(instanceId, winboxInstance);
+      }
+      return () => {
+        // Unregister the WinBox instance on unmount
+        unregisterWinBoxInstance(instanceId);
+      };
+    }, [instanceId]);
+
+    // --- Global State Atoms ---
     const closeWindow = useSetAtom(closeMiniappAtom);
-    const toggleMinimize = useSetAtom(toggleMinimizeMiniappAtom);
-    const definition = useAtomValue(
-      // Select only the needed definition to avoid re-renders if other definitions change
-      atom((get) => get(miniappDefinitionsByIdAtom)[definitionId]),
-    );
+    const definition = useAtomValue(miniappDefinitionsByIdAtom)[definitionId];
+    const setGlobalMinimized = useSetAtom(updateGlobalMinimizedStateAtom); // Use the setter
 
-    console.log(
-      `Rendering MiniappWindow ${instanceId}, zIndex: ${windowState.zIndex}, minimized: ${windowState.minimized}`,
-    ); // Debug log
+    // --- Remove Local State for Interaction ---
+    // const [isDragging, setIsDragging] = useState(false); // REMOVED
+    // const [interactionState, setInteractionState] = useState({...}); // REMOVED
+    // const sync useEffect = REMOVED
 
-    // Fetch definition details (already derived above)
+    // --- Definition Check ---
     if (!definition) {
       console.error(
         `MiniappWindow: Definition ${definitionId} not found for instance ${instanceId}.`,
       );
-      // Consider closing it automatically from here might be complex due to hook rules.
-      // A useEffect in the parent component rendering the list might be better.
+      // Important: Return null here. If definition isn't ready, don't render WinBox.
       return null;
     }
 
-    // --- Memoized Callbacks ---
-    const handleDragStop = useCallback(
-      (_e: any, d: DraggableData) => {
-        // Update global state only on drag stop
-        // Check if position actually changed to potentially avoid redundant updates
-        if (d.x !== windowState.x || d.y !== windowState.y) {
-          console.log(`DragStop ${instanceId}: Updating global state`);
-          updateWindowState({ instanceId, state: { x: d.x, y: d.y } });
-        } else {
-          console.log(`DragStop ${instanceId}: Position did not change`);
-        }
+    // const handleCreate = useCallback((params: WindowContentProps) => {
+    //     winboxRef.current = winboxInstance;
+    //     registerWinBoxInstance(instanceId, winboxInstance);
+
+    //     // Ensure initial minimized state matches global state when created
+    //     if (minimized && !winboxInstance.minimized) {
+    //         console.log(`Initial sync: Minimizing WinBox ${instanceId} based on global state.`);
+    //         winboxInstance.minimize(true); // true = silent / no animation
+    //     } else if (!minimized && winboxInstance.minimized) {
+    //         console.log(`Initial sync: Restoring WinBox ${instanceId} based on global state.`);
+    //         winboxInstance.restore(true);
+    //     }
+    // }, [instanceId, minimized]); // Include minimized in dep array for initial sync
+
+    // Cleanup ref on unmount
+    // useEffect(() => {
+    //     return () => {
+    //         unregisterWinBoxInstance(instanceId);
+    //         winboxRef.current = null; // Clear the ref
+    //     };
+    // }, [instanceId]);
+
+    // Called when user clicks the close button in WinBox
+    const handleWinBoxClose = useCallback(() => {
+      console.log(`WinBox Close requested for ${instanceId}`);
+      closeWindow(instanceId); // Trigger global state update to remove this instance
+      return false; // Tell WinBox to allow the close operation
+    }, [instanceId, closeWindow]);
+
+    // Called when the window gains focus (WinBox handles z-index)
+    const handleWinBoxFocus = useCallback(() => {
+      console.log(`WinBox Focus ${instanceId}`);
+      // No need to update global zIndex state anymore.
+      // If needed, update taskbar highlight or other UI elements here.
+    }, [instanceId]);
+
+    const handleWinBoxMinimize = useCallback(() => {
+      console.log(`WinBox Minimize ${instanceId} (via control)`);
+      setGlobalMinimized({ instanceId, minimized: true }); // Update global state
+    }, [instanceId, setGlobalMinimized]);
+
+    // Sync global state WHEN user restores using WinBox controls
+    const handleWinBoxRestore = useCallback(() => {
+      console.log(`WinBox Restore ${instanceId} (via control)`);
+      setGlobalMinimized({ instanceId, minimized: false }); // Update global state
+    }, [instanceId, setGlobalMinimized]);
+
+    // Called when window stops moving (x, y available in WinBox instance)
+    const handleWinBoxMove = useCallback(
+      (winbox: any) => {
+        // winbox instance is passed
+        console.log(
+          `WinBox Move end ${instanceId}: x=${winbox.x}, y=${winbox.y}`,
+        );
+        // Persist position *if desired*, but not to the main global state atom
+        // Could save to localStorage associated with instanceId, for example.
       },
-      [instanceId, updateWindowState, windowState.x, windowState.y],
-    ); // Include dependencies
+      [instanceId],
+    );
 
-    const handleResizeStop = useCallback(
-      (
-        _e: any,
-        _direction: any,
-        ref: HTMLElement,
-        _delta: ResizableDelta,
-        position: { x: number; y: number },
-      ) => {
-        // Update global state only on resize stop
-        console.log(`ResizeStop ${instanceId}: Updating global state`);
-        updateWindowState({
-          instanceId,
-          state: {
-            width: ref.offsetWidth,
-            height: ref.offsetHeight,
-            x: position.x, // react-rnd updates position on resize
-            y: position.y,
-          },
-        });
+    // Called when window stops resizing (width, height available in WinBox instance)
+    const handleWinBoxResize = useCallback(
+      (winbox: any) => {
+        // winbox instance is passed
+        console.log(
+          `WinBox Resize end ${instanceId}: w=${winbox.width}, h=${winbox.height}`,
+        );
+        // Persist size *if desired*, similar to position.
       },
-      [instanceId, updateWindowState],
-    ); // Include dependencies
+      [instanceId],
+    );
 
-    // Focus should only update zIndex, triggering minimal re-renders due to memoization elsewhere
-    const handleFocus = useCallback(() => {
-      console.log(`Focus ${instanceId}`);
-      focusWindow(instanceId);
-    }, [instanceId, focusWindow]); // Include dependencies
-
-    const handleClose = useCallback(
-      (e: React.MouseEvent) => {
-        e.stopPropagation(); // Prevent focus trigger on close
-        console.log(`Close ${instanceId}`);
-        closeWindow(instanceId);
-      },
-      [instanceId, closeWindow],
-    ); // Include dependencies
-
-    const handleMinimize = useCallback(
-      (e: React.MouseEvent) => {
-        e.stopPropagation();
-        console.log(`Minimize ${instanceId}`);
-        toggleMinimize(instanceId);
-      },
-      [instanceId, toggleMinimize],
-    ); // Include dependencies
-
-    // --- Component Logic ---
+    // --- Component Logic & WinBox Options ---
     const appName = definition?.name || 'MiniApp';
-    const appIcon = definition?.icon;
+    // WinBox icon handling is simpler (URL or class). Let's omit the React icon for now.
+    // const appIcon = definition?.icon;
 
-    // Style for Rnd component - extracted for clarity
-    const rndStyle: React.CSSProperties = {
-      zIndex: windowState.zIndex,
-      willChange: 'transform',
-      // overflow: 'hidden' // Moved overflow handling inside
+    // Define options for the WinBox instance
+    const winBoxOptions: WinBoxPropType = {
+      id: instanceId, // Use instanceId for the DOM element ID
+      title: definition?.icon + ' ' + appName,
+      // icon: appIcon, // If appIcon is a URL or CSS class name supported by WinBox theme
+      // Initial position/size (WinBox has good defaults like 'center')
+      x: 'center',
+      y: 'center',
+      width: MIN_WIDTH, // Example initial size
+      height: MIN_HEIGHT, // Example initial size
+      minWidth: MIN_WIDTH,
+      minHeight: MIN_HEIGHT,
+      // Restrict dragging/resizing within the body
+      // bounds: [0, 0, window.innerWidth, window.innerHeight], // Example using array
+      // Or use 'parent' if wrapped in a specific container, but body is common
+      // Using WinBox defaults for bounds is usually sufficient unless specific constraints are needed.
+
+      // --- Event Handlers ---
+      // onCreate: handleCreate,
+      onClose: handleWinBoxClose, // Hook up the close handler
+      onFocus: handleWinBoxFocus,
+      onMinimize: handleWinBoxMinimize,
+      onRestore: handleWinBoxRestore,
+      onMove: handleWinBoxMove, // Called at end of move
+      onResize: handleWinBoxResize, // Called at end of resize
+      noFull: true,
+      // Custom styling (optional)
+      className: ['miniapp-winbox', 'no-overflow'].join(' '), // Add custom classes if needed. 'no-overflow' prevents WinBox scrollbars if content handles it.
+      // background: '#fff', // Set background if needed, often handled by content CSS
     };
 
+    console.log(`Rendering WinBox for instance ${instanceId}`);
+
     return (
-      <Rnd
-        size={{
-          width: windowState.width,
-          // Set height directly for minimized state
-          height: windowState.minimized ? TITLE_BAR_HEIGHT : windowState.height,
-        }}
-        position={{ x: windowState.x, y: windowState.y }}
-        minWidth={MIN_WIDTH}
-        // Adjust minHeight based on minimized state
-        minHeight={windowState.minimized ? TITLE_BAR_HEIGHT : MIN_HEIGHT}
-        maxWidth="95vw"
-        maxHeight="90vh"
-        style={rndStyle}
-        bounds="body"
-        // --- Event Handlers ---
-        // Focus only on mouse down capture on the whole component
-        onMouseDownCapture={handleFocus}
-        // Drag/Resize handlers update global state only on stop
-        onDragStop={handleDragStop}
-        onResizeStop={handleResizeStop}
-        // --- Configuration ---
-        dragHandleClassName="miniapp-drag-handle" // Class for the title bar handle
-        className="bg-background flex flex-col overflow-hidden rounded-md border border-neutral-300 shadow-lg dark:border-neutral-700" // Apply overflow hidden here
-        enableResizing={!windowState.minimized} // Disable resizing when minimized
-        // Disable dragging when minimized? Optional, might be desired.
-        // disableDragging={windowState.minimized}
-      >
-        {/* Title Bar */}
-        <div
-          className={`miniapp-drag-handle bg-muted text-muted-foreground flex h-[${TITLE_BAR_HEIGHT}px] flex-shrink-0 cursor-grab items-center justify-between border-b border-neutral-300 px-2 dark:border-neutral-700`}
-        >
-          <div className="flex items-center space-x-1 overflow-hidden">
-            {/* Icon */}
-            <span className="flex-shrink-0 text-sm">
-              {appIcon ? (
-                <span className="text-base">{appIcon}</span>
-              ) : (
-                <LuPackage className="h-4 w-4" />
-              )}
-            </span>
-            {/* Title */}
-            <span className="flex-1 truncate text-xs font-medium">
-              {appName}
-            </span>
-          </div>
-
-          {/* Window Controls */}
-          <div className="flex flex-shrink-0 items-center">
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-6 w-6"
-              title="Minimize"
-              onClick={handleMinimize} // Use memoized handler
-              // Prevent focus when clicking button
-              onMouseDown={(e) => e.stopPropagation()}
-            >
-              <LuMinus className="h-4 w-4" />
-            </Button>
-            <Button
-              variant="ghost"
-              size="icon"
-              className="hover:bg-destructive/80 h-6 w-6"
-              title="Close"
-              onClick={handleClose} // Use memoized handler
-              // Prevent focus when clicking button
-              onMouseDown={(e) => e.stopPropagation()}
-            >
-              <LuX className="h-4 w-4" />
-            </Button>
-          </div>
-        </div>
-
-        {/* Content Area - Render only if not minimized */}
-        {/* Use the memoized WindowContent component */}
-        {!windowState.minimized && (
-          <WindowContent definition={definition} instanceId={instanceId} />
-        )}
-      </Rnd>
+      <WinBox ref={winboxRef} {...winBoxOptions}>
+        {/* Render the actual application content inside WinBox */}
+        <WindowContent definition={definition} instanceId={instanceId} />
+      </WinBox>
     );
-    // Custom comparison function for React.memo on MiniappWindow
+
+    // Custom comparison function for React.memo - simplified
   },
   (prevProps, nextProps) => {
-    // Only re-render if these specific props change. Deep comparison for windowState is tricky,
-    // so we compare individual relevant properties.
+    // Re-render if instanceId, definitionId, or minimized state changes from global store
     return (
       prevProps.instance.instanceId === nextProps.instance.instanceId &&
       prevProps.instance.definitionId === nextProps.instance.definitionId &&
-      prevProps.instance.windowState.x === nextProps.instance.windowState.x &&
-      prevProps.instance.windowState.y === nextProps.instance.windowState.y &&
-      prevProps.instance.windowState.width ===
-        nextProps.instance.windowState.width &&
-      prevProps.instance.windowState.height ===
-        nextProps.instance.windowState.height &&
-      prevProps.instance.windowState.zIndex ===
-        nextProps.instance.windowState.zIndex &&
-      prevProps.instance.windowState.minimized ===
-        nextProps.instance.windowState.minimized
-    );
-    // Add other windowState properties if they directly affect MiniappWindow rendering
+      prevProps.instance.minimized === nextProps.instance.minimized
+    ); // Add check
   },
 );
 
-MiniappWindow.displayName = 'MiniappWindow'; // For better debugging
+MiniappWindow.displayName = 'MiniappWindow';

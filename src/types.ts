@@ -201,22 +201,11 @@ export interface MiniappDefinition {
   permissions?: MiniappPermissions;
 }
 
-// State for a floating MiniApp window
-export interface MiniappWindowState {
-  x: number;
-  y: number;
-  width: number;
-  height: number;
-  zIndex: number;
-  minimized: boolean;
-  // Add focus state? Can be derived from zIndex potentially
-}
-
 // Represents a running instance of a MiniApp
 export interface MiniappInstance {
   instanceId: string; // Unique ID for this running instance
   definitionId: string; // ID of the MiniappDefinition being run
-  windowState: MiniappWindowState;
+  minimized: boolean; // Whether the window is minimized or not
   // Consider adding definition directly if needed frequently, or derive it
   // definition: MiniappDefinition;
 }
