@@ -1,5 +1,20 @@
 export type ValidRoles = 'user' | 'assistant' | 'system';
 
+export interface McpToolDefinition {
+  name: string; // Tool name, unique within the Miniapp's MCP server
+  description: string;
+  inputSchema: any; // JSON Schema object for input arguments
+  outputSchema?: any; // Optional: Define expected output structure
+}
+
+export interface MiniappMcpDefinition {
+  serverInfo: {
+    name: string; // Display name for this MCP server (e.g., "My Miniapp Tools")
+    version: string; // Version of the MCP implementation in the Miniapp
+  };
+  tools: McpToolDefinition[];
+}
+
 interface BaseToolCallInfo {
   callId: string; // Unique ID for this specific tool call instance
   toolName: string;

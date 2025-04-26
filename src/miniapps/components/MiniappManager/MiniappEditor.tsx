@@ -333,6 +333,12 @@ export function MiniappEditor({
               }
             />
           </TabsContent>
+          <TabsContent value="mcp">
+            <McpDefinitionEditor
+              value={editableState.mcpDefinition} // Pass current definition
+              onChange={(mcpDef) => handleStateChange('mcpDefinition', mcpDef)} // Update state
+            />
+          </TabsContent>
         </div>
       </Tabs>
 

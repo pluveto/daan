@@ -1,3 +1,5 @@
+import { MiniappMcpDefinition } from './tool-call';
+
 export interface MiniappDefinition {
   id: string; // UUID recommended
   icon?: string;
@@ -7,6 +9,7 @@ export interface MiniappDefinition {
   configSchema?: Record<string, any>;
   defaultConfig?: Record<string, any>;
   defaultWindowSize?: { width: number; height: number };
+  mcpDefinition?: MiniappMcpDefinition;
   enabled: boolean; // Controls if it *can* be activated
   dependencies?: string[];
   permissions?: MiniappPermissions;

@@ -70,7 +70,7 @@ interface McpServerListProps {
   servers: McpServerConfig[];
   serverStates: Map<string, McpServerState>;
   onToggleEnabled: (serverId: string) => void;
-  onConnect: (serverId: string) => void;
+  onConnect: (payload: ConnectMcpServerPayload) => void;
   onDisconnect: (serverId: string) => void;
   onEdit: (server: McpServerConfig) => void;
   onDelete: (serverId: string) => void;

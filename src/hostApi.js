@@ -9,6 +9,9 @@ window.hostApi = (() => {
   /** @type {Map<string, Function>} */
   const registeredFunctions = new Map();
 
+  /** @type {Function | null} */
+  let mcpRequestHandler = null;
+
   // --- Internal: Send message TO Host ---
   /**
    * Sends a message to the host application.
@@ -168,6 +171,47 @@ window.hostApi = (() => {
       window.dispatchEvent(
         new CustomEvent('daan:llmError', { detail: { requestId, error } }),
       );
+    } else if (type === 'mcpRequest' && payload && requestId) {
+      console.debug(`Miniapp: Received mcpRequest ${requestId}`, payload);
+      if (typeof mcpRequestHandler === 'function') {
+        // Use Promise.resolve to handle both sync/async handlers
+        Promise.resolve(mcpRequestHandler(payload)) // Pass the JSON-RPC request payload
+          .then((result) => {
+            // Assume handler returns a valid JSON-RPC Response object
+            console.debug(`Miniapp: Sending mcpResponse for ${requestId}`);
+            sendMessageToHost('mcpResponse', result, requestId);
+          })
+          .catch((err) => {
+            console.error(
+              `Miniapp: Error in MCP request handler for ${requestId}:`,
+              err,
+            );
+            // Construct a JSON-RPC error response object
+            const errorResponsePayload = {
+              jsonrpc: '2.0',
+              id: payload.id, // Use the ID from the original request
+              error: {
+                code: -32000, // Generic server error
+                message: err?.message || 'Miniapp MCP handler failed.',
+                // data: err?.stack // Optional: include stack in data?
+              },
+            };
+            sendMessageToHost('mcpResponse', errorResponsePayload, requestId);
+          });
+      } else {
+        console.warn(
+          `Miniapp: Received mcpRequest ${requestId} but no MCP handler registered.`,
+        );
+        const errorResponsePayload = {
+          jsonrpc: '2.0',
+          id: payload.id, // Use the ID from the original request
+          error: {
+            code: -32601,
+            message: 'Method not found (No MCP handler registered in Miniapp)',
+          },
+        };
+        sendMessageToHost('mcpResponse', errorResponsePayload, requestId);
+      }
     }
     // Add handlers for other message types as needed
   }
@@ -388,6 +432,27 @@ window.hostApi = (() => {
        */
       abort: (requestId) => callHost('llmAbort', { requestId }),
     },
+    /**
+     * Registers a handler function to process incoming MCP requests from the host.
+     * The handler receives the JSON-RPC request object and MUST return a Promise
+     * resolving with a valid JSON-RPC response object (containing 'result' or 'error').
+     * @param {function(object): Promise<object>} handler - Async function (request) => Promise<response>.
+     */
+    registerMcpHandler: (handler) => {
+      if (typeof handler === 'function') {
+        console.debug('Miniapp: Registering MCP request handler.');
+        mcpRequestHandler = handler;
+      } else {
+        console.error(
+          'Miniapp: Invalid MCP handler provided. Must be a function.',
+        );
+      }
+    },
+    /** Unregisters the MCP request handler. */
+    unregisterMcpHandler: () => {
+      console.debug('Miniapp: Unregistering MCP request handler.');
+      mcpRequestHandler = null;
+    },
 
     // --- Cleanup on Unload ---
     // Automatically unregister functions and potentially abort pending requests when the Miniapp unloads.
@@ -404,7 +469,8 @@ window.hostApi = (() => {
       registeredFunctions.clear();
       // Remove the main listener
       window.removeEventListener('message', handleHostMessage);
-      console.log('Miniapp: hostApi cleanup complete.');
+      mcpRequestHandler = null; // Clear handler on unload
+      console.log('Miniapp: hostApi cleanup complete (incl. MCP).');
     },
   };
 

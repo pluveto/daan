@@ -1,3 +1,5 @@
+// src/settings/McpSettingsTab/McpServerForm.tsx
+// ... (imports: include Select components, useEffect, useForm, etc.)
 import { Button } from '@/components/ui/Button';
 import {
   DialogContent,
@@ -7,7 +9,6 @@ import {
   DialogTitle,
 } from '@/components/ui/Dialog';
 import {
-  Form,
   FormControl,
   FormDescription,
   FormField,
@@ -23,14 +24,15 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/Select';
-import { Switch } from '@/components/ui/Switch';
 import { Textarea } from '@/components/ui/Textarea';
 import { isDesktopEnv } from '@/lib/env';
 import { cn } from '@/lib/utils';
-import { McpServerConfig } from '@/store/mcp';
+import { McpServerConfig } from '@/store/mcp'; // Import specific type if needed
+import { miniappsDefinitionAtom } from '@/store/miniapp'; // Import definitions atom
 import { zodResolver } from '@hookform/resolvers/zod';
-import React, { useEffect } from 'react';
-import { useForm } from 'react-hook-form';
+import { useAtomValue } from 'jotai'; // Import useAtomValue
+import React, { useEffect, useMemo } from 'react';
+import { Form, useForm } from 'react-hook-form';
 import { McpServerFormData, mcpServerFormSchema } from './schema';
 
 interface McpServerFormProps {
@@ -47,66 +49,93 @@ export const McpServerForm: React.FC<McpServerFormProps> = ({
   editingServer,
 }) => {
   const isEditing = !!editingServer;
-  const canUseStdio = isDesktopEnv(); // Check if Tauri environment is active
-
+  const canUseStdio = isDesktopEnv();
   const isEditingBuiltin =
     isEditing && editingServer?.type === 'builtin-pseudo';
 
-  const form = useForm({
+  // Get Miniapp definitions for the dropdown
+  const miniappDefinitions = useAtomValue(miniappsDefinitionAtom);
+
+  // Filter definitions that could potentially be MCP servers (optional)
+  // For now, list all non-enabled ones for selection. A better filter might check for mcpDefinition.
+  const mcpCandidateMiniapps = useMemo(() => {
+    return miniappDefinitions.map((def) => ({
+      value: def.id,
+      label:
+        `${def.icon || '📦'} ${def.name}` +
+        (def.mcpDefinition ? ' (MCP Capable)' : ''), // Indicate if MCP def exists
+    }));
+  }, [miniappDefinitions]);
+
+  const form = useForm<McpServerFormData>({
+    // Use the specific Zod type
     mode: 'onChange',
     resolver: zodResolver(mcpServerFormSchema),
-    // Default values should ideally match the schema structure
     defaultValues: {
+      // Set defaults matching the schema
       name: '',
       description: '',
       type: 'sse', // Default to SSE
       url: '',
       command: undefined,
-      args: undefined,
+      args: [],
+      targetMiniappId: undefined, // Add default for new field
       autoApproveTools: false,
     },
   });
 
-  // Watch the 'type' field to conditionally render inputs
   const serverType = form.watch('type');
 
-  // Reset form when dialog opens or editingServer changes
+  // Reset form logic
   useEffect(() => {
     if (isOpen) {
       if (editingServer) {
-        // Prepare data for the form, especially converting args back to string for input if needed
+        // Prepare form data based on editingServer type
         const formData: Partial<McpServerFormData> = {
           id: editingServer.id,
           name: editingServer.name,
           description: editingServer.description || '',
-          type: editingServer.type, // Cast based on logic
+          type: editingServer.type,
           autoApproveTools: editingServer.autoApproveTools,
+          // Set type-specific fields
+          url: editingServer.type === 'sse' ? editingServer.url : undefined,
+          command:
+            editingServer.type === 'stdio' ? editingServer.command : undefined,
+          args: editingServer.type === 'stdio' ? editingServer.args : undefined,
+          targetMiniappId:
+            editingServer.type === 'miniapp'
+              ? editingServer.targetMiniappId
+              : undefined,
         };
-        if (editingServer.type === 'sse') {
-          formData.url = editingServer.url;
-        } else if (editingServer.type === 'stdio') {
-          formData.command = editingServer.command;
-          formData.args = editingServer.args; // Keep as array for reset
-        }
         form.reset(formData);
       } else {
-        // Reset to defaults for adding new, ensuring type is valid
+        // Reset to defaults for adding new
         form.reset({
           name: '',
           description: '',
-          type: 'sse', // Default to SSE
+          type: 'sse',
           url: '',
           command: undefined,
-          args: undefined,
+          args: [],
+          targetMiniappId: undefined,
           autoApproveTools: false,
         });
       }
     }
-  }, [isOpen, editingServer, form, canUseStdio]);
+  }, [isOpen, editingServer, form]);
 
   const handleFormSubmit = (data: McpServerFormData) => {
-    onSubmit(data); // Pass validated data up
-    onOpenChange(false); // Close dialog
+    // Clear undefined fields based on type before submitting, schema refinement helps but explicit clear can be safer
+    let finalData = { ...data };
+    if (data.type !== 'sse') finalData.url = undefined;
+    if (data.type !== 'stdio') {
+      finalData.command = undefined;
+      finalData.args = undefined;
+    }
+    if (data.type !== 'miniapp') finalData.targetMiniappId = undefined;
+
+    onSubmit(finalData);
+    onOpenChange(false);
   };
 
   return (
@@ -197,15 +226,12 @@ export const McpServerForm: React.FC<McpServerFormProps> = ({
                 <Select
                   onValueChange={(value) => {
                     field.onChange(value);
-                    // Optionally reset other fields when type changes
-                    if (value === 'sse') {
-                      form.setValue('command', undefined);
-                      form.setValue('args', undefined);
-                    } else if (value === 'stdio') {
-                      form.setValue('url', undefined);
-                    }
+                    // Reset other fields when type changes
+                    // form.setValue('url', undefined);
+                    // form.setValue('command', undefined);
+                    // form.setValue('args', []);
+                    // form.setValue('targetMiniappId', undefined);
                   }}
-                  value={field.value}
                   // Disable changing type for built-in or if stdio not supported
                   disabled={isEditingBuiltin} // Disable changing type for built-in
                 >
@@ -227,7 +253,7 @@ export const McpServerForm: React.FC<McpServerFormProps> = ({
                         Stdio (Local Command)
                       </SelectItem>
                     )}
-                    {/* If editing a built-in, show it disabled */}
+                    <SelectItem value="miniapp">Miniapp</SelectItem>
                     {isEditingBuiltin && (
                       <SelectItem value="builtin-pseudo" disabled>
                         Built-in
@@ -322,6 +348,42 @@ export const McpServerForm: React.FC<McpServerFormProps> = ({
                   <FormDescription>
                     Comma-separated arguments to pass to the command.
                     {/* For Textarea: Arguments to pass to the command, one per line. */}
+                  </FormDescription>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+          )}
+          {/* === NEW: Miniapp Target Selector === */}
+          {serverType === 'miniapp' && (
+            <FormField
+              control={form.control}
+              name="targetMiniappId"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Target Miniapp</FormLabel>
+                  <Select onValueChange={field.onChange} value={field.value}>
+                    <FormControl>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select the Miniapp acting as server..." />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      {mcpCandidateMiniapps.length === 0 && (
+                        <SelectItem value="-" disabled>
+                          No Miniapps available
+                        </SelectItem>
+                      )}
+                      {mcpCandidateMiniapps.map((miniapp) => (
+                        <SelectItem key={miniapp.value} value={miniapp.value}>
+                          {miniapp.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <FormDescription>
+                    Select the installed Miniapp that will handle MCP requests.
+                    Ensure it's coded to act as an MCP server.
                   </FormDescription>
                   <FormMessage />
                 </FormItem>

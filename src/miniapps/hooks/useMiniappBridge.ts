@@ -22,6 +22,7 @@ import {
 } from '@/store/miniapp';
 import type { MiniappInstance, MiniappPermissions } from '@/types/miniapp'; // Ensure types are imported
 import { LlmCallParams } from '@/types/miniapp-dto';
+import { JSONRPCResponse } from '@moinfra/mcp-client-sdk/types.js';
 import { invoke } from '@tauri-apps/api/core'; // If using Tauri
 import Ajv from 'ajv';
 import { useAtomValue } from 'jotai'; // Use useAtomValue for reading atoms in hooks
@@ -613,7 +614,7 @@ export function useMiniappBridge(
   useEffect(() => {
     const handleMessage = (event: MessageEvent) => {
       if (event.source !== iframeRef.current?.contentWindow) return;
-      const { type, payload, requestId } = event.data;
+      const { type, payload, requestId, error } = event.data;
 
       if (type === 'apiRequest' && payload?.apiName && requestId) {
         // Trigger the processApiRequest callback
@@ -639,6 +640,17 @@ export function useMiniappBridge(
               );
             }
           });
+      } else if (
+        type === 'mcpResponse' &&
+        payload &&
+        typeof payload.id !== 'undefined'
+      ) {
+        // Payload should be the JSON-RPC Response object
+        console.debug(
+          `Host Bridge (${instanceId}): Received mcpResponse for ID ${payload.id}`,
+        );
+        // Route it to the static handler in MiniappTransport which uses the global map
+        routeMcpResponseToTransport(payload as JSONRPCResponse);
       }
       // --- Response from another Miniapp (for inter-app call initiated elsewhere) ---
       else if (
@@ -646,7 +658,21 @@ export function useMiniappBridge(
         requestId &&
         pendingInterAppRequests.current.has(requestId)
       ) {
-        // (Keep existing logic for handling functionResponse)
+        // Process a response TO an inter-app call *initiated by another miniapp* targeting this one
+        const promiseFuncs = pendingInterAppRequests.current.get(requestId);
+        if (promiseFuncs) {
+          console.log(
+            `Host Bridge (${instanceId}): Received response for inter-app call ${requestId}`,
+            payload,
+            error,
+          );
+          if (error) {
+            promiseFuncs.reject(new Error(error));
+          } else {
+            promiseFuncs.resolve(payload);
+          }
+          pendingInterAppRequests.current.delete(requestId);
+        }
       }
       // --- Handle other message types if needed ---
       else if (type) {
