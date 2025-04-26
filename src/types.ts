@@ -177,7 +177,8 @@ export interface MiniappDefinition {
   defaultWindowSize?: { width: number; height: number };
   enabled: boolean; // Controls if it *can* be activated
   dependencies?: string[];
-  requiredApis?: string[]; // For future permission checks
+  permissions?: MiniappPermissions;
+  requiredApis?: string[];
   createdAt: number; // timestamp
   updatedAt: number; // timestamp
 }
@@ -197,10 +198,6 @@ export interface MiniappPermissions {
   allowedTauriCommands?: string[];
   // Can it use the generic storage API? (Default true usually)
   useStorage?: boolean;
-}
-
-export interface MiniappDefinition {
-  permissions?: MiniappPermissions;
 }
 
 // Represents a running instance of a MiniApp

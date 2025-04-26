@@ -1,0 +1,380 @@
+// src/lib/miniappImportExport.ts
+import {
+  getAllDataForMiniapp,
+  setMiniappDataItem,
+} from '@/miniapps/persistence';
+import type { MiniappDefinition } from '@/types';
+import { toast } from 'sonner';
+import { v4 as uuidv4 } from 'uuid'; // Import uuid
+import { z } from 'zod';
+import { downloadJson } from './download';
+
+// --- Zod Schema for Import Validation ---
+
+// More detailed schema reflecting MiniappDefinition for better validation during import
+// Making most fields optional during initial parse, will apply defaults later.
+const MiniappImportDefinitionSchema = z
+  .object({
+    id: z.string().uuid().or(z.string().min(1)).optional(), // Allow existing or file ID
+    name: z.string().min(1, 'Definition must have a name'),
+    icon: z.string().optional(),
+    description: z.string().optional(),
+    htmlContent: z.string().min(1, 'Definition must have htmlContent'),
+    configSchema: z.record(z.any()).optional(),
+    defaultConfig: z.record(z.any()).optional(),
+    defaultWindowSize: z
+      .object({
+        width: z.number().positive(),
+        height: z.number().positive(),
+      })
+      .optional(),
+    enabled: z.boolean().optional(), // Will default later
+    dependencies: z.array(z.string()).optional(),
+    requiredApis: z.array(z.string()).optional(), // Include this field
+    permissions: z.record(z.any()).optional(), // Define more strictly later if needed
+    // createdAt/updatedAt are handled during import logic, not required in file
+    createdAt: z.number().optional(),
+    updatedAt: z.number().optional(),
+  })
+  .passthrough(); // Allow other fields initially
+
+const MiniappExportDataSchema = z.record(z.string(), z.any()).optional();
+
+const MiniappExportFileSchema = z.object({
+  version: z.literal(1),
+  type: z.literal('miniapp'),
+  definition: MiniappImportDefinitionSchema,
+  data: MiniappExportDataSchema,
+});
+
+type MiniappExportFileData = z.infer<typeof MiniappExportFileSchema>;
+type MiniappImportDefinition = z.infer<typeof MiniappImportDefinitionSchema>;
+
+// --- Export Functions ---
+
+/**
+ * Sanitizes a string for use in a filename.
+ * @param name The string to sanitize.
+ * @returns A filesystem-safe string.
+ */
+function sanitizeFilename(name: string): string {
+  // Remove invalid characters, replace spaces, limit length
+  return name
+    .replace(/[<>:"/\\|?*\s]+/g, '_') // Replace invalid chars and whitespace with underscore
+    .replace(/_{2,}/g, '_') // Replace multiple underscores with one
+    .slice(0, 50); // Limit length
+}
+
+/**
+ * Exports a Miniapp definition to a JSON file.
+ * @param definition The MiniappDefinition object to export.
+ */
+export function exportMiniappDefinition(
+  definition: MiniappImportDefinition,
+): void {
+  try {
+    const exportData: MiniappExportFileData = {
+      version: 1,
+      type: 'miniapp',
+      definition: definition,
+      data: undefined, // No data to export
+    };
+
+    const filename = `${sanitizeFilename(definition.name)}.daan-miniapp.json`;
+    downloadJson(exportData, filename);
+    toast.success(`Exported Miniapp definition "${definition.name}".`);
+  } catch (error) {
+    console.error('Error exporting Miniapp definition:', error);
+    toast.error(
+      `Failed to export Miniapp: ${error instanceof Error ? error.message : String(error)}`,
+    );
+  }
+}
+
+/**
+ * Exports a Miniapp definition along with its associated data to a JSON file.
+ * @param definition The MiniappDefinition object to export.
+ */
+export async function exportMiniappWithData(
+  definition: MiniappImportDefinition,
+): Promise<void> {
+  try {
+    toast.info(`Workspaceing data for Miniapp "${definition.name}"...`);
+    if (!definition.id) {
+      throw new Error('Cannot export data for a Miniapp without an ID.');
+    }
+    const data = await getAllDataForMiniapp(definition.id);
+    const exportData: MiniappExportFileData = {
+      version: 1,
+      type: 'miniapp',
+      definition: definition,
+      data: data, // Include the fetched data
+    };
+
+    const filename = `${sanitizeFilename(definition.name)}.daan-miniapp-data.json`; // Slightly different name
+    downloadJson(exportData, filename);
+    toast.success(`Exported Miniapp "${definition.name}" with data.`);
+  } catch (error) {
+    console.error('Error exporting Miniapp with data:', error);
+    toast.error(
+      `Failed to export Miniapp with data: ${error instanceof Error ? error.message : String(error)}`,
+    );
+  }
+}
+
+// --- Import Function ---
+
+/**
+ * Imports a Miniapp definition (and optionally data) from a File object.
+ * Handles validation, ID conflicts, merging fields, and updates application state.
+ *
+ * @param file The File object to import.
+ * @param getDefinitions A function to get the current list of MiniappDefinition.
+ * @param setDefinitions The state setter function for miniappsDefinitionAtom.
+ * @returns Promise resolving when import is complete or failed.
+ */
+export async function importMiniappFromFile(
+  file: File,
+  getDefinitions: () => MiniappDefinition[],
+  setDefinitions: (
+    fn: (prev: MiniappDefinition[]) => MiniappDefinition[],
+  ) => void,
+): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+
+    reader.onload = async (event) => {
+      if (!event.target?.result || typeof event.target.result !== 'string') {
+        toast.error('Failed to read file content.');
+        reject(new Error('Failed to read file content.'));
+        return;
+      }
+
+      let parsedData: any;
+      try {
+        parsedData = JSON.parse(event.target.result);
+      } catch (error) {
+        console.error('Import error: Failed to parse JSON.', error);
+        toast.error('Import failed: Invalid JSON file.');
+        reject(new Error('Invalid JSON file.'));
+        return;
+      }
+
+      // Validate the overall structure
+      const validationResult = MiniappExportFileSchema.safeParse(parsedData);
+      if (!validationResult.success) {
+        console.error(
+          'Import error: File structure validation failed.',
+          validationResult.error.errors,
+        );
+        const errorDetails = validationResult.error.errors
+          .map((e) => `${e.path.join('.')}: ${e.message}`)
+          .join('; ');
+        toast.error('Import failed: Invalid file format.', {
+          description: errorDetails,
+        });
+        reject(new Error(`Invalid file format: ${errorDetails}`));
+        return;
+      }
+
+      const importedData = validationResult.data;
+      const importedDefinitionData = importedData.definition; // Data parsed by Zod
+      const importedMiniappData = importedData.data;
+
+      const currentDefinitions = getDefinitions();
+      // Use ID from file if present, otherwise generate one (for potentially malformed exports)
+      const idFromFile = importedDefinitionData.id || uuidv4();
+      const existingDefinitionIndex = currentDefinitions.findIndex(
+        (def) => def.id === idFromFile,
+      );
+      const definitionExists = existingDefinitionIndex !== -1;
+      const existingDefinition = definitionExists
+        ? currentDefinitions[existingDefinitionIndex]
+        : null;
+
+      let finalDefinition: MiniappDefinition;
+      const now = Date.now();
+
+      // --- Handle Conflicts / Prepare Final Definition ---
+
+      // Define default values for a new MiniappDefinition
+      const defaultValues: Omit<
+        MiniappDefinition,
+        'id' | 'name' | 'htmlContent' | 'createdAt' | 'updatedAt'
+      > = {
+        icon: '📦',
+        description: '',
+        configSchema: {},
+        defaultConfig: {},
+        defaultWindowSize: { width: 800, height: 600 },
+        enabled: false,
+        dependencies: [],
+        requiredApis: [],
+        permissions: { useStorage: true }, // Default sensible permission
+      };
+
+      if (definitionExists && existingDefinition) {
+        // --- Overwrite Logic ---
+        const confirmed = window.confirm(
+          `Miniapp "${importedDefinitionData.name}" (ID: ${idFromFile}) already exists. Overwrite it?`,
+        );
+        if (!confirmed) {
+          toast.info('Import cancelled by user.');
+          resolve();
+          return;
+        }
+
+        // Merge imported data with existing, prioritizing imported values but keeping existing ID/createdAt
+        finalDefinition = {
+          // Base: existing definition (to ensure all keys are present)
+          ...existingDefinition,
+          // Overwrite with imported values if they exist
+          name: importedDefinitionData.name, // Required by schema
+          icon:
+            importedDefinitionData.icon ??
+            existingDefinition.icon ??
+            defaultValues.icon,
+          description:
+            importedDefinitionData.description ??
+            existingDefinition.description ??
+            defaultValues.description,
+          htmlContent: importedDefinitionData.htmlContent, // Required by schema
+          configSchema:
+            importedDefinitionData.configSchema ??
+            existingDefinition.configSchema ??
+            defaultValues.configSchema,
+          defaultConfig:
+            importedDefinitionData.defaultConfig ??
+            existingDefinition.defaultConfig ??
+            defaultValues.defaultConfig,
+          defaultWindowSize:
+            importedDefinitionData.defaultWindowSize ??
+            existingDefinition.defaultWindowSize ??
+            defaultValues.defaultWindowSize,
+          enabled: importedDefinitionData.enabled ?? existingDefinition.enabled, // Keep existing enabled state by default on overwrite
+          dependencies:
+            importedDefinitionData.dependencies ??
+            existingDefinition.dependencies ??
+            defaultValues.dependencies,
+          requiredApis:
+            importedDefinitionData.requiredApis ??
+            existingDefinition.requiredApis ??
+            defaultValues.requiredApis,
+          permissions:
+            importedDefinitionData.permissions ??
+            existingDefinition.permissions ??
+            defaultValues.permissions,
+          // Preserve existing ID and createdAt, update updatedAt
+          id: existingDefinition.id,
+          createdAt: existingDefinition.createdAt,
+          updatedAt: now,
+        };
+        console.log(
+          `Import: Preparing to overwrite Miniapp ${finalDefinition.id}`,
+        );
+      } else {
+        // --- New Install Logic ---
+        // Use imported data, falling back to defaults for missing fields
+        finalDefinition = {
+          id: idFromFile, // Use ID from file or generated one
+          name: importedDefinitionData.name, // Required
+          htmlContent: importedDefinitionData.htmlContent, // Required
+          icon: importedDefinitionData.icon ?? defaultValues.icon,
+          description:
+            importedDefinitionData.description ?? defaultValues.description,
+          configSchema:
+            importedDefinitionData.configSchema ?? defaultValues.configSchema,
+          defaultConfig:
+            importedDefinitionData.defaultConfig ?? defaultValues.defaultConfig,
+          defaultWindowSize:
+            importedDefinitionData.defaultWindowSize ??
+            defaultValues.defaultWindowSize,
+          enabled: importedDefinitionData.enabled ?? defaultValues.enabled, // Default false for new installs
+          dependencies:
+            importedDefinitionData.dependencies ?? defaultValues.dependencies,
+          requiredApis:
+            importedDefinitionData.requiredApis ?? defaultValues.requiredApis,
+          permissions:
+            importedDefinitionData.permissions ?? defaultValues.permissions,
+          createdAt: now,
+          updatedAt: now,
+        };
+        console.log(
+          `Import: Preparing to install new Miniapp ${finalDefinition.id}`,
+        );
+      }
+
+      // --- Update State: Definition ---
+      try {
+        setDefinitions((prev) => {
+          if (definitionExists) {
+            // Overwrite existing
+            return prev.map((def) =>
+              def.id === finalDefinition.id ? finalDefinition : def,
+            );
+          } else {
+            // Add new
+            return [...prev, finalDefinition];
+          }
+        });
+        // Toast success after definition is updated
+        toast.success(
+          `Miniapp "${finalDefinition.name}" ${definitionExists ? 'updated' : 'installed'} successfully.`,
+        );
+      } catch (stateError) {
+        console.error(
+          'Import error: Failed to update definitions state:',
+          stateError,
+        );
+        toast.error('Import failed: Could not save Miniapp definition.');
+        reject(new Error('Failed to save Miniapp definition.'));
+        return;
+      }
+
+      // --- Update State: Data (if included) ---
+      if (importedMiniappData && Object.keys(importedMiniappData).length > 0) {
+        // Use the final ID (in case it was preserved during overwrite)
+        const targetId = finalDefinition.id;
+        toast.info(
+          `Importing data for "${finalDefinition.name}" (ID: ${targetId})...`,
+        );
+        let dataImportErrors = 0;
+        const importPromises = Object.entries(importedMiniappData).map(
+          async ([key, value]) => {
+            try {
+              await setMiniappDataItem(targetId, key, value);
+            } catch (error) {
+              console.error(
+                `Import error: Failed to import data key '${key}' for ${targetId}:`,
+                error,
+              );
+              dataImportErrors++;
+            }
+          },
+        );
+
+        await Promise.allSettled(importPromises);
+
+        if (dataImportErrors > 0) {
+          toast.warning(
+            `Import partially complete for "${finalDefinition.name}". ${dataImportErrors} data items failed to import. Check console for details.`,
+          );
+        } else {
+          toast.success(
+            `Successfully imported ${Object.keys(importedMiniappData).length} data items for "${finalDefinition.name}".`,
+          );
+        }
+      }
+
+      resolve(); // Import process finished
+    };
+
+    reader.onerror = (error) => {
+      console.error('Import error: FileReader failed.', error);
+      toast.error('Import failed: Could not read the file.');
+      reject(new Error('Could not read the file.'));
+    };
+
+    reader.readAsText(file);
+  });
+}
