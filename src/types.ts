@@ -192,6 +192,7 @@ export interface MiniappPermissions {
   readConfig?: string[];
   // Can it call functions on other Miniapps? List allowed target IDs or undefined for all, empty for none.
   callMiniapp?: string[];
+  llmAccess?: boolean; // Can it access the LLM?
   // Which Tauri commands can it invoke?
   allowedTauriCommands?: string[];
   // Can it use the generic storage API? (Default true usually)

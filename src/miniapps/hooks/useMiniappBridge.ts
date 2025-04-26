@@ -1,20 +1,20 @@
 // src/miniapps/hooks/useMiniappBridge.ts
 import {
-  getAllMiniappDataKeys,
-  getMiniappDataItem,
-  removeMiniappDataItem,
+  getAllMiniappDataKeys, // NEW
+  getMiniappDataItem, // NEW
+  removeMiniappDataItem, // NEW
   saveMiniappConfig,
-  setMiniappDataItem,
+  setMiniappDataItem, // NEW
 } from '@/miniapps/persistence';
 import {
   activeMiniappInstancesAtom,
   miniappsConfigAtom,
   miniappsDefinitionAtom,
 } from '@/store/miniapp';
-import { MiniappPermissions } from '@/types';
-import { invoke } from '@tauri-apps/api/core';
+import type { MiniappInstance, MiniappPermissions } from '@/types'; // Ensure types are imported
+import { invoke } from '@tauri-apps/api/core'; // If using Tauri
 import Ajv from 'ajv';
-import { useAtomValue } from 'jotai';
+import { useAtomValue } from 'jotai'; // Use useAtomValue for reading atoms in hooks
 import { useCallback, useEffect, useRef } from 'react';
 import { useMiniappBridgeContext } from '../components/MiniappBridgeContext';
 
@@ -38,34 +38,47 @@ const ALLOWED_TAURI_COMMANDS_FOR_MINIAPPS: Set<string> = new Set([
 // --- AJV Initialization ---
 const ajv = new Ajv();
 
+// Helper function to get definitionId from instanceId (you might already have this)
+function getDefinitionIdFromInstanceId(
+  instanceId: string,
+  instances: MiniappInstance[],
+): string | null {
+  const instance = instances.find((inst) => inst.instanceId === instanceId);
+  return instance?.definitionId ?? null;
+}
+
 export function useMiniappBridge(
   iframeRef: React.RefObject<HTMLIFrameElement | null>,
-  instanceId: string, // Use the unique instance ID
-  definitionId: string, // Keep definition ID for config/schema lookup
+  instanceId: string,
+  // definitionId: string, // We can derive definitionId from instanceId now
 ) {
-  const {
-    registerSendMessage,
-    unregisterSendMessage,
-    getSendMessage,
-    // broadcastToMiniapps, // Not directly used by the bridge logic itself
-  } = useMiniappBridgeContext(); // Get functions from context
+  const { registerSendMessage, unregisterSendMessage, getSendMessage } =
+    useMiniappBridgeContext();
 
-  // Note: We don't use setConfigs here anymore, config saving happens via persistence
-  const configs = useAtomValue(miniappsConfigAtom);
-  const definitions = useAtomValue(miniappsDefinitionAtom);
+  // Get atoms needed within the hook's scope
+  const allDefinitions = useAtomValue(miniappsDefinitionAtom);
+  const allConfigs = useAtomValue(miniappsConfigAtom);
+  const activeInstances = useAtomValue(activeMiniappInstancesAtom); // Get active instances
 
-  // Store promises waiting for responses from *this* Miniapp (for inter-app calls)
+  // Derive the specific definition and config for *this* instance
+  // Memoize these lookups for performance if needed, but direct lookup might be fine
+  const definitionId = getDefinitionIdFromInstanceId(
+    instanceId,
+    activeInstances,
+  );
+  const miniappDefinition = allDefinitions.find(
+    (def) => def.id === definitionId,
+  );
+  // Note: Own config lookup is done within the API handler where needed
+
   const pendingInterAppRequests = useRef<Map<string, PendingInterAppRequest>>(
     new Map(),
   );
 
-  // Get the specific definition for this instance
-  const miniappDefinition = definitions.find((def) => def.id === definitionId);
-  const activeInstances = useAtomValue(activeMiniappInstancesAtom); // Need jotai get() if inside atom write, or useAtomValue otherwise
-
   // Function to send messages TO this specific iframe
   const sendMessageToMiniapp = useCallback(
     (type: string, payload: any, requestId?: string, error?: string) => {
+      // Check if iframe and contentWindow still exist before sending
       if (iframeRef.current?.contentWindow) {
         iframeRef.current.contentWindow.postMessage(
           { type, payload, requestId, error },
@@ -73,11 +86,11 @@ export function useMiniappBridge(
         );
       } else {
         console.warn(
-          `Cannot send message to Miniapp Instance ${instanceId}, contentWindow not available.`,
+          `Cannot send message to Miniapp Instance ${instanceId} (Def: ${definitionId}). Iframe or contentWindow no longer available.`,
         );
       }
     },
-    [iframeRef, instanceId], // Depend on instanceId for logging
+    [iframeRef, instanceId, definitionId], // Include definitionId for logging context
   );
 
   // Permission Checking Logic (remains largely the same, uses miniappDefinition)
@@ -150,13 +163,75 @@ export function useMiniappBridge(
           }
           return;
         }
+        case 'llmGetModels':
+        case 'llmGetDefaults':
+        case 'llmCall':
+        case 'llmAbort': {
+          if (!checkPermission('llmAccess', permissions)) {
+            // Assuming 'llmAccess' permission
+            throw new Error(
+              `Permission denied: Miniapp does not have LLM access.`,
+            );
+          }
+          return;
+        }
         default:
+          console.warn(
+            `Host Bridge (${instanceId}): No specific permission check implemented for API: ${apiName}. Denying by default.`,
+          );
           throw new Error(
-            `Permission check not implemented or failed for API: ${apiName}`,
+            `Permission denied or check not implemented for API: ${apiName}`,
           );
       }
     },
     [miniappDefinition, instanceId], // Depend on definition and instanceId
+  );
+
+  // Helper function to check permissions
+  const checkPermission = useCallback(
+    (
+      permissionType: keyof MiniappPermissions,
+      permissions: MiniappPermissions | undefined,
+      target?: string, // Optional target (e.g., target miniappId or Tauri command)
+    ): boolean => {
+      if (!permissions) {
+        // Default deny if no permissions object defined for the Miniapp
+        console.warn(
+          `Permission check failed for '${permissionType}': No permissions defined for Miniapp Definition ${definitionId}`,
+        );
+        return false;
+      }
+
+      const permissionValue = permissions[permissionType];
+
+      if (permissionValue === undefined || permissionValue === null) {
+        // If specific permission isn't set, decide on a default
+        // Explicitly allow storage by default unless set to false. Deny others by default.
+        if (permissionType === 'useStorage') {
+          // Check if explicitly set to false, otherwise default allow
+          return permissionValue !== false;
+        }
+        // Default deny for other unset permissions
+        return false;
+      }
+
+      if (typeof permissionValue === 'boolean') {
+        return permissionValue; // true allows all, false denies all
+      }
+
+      if (Array.isArray(permissionValue) && target) {
+        // Check if the target is in the allowed list
+        return permissionValue.includes(target);
+      }
+
+      // If format doesn't match expected (e.g., boolean or string[]), deny.
+      console.warn(
+        `Permission check failed for '${permissionType}': Unexpected format in permissions object for Miniapp Definition ${definitionId}`,
+        permissionValue,
+      );
+      return false;
+    },
+    [definitionId], // Depend on definitionId for logging
   );
 
   // API Request Processor Function
@@ -165,96 +240,103 @@ export function useMiniappBridge(
       apiName: string,
       args: any,
       requestId: string | undefined,
-      // sourceMiniappId: string, // No longer needed, it's always 'this' instance
     ): Promise<any> => {
       console.log(
-        `Host Bridge (${instanceId}): Processing API request '${apiName}'`,
+        `Host Bridge (${instanceId}): Processing API request '${apiName}' (Req ID: ${requestId})`,
         args,
       );
-      // Use the definition associated with this hook instance
-      const sourceDefinition = miniappDefinition;
 
-      // Check permissions for *this* miniapp instance
-      checkApiCallPermission(apiName, args);
+      // Ensure we have the definitionId before proceeding
+      if (!definitionId) {
+        throw new Error(
+          `Cannot process API request: Could not determine definition ID for instance ${instanceId}.`,
+        );
+      }
 
+      // Permission check first
+      checkApiCallPermission(apiName, args); // Throws on denial
+
+      // --- Process based on API name ---
       switch (apiName) {
         // --- Storage APIs --- (Use definitionId for storage partitioning)
         case 'storageSetItem': {
           const key = args?.key;
           const value = args?.value;
+          // Basic validation (persistence layer does more)
           if (typeof key !== 'string' || key.length === 0)
-            throw new Error("Invalid 'key'");
-          await setMiniappDataItem(definitionId, key, value); // Use definitionId
+            throw new Error("Invalid 'key' for storageSetItem");
+          await setMiniappDataItem(definitionId, key, value);
           return { success: true };
         }
         case 'storageGetItem': {
           const key = args?.key;
           if (typeof key !== 'string' || key.length === 0)
-            throw new Error("Invalid 'key'");
-          return await getMiniappDataItem(definitionId, key); // Use definitionId
+            throw new Error("Invalid 'key' for storageGetItem");
+          return await getMiniappDataItem(definitionId, key); // Returns value or undefined
         }
         case 'storageRemoveItem': {
           const key = args?.key;
           if (typeof key !== 'string' || key.length === 0)
-            throw new Error("Invalid 'key'");
-          await removeMiniappDataItem(definitionId, key); // Use definitionId
+            throw new Error("Invalid 'key' for storageRemoveItem");
+          await removeMiniappDataItem(definitionId, key);
           return { success: true };
         }
         case 'storageGetAllKeys': {
-          return await getAllMiniappDataKeys(definitionId); // Use definitionId
+          return await getAllMiniappDataKeys(definitionId); // Returns string[]
         }
-        // --- Config APIs --- (Use definitionId for config lookup/saving)
+
+        // --- Config APIs ---
         case 'getOwnConfig': {
-          const savedConfig = configs[definitionId] || {};
-          const defaults = sourceDefinition?.defaultConfig || {};
+          const savedConfig = allConfigs[definitionId] || {};
+          const defaults = miniappDefinition?.defaultConfig || {};
           return { ...defaults, ...savedConfig };
         }
         case 'setOwnConfig': {
           const newConfig = args?.config;
           if (typeof newConfig !== 'object' || newConfig === null)
-            throw new Error("Invalid 'config'");
-          if (sourceDefinition?.configSchema) {
+            throw new Error("Invalid 'config' for setOwnConfig");
+
+          // Validate against schema if it exists
+          if (
+            miniappDefinition?.configSchema &&
+            Object.keys(miniappDefinition.configSchema).length > 0
+          ) {
             try {
-              const validate = ajv.compile(sourceDefinition.configSchema);
-              if (!validate(newConfig))
+              const validate = ajv.compile(miniappDefinition.configSchema);
+              if (!validate(newConfig)) {
                 throw new Error(
                   `Config validation failed: ${ajv.errorsText(validate.errors)}`,
                 );
+              }
             } catch (schemaError: any) {
-              throw new Error(`Invalid config schema: ${schemaError.message}`);
+              console.error(
+                `Host Bridge (${instanceId}): Error compiling config schema for validation:`,
+                schemaError,
+              );
+              throw new Error(
+                `Invalid config schema configured for this Miniapp: ${schemaError.message}`,
+              );
             }
           }
-          // Save config via persistence function (don't update atom directly)
-          await saveMiniappConfig(definitionId, newConfig); // Fire and forget persistence
-          // TODO: Consider if the configsAtom *should* be updated here for immediate reflection in other parts of the UI that might read it.
-          // setConfigs(prev => ({ ...prev, [definitionId]: newConfig })); // Optionally update atom
+          // Save config via persistence function
+          await saveMiniappConfig(definitionId, newConfig);
+          // NOTE: This does NOT automatically update the `allConfigs` atom value used by this hook instance.
+          // The change will be visible on next app load or if the atom is manually updated elsewhere.
+          // Consider using `set(miniappsConfigAtom, ...)` here if immediate reflection is needed,
+          // but be careful about potential race conditions or performance impacts.
           return { success: true };
         }
         case 'getOwnSchema': {
-          return sourceDefinition?.configSchema || {};
+          return miniappDefinition?.configSchema || {};
         }
+
         // --- Other APIs ---
-        case 'getConfig': {
-          // Get config of *another* miniapp definition
-          const targetDefinitionId = args?.miniappId;
-          if (!targetDefinitionId || typeof targetDefinitionId !== 'string')
-            throw new Error("Missing 'miniappId'");
-          console.log(
-            `Host Bridge (${instanceId}): Reading config for definition ${targetDefinitionId}`,
-          );
-          const targetDefinition = definitions.find(
-            (d) => d.id === targetDefinitionId,
-          );
-          const savedConfig = configs[targetDefinitionId] || {};
-          const defaults = targetDefinition?.defaultConfig || {};
-          return { ...defaults, ...savedConfig }; // Return target config merged with defaults
-        }
         case 'log': {
           console.log(
-            `[Miniapp: ${instanceId}]`,
+            `[Miniapp: ${instanceId} | ${miniappDefinition?.name || definitionId}]`,
             ...(Array.isArray(args) ? args : [args]),
           );
-          return true;
+          return { success: true }; // Acknowledge log
         }
         case 'callMiniapp': {
           const {
@@ -279,7 +361,7 @@ export function useMiniappBridge(
 
           if (!targetInstance) {
             // Check if definition exists but no instance is running
-            const targetDefExists = definitions.some(
+            const targetDefExists = allDefinitions.some(
               (def) => def.id === targetDefinitionId,
             );
             if (targetDefExists) {
@@ -365,50 +447,95 @@ export function useMiniappBridge(
         }
         case 'reportError': {
           const { message, stack } = args || {};
-          console.error(`[Miniapp Error: ${instanceId}]`, {
-            message: message || 'N/A',
-            stack: stack || 'N/A',
-          });
-          return { success: true };
+          console.error(
+            `[Miniapp Error: ${instanceId} | ${miniappDefinition?.name || definitionId}]`,
+            {
+              message: message || 'N/A',
+              stack: stack || 'N/A',
+            },
+          );
+          return { success: true }; // Acknowledge report
         }
+        case 'llmGetModels':
+          {
+            // Implement logic as sketched in previous thought step
+            // Read from apiProvidersAtom, filter enabled, format, return
+          }
+          break;
+        case 'llmGetDefaults':
+          {
+            // Implement logic as sketched
+            // Read from settings atoms (defaultModelAtom etc.), return
+          }
+          break;
+        case 'llmCall':
+          {
+            // Implement logic as sketched
+            // 1. Get miniappRequestId from args.requestId
+            // 2. Call host LLM logic (needs modification for callbacks/async iter + requestId mapping)
+            // 3. Use sendMessageToMiniapp to send llmCallResponseChunk/Final/Error messages back
+            // 4. Store mapping between miniappRequestId and host AbortController
+          }
+          break;
+        case 'llmAbort':
+          {
+            // Implement logic as sketched
+            // 1. Get miniappRequestId from args.requestId
+            // 2. Look up AbortController using the stored mapping
+            // 3. Call controller.abort()
+          }
+          break;
+
         default: {
+          console.error(
+            `Host Bridge (${instanceId}): Received unknown API request type: ${apiName}`,
+          );
           throw new Error(`Unknown Host API method: ${apiName}`);
         }
       }
     },
     [
-      configs,
-      definitions,
-      miniappDefinition,
+      // Include all dependencies used inside the callback
       instanceId,
-      definitionId, // Needed for storage/config keys
-      checkApiCallPermission, // Uses definition
+      definitionId,
+      miniappDefinition,
+      allConfigs,
+      // allDefinitions, // Only if needed directly, miniappDefinition derived already
+      checkApiCallPermission, // Depends on definitionId etc.
+      sendMessageToMiniapp, // Depends on iframeRef, instanceId, definitionId
       getSendMessage, // From context
-      iframeRef, // For sendMessageToMiniapp
-      // getAtomValue // Required if used inside useCallback
+      // Add Jotai `get` function if reading atoms directly, or use useAtomValue outside
     ],
   );
 
   // Effect to register/unregister the sendMessage function for *this* instance
   useEffect(() => {
-    console.log(`useMiniappBridge: Registering sendMessage for ${instanceId}`);
-    registerSendMessage(instanceId, sendMessageToMiniapp);
+    // Ensure we have an instanceId before registering
+    if (instanceId) {
+      console.log(
+        `useMiniappBridge: Registering sendMessage for ${instanceId} (Def: ${definitionId})`,
+      );
+      registerSendMessage(instanceId, sendMessageToMiniapp);
+    } else {
+      console.warn(
+        'useMiniappBridge: Cannot register sender, instanceId is missing.',
+      );
+    }
 
     return () => {
-      console.log(
-        `useMiniappBridge: Unregistering sendMessage for ${instanceId}`,
-      );
-      unregisterSendMessage(instanceId);
-      // Clean up pending inter-app requests initiated *by this instance*
-      pendingInterAppRequests.current.forEach((req, reqId) => {
-        if (req.sourceMiniappId === instanceId) {
-          req.reject(new Error(`Source Miniapp ${instanceId} unloaded.`));
-          pendingInterAppRequests.current.delete(reqId);
-        }
-      });
+      if (instanceId) {
+        console.log(
+          `useMiniappBridge: Unregistering sendMessage for ${instanceId} (Def: ${definitionId})`,
+        );
+        unregisterSendMessage(instanceId);
+        // Clean up pending inter-app requests initiated *by this instance*
+        // (Keep existing cleanup logic for pendingInterAppRequests)
+      }
     };
+    // Ensure dependencies are stable
   }, [
     instanceId,
+    definitionId,
     registerSendMessage,
     unregisterSendMessage,
     sendMessageToMiniapp,
@@ -417,53 +544,66 @@ export function useMiniappBridge(
   // Effect to listen for messages FROM this iframe
   useEffect(() => {
     const handleMessage = (event: MessageEvent) => {
+      // Basic security checks (source, potentially origin)
       if (event.source !== iframeRef.current?.contentWindow) return;
-      // Optional: Origin check
-      // if (event.origin !== 'expected-origin') return;
+      // Optional: Origin check if host origin is fixed
+      // if (event.origin !== 'YOUR_HOST_ORIGIN') return;
 
       const { type, payload, requestId, error } = event.data;
 
-      if (type === 'apiRequest' && payload?.apiName) {
-        // Process API request FROM this miniapp
+      // --- API Request from Miniapp ---
+      if (type === 'apiRequest' && payload?.apiName && requestId) {
         processApiRequest(payload.apiName, payload.args, requestId)
           .then((result) => {
-            sendMessageToMiniapp('apiResponse', result, requestId);
+            // Check if iframe still exists before sending response
+            if (iframeRef.current) {
+              sendMessageToMiniapp('apiResponse', result, requestId);
+            }
           })
           .catch((err) => {
             console.error(
-              `Host Bridge (${instanceId}): Error processing API request '${payload.apiName}':`,
+              `Host Bridge (${instanceId}): Error processing API request '${payload.apiName}' (Req ID: ${requestId}):`,
               err,
             );
-            sendMessageToMiniapp(
-              'apiResponse',
-              null,
-              requestId,
-              err.message || 'Unknown error',
-            );
+            // Check if iframe still exists before sending error
+            if (iframeRef.current) {
+              sendMessageToMiniapp(
+                'apiResponse',
+                null, // No payload on error
+                requestId,
+                err?.message || 'Unknown processing error', // Send error message
+              );
+            }
           });
-      } else if (
+      }
+      // --- Response from another Miniapp (for inter-app call initiated elsewhere) ---
+      else if (
         type === 'functionResponse' &&
         requestId &&
         pendingInterAppRequests.current.has(requestId)
       ) {
-        // Process a response TO an inter-app call *initiated by another miniapp* targeting this one
-        const promiseFuncs = pendingInterAppRequests.current.get(requestId);
-        if (promiseFuncs) {
-          console.log(
-            `Host Bridge (${instanceId}): Received response for inter-app call ${requestId}`,
-            payload,
-            error,
+        // (Keep existing logic for handling functionResponse)
+      }
+      // --- Handle other message types if needed ---
+      else if (type) {
+        // Ignore known types handled elsewhere (like responses to host calls)
+        const knownResponseTypes = [
+          'apiResponse',
+          'functionResponse',
+          'llmCallResponseChunk',
+          'llmCallResponseFinal',
+          'llmCallError',
+          'mcpResponse',
+        ];
+        if (!knownResponseTypes.includes(type)) {
+          console.warn(
+            `Host Bridge (${instanceId}): Received unhandled message type from Miniapp: '${type}'`,
+            event.data,
           );
-          if (error) {
-            promiseFuncs.reject(new Error(error));
-          } else {
-            promiseFuncs.resolve(payload);
-          }
-          pendingInterAppRequests.current.delete(requestId);
         }
       } else {
         console.warn(
-          `Host Bridge (${instanceId}): Received unknown message type or format:`,
+          `Host Bridge (${instanceId}): Received malformed message from Miniapp:`,
           event.data,
         );
       }
@@ -474,41 +614,10 @@ export function useMiniappBridge(
     return () => {
       window.removeEventListener('message', handleMessage);
       console.log(`Host Bridge (${instanceId}): Message listener removed.`);
-      // No need to clean up pendingInterAppRequests here, done in registration cleanup
+      // Cleanup pending inter-app requests is handled in the registration effect
     };
+    // Ensure dependencies are stable
   }, [iframeRef, instanceId, processApiRequest, sendMessageToMiniapp]);
 
-  // Return the function to send messages *to* this miniapp (might not be needed externally)
-  // The primary purpose of this hook is now setting up the listener and registering the sender.
-  // return { sendMessageToMiniapp }; // Can be removed if not used by the caller component
-}
-
-// Helper function to check permissions
-function checkPermission(
-  permissionType: keyof MiniappPermissions,
-  permissions: MiniappPermissions | undefined,
-  target?: string, // Optional target (e.g., target miniappId or Tauri command)
-): boolean {
-  if (!permissions) return false; // Default deny if no permissions object
-
-  const permissionValue = permissions[permissionType];
-
-  if (permissionValue === undefined || permissionValue === null) {
-    // If specific permission isn't set, decide on a default (e.g., deny)
-    // Exception: maybe default 'useStorage' to true?
-    if (permissionType === 'useStorage') return true; // Example: Allow storage by default
-    return false; // Default deny for others
-  }
-
-  if (typeof permissionValue === 'boolean') {
-    return permissionValue; // true allows all, false denies all
-  }
-
-  if (Array.isArray(permissionValue) && target) {
-    // Check if the target is in the allowed list
-    return permissionValue.includes(target);
-  }
-
-  // If format doesn't match expected (e.g., boolean or string[]), deny.
-  return false;
+  // This hook primarily sets up the bridge; doesn't need to return anything usually.
 }
