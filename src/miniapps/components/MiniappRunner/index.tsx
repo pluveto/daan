@@ -1,4 +1,5 @@
 // src/miniapps/components/MiniappRunner/index.tsx
+import hostApiScript from '@/hostApi.js?raw';
 import { useMiniappBridge } from '@/miniapps/hooks/useMiniappBridge';
 import { nightModeAtom } from '@/store';
 import type { MiniappDefinition } from '@/types';
@@ -64,9 +65,6 @@ interface MiniappRunnerProps {
   miniappDefinition: MiniappDefinition;
   instanceId: string;
 }
-
-const hostApiScript = (await import('@/hostApi.js?raw')).default;
-
 // --- Runner Component ---
 export function MiniappRunner({
   miniappDefinition,
