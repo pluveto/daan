@@ -1,11 +1,13 @@
 <p align="center"><img src="assets/cover.png" width="200" alt="Daan Logo" /></p>
-<h1 align="center">Dààn</h1>
+<h1 align="center">Dáàn</h1>
 <p align="center">A Lightweight Language Model Client</p>
 <p align="center">
   English | <a href="使用说明.md">中文</a>
 </p>
 
 Daan (答案, "Answer" in Chinese) is a concise and lightweight client for interacting with Large Language Models (LLMs), offering a smooth and efficient AI experience. It's compatible with OpenAI's GPT series and other OpenAI-compatible APIs.
+
+**正在支持使用 AI 在 Daan 内生成并运行 JS App 和 MCP服务，让 AI 工具化变得轻而易举，敬请期待！**
 
 [Try the Demo](https://demo.daan.one)
 
