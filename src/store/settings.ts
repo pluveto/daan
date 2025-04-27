@@ -380,3 +380,9 @@ export const showEstimatedTokensAtom = atomWithSafeStorage<boolean>(
   'globalSettings_showEstimatedTokens',
   true,
 );
+
+/** Whether to display estimated token counts. */
+export const enableMiniappFeatureAtom = atomWithSafeStorage<boolean>(
+  'globalSettings_enableMiniappFeature',
+  false,
+);

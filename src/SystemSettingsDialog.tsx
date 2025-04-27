@@ -1,5 +1,4 @@
 // src/SystemSettingsDialog.tsx
-// Implemented Tab structure using shadcn UI components
 import {
   Dialog,
   DialogContent,
@@ -11,7 +10,7 @@ import {
   isSystemSettingsDialogOpenAtom,
   systemSettingsDialogActiveTabAtom,
 } from '@/store/uiState';
-import { useAtom } from 'jotai';
+import { useAtom, useAtomValue } from 'jotai';
 import React from 'react';
 import {
   LuBlocks,
@@ -19,102 +18,126 @@ import {
   LuFlaskConical,
   LuOrbit,
   LuPalette,
+  LuShoppingBag,
 } from 'react-icons/lu';
 // Import Tab components
 import { ApiSettingsTab } from './settings/ApiSettingsTab';
 import { FunctionSettingsTab } from './settings/FunctionSettingsTab';
+import { MarketPlaceTab } from './settings/MarketPlaceTab';
 import { McpSettingsTab } from './settings/McpSettingsTab';
 import { MiniappSettingsTab } from './settings/MiniappSettingsTab';
 import { UiSettingsTab } from './settings/UiSettingsTab';
+import { enableMiniappFeatureAtom } from './store';
 
-export const SystemSettingsDialog: React.FC = () => {
+interface TabConfig {
+  id: string;
+  label: string;
+  icon: React.ReactNode;
+  component: React.ReactNode;
+  enable: boolean;
+}
+
+interface SystemSettingsDialogProps {}
+
+export const SystemSettingsDialog: React.FC<
+  SystemSettingsDialogProps
+> = ({}) => {
   const [isOpen, setIsOpen] = useAtom(isSystemSettingsDialogOpenAtom);
-  const [activeTab, setActiveTab] = useAtom(systemSettingsDialogActiveTabAtom); // Default tab
+  const [activeTab, setActiveTab] = useAtom(systemSettingsDialogActiveTabAtom);
+  const enableMiniappFeature = useAtomValue(enableMiniappFeatureAtom);
+
+  const tabConfigs: TabConfig[] = [
+    {
+      id: 'api',
+      label: 'API',
+      icon: <LuOrbit className="mr-2 h-4 w-4" />,
+      component: <ApiSettingsTab />,
+      enable: true,
+    },
+    {
+      id: 'mcp',
+      label: 'MCP',
+      icon: <LuFlaskConical className="mr-2 h-4 w-4" />,
+      component: <McpSettingsTab />,
+      enable: true,
+    },
+    {
+      id: 'miniapp',
+      label: 'Miniapp',
+      icon: <LuBlocks className="mr-2 h-4 w-4" />,
+      component: <MiniappSettingsTab />,
+      enable: enableMiniappFeature,
+    },
+    {
+      id: 'ui',
+      label: 'UI',
+      icon: <LuPalette className="mr-2 h-4 w-4" />,
+      component: <UiSettingsTab />,
+      enable: true,
+    },
+    {
+      id: 'function',
+      label: 'Function',
+      icon: <LuCog className="mr-2 h-4 w-4" />,
+      component: <FunctionSettingsTab />,
+      enable: true,
+    },
+    {
+      id: 'marketplace',
+      label: 'Marketplace',
+      icon: <LuShoppingBag className="mr-2 h-4 w-4" />,
+      component: <MarketPlaceTab />,
+      enable: false,
+    },
+  ];
+
+  const visibleTabs = tabConfigs.filter((tab) => tab.enable);
+
+  React.useEffect(() => {
+    if (
+      visibleTabs.length > 0 &&
+      !visibleTabs.some((tab) => tab.id === activeTab)
+    ) {
+      setActiveTab(visibleTabs[0].id);
+    }
+  }, [activeTab, visibleTabs, setActiveTab]);
 
   return (
     <Dialog open={isOpen} onOpenChange={setIsOpen}>
       <DialogContent className="flex h-[80vh] max-h-[900px] w-full max-w-3xl flex-col gap-0 p-0 sm:max-w-3xl">
         <DialogHeader className="flex-shrink-0 border-b p-4">
           <DialogTitle>System Settings</DialogTitle>
-          {/* Removed description - title is enough */}
         </DialogHeader>
 
         <Tabs
-          className="flex flex-1 flex-col overflow-hidden" // Ensure tabs take remaining space
+          className="flex flex-1 flex-col overflow-hidden"
           onValueChange={setActiveTab}
           value={activeTab}
         >
-          {/* Tab Headers */}
           <TabsList className="flex w-full flex-shrink-0 justify-start rounded-none border-b bg-neutral-100 dark:bg-neutral-900/50">
-            <TabsTrigger
-              className="flex-1 py-3 data-[state=active]:shadow-none"
-              value="api"
-            >
-              <LuOrbit className="mr-2 h-4 w-4" /> API
-            </TabsTrigger>
-            <TabsTrigger
-              className="flex-1 py-3 data-[state=active]:shadow-none"
-              value="mcp"
-            >
-              <LuFlaskConical className="mr-2 h-4 w-4" /> MCP
-            </TabsTrigger>
-
-            <TabsTrigger
-              className="flex-1 py-3 data-[state=active]:shadow-none"
-              value="miniapp"
-            >
-              <LuBlocks className="mr-2 h-4 w-4" /> Miniapp
-            </TabsTrigger>
-            <TabsTrigger
-              className="flex-1 py-3 data-[state=active]:shadow-none"
-              value="ui"
-            >
-              <LuPalette className="mr-2 h-4 w-4" /> UI
-            </TabsTrigger>
-            <TabsTrigger
-              className="flex-1 py-3 data-[state=active]:shadow-none"
-              value="function"
-            >
-              <LuCog className="mr-2 h-4 w-4" /> Function
-            </TabsTrigger>
+            {visibleTabs.map((tab) => (
+              <TabsTrigger
+                key={tab.id}
+                className="flex-1 py-3 data-[state=active]:shadow-none"
+                value={tab.id}
+              >
+                {tab.icon} {tab.label}
+              </TabsTrigger>
+            ))}
           </TabsList>
 
-          {/* Tab Content - Make this area scrollable */}
           <div className="flex-1 overflow-y-auto">
-            <TabsContent
-              className="mt-0 h-full focus-visible:ring-0 focus-visible:ring-offset-0"
-              value="api"
-            >
-              <ApiSettingsTab />
-            </TabsContent>
-            <TabsContent
-              className="mt-0 h-full focus-visible:ring-0 focus-visible:ring-offset-0"
-              value="mcp"
-            >
-              <McpSettingsTab />
-            </TabsContent>
-            <TabsContent
-              className="mt-0 h-full focus-visible:ring-0 focus-visible:ring-offset-0"
-              value="miniapp"
-            >
-              <MiniappSettingsTab />
-            </TabsContent>
-            <TabsContent
-              className="mt-0 h-full focus-visible:ring-0 focus-visible:ring-offset-0"
-              value="ui"
-            >
-              <UiSettingsTab />
-            </TabsContent>
-            <TabsContent
-              className="mt-0 h-full focus-visible:ring-0 focus-visible:ring-offset-0"
-              value="function"
-            >
-              <FunctionSettingsTab />
-            </TabsContent>
+            {visibleTabs.map((tab) => (
+              <TabsContent
+                key={tab.id}
+                className="mt-0 h-full focus-visible:ring-0 focus-visible:ring-offset-0"
+                value={tab.id}
+              >
+                {tab.component}
+              </TabsContent>
+            ))}
           </div>
         </Tabs>
-
-        {/* No explicit Save/Reset buttons needed; changes apply via Jotai atoms */}
       </DialogContent>
     </Dialog>
   );

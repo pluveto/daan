@@ -6,10 +6,16 @@ import type {
 } from '@/types';
 import { atom } from 'jotai';
 // import { selectAtom } from 'jotai/utils'; // Keep if used elsewhere
+import type { MiniappTransport } from '@/lib/MiniappTransport';
 import { uniqueId } from 'lodash';
 import WinBox from 'react-winbox';
 
 // --- Base Atoms ---
+
+// Atom to hold the mapping from instanceId to active MiniappTransport
+export const activeMiniappTransportsAtom = atom<Map<string, MiniappTransport>>(
+  new Map(),
+);
 export const miniappsDefinitionAtom = atom<MiniappDefinition[]>([]);
 export const miniappsConfigAtom = atom<Record<string, MiniappConfig>>({});
 // Holds the active instances (now just their IDs)

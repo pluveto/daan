@@ -1,9 +1,14 @@
 // src/store/mcp.ts
-import { MiniappTransport } from '@/lib/MiniappTransport';
+import {
+  MiniappTransport,
+  registerMiniappTransportForInstance,
+  unregisterMiniappTransportForInstance,
+} from '@/lib/MiniappTransport';
 import { TauriStdioTransport } from '@/lib/TauriStdioTransport';
 import { atomWithSafeStorage } from '@/lib/utils';
 import { createBuiltinExprEvaluatorServer } from '@/mcp/builtinExprEvaluator';
 import { createBuiltinTimeServer } from '@/mcp/builtinTime'; // Import the time server creator
+import { miniAppRegistryAtom } from '@/miniapps/hooks/useMiniappBridgeRegistry';
 import type {
   Message,
   MiniappBridgeRegistry,
@@ -23,7 +28,11 @@ import { v4 as uuidv4 } from 'uuid';
 import { callOpenAIStreamLogic } from './apiActions';
 import { activeChatIdAtom, chatsAtom } from './chatData';
 import { updateMessagesInChat } from './messageActions';
-import { miniappsDefinitionAtom } from './miniapp';
+import {
+  activeMiniappInstancesAtom,
+  activeMiniappTransportsAtom,
+  miniappsDefinitionAtom,
+} from './miniapp';
 import { getHistoryForApi } from './regeneration';
 import { defaultMaxHistoryAtom } from './settings';
 
@@ -328,15 +337,14 @@ export const toggleMcpServerEnabledAtom = atom(
 
 export interface ConnectMcpServerPayload {
   serverId: string;
-  bridgeRegistry: MiniappBridgeRegistry; // Pass the context value
+  bridgeRegistry?: MiniappBridgeRegistry; // Pass the context value
   getter: Getter;
 }
 
 /** Action to connect to a specific MCP server. */
 export const connectMcpServerAtom = atom(
   null,
-  async (get, set, payload: ConnectMcpServerPayload) => {
-    const { serverId, bridgeRegistry, getter } = payload; // Use the passed getter
+  async (get, set, serverId: string) => {
     const config = get(mcpServersAtom).find((s) => s.id === serverId);
     if (!config) {
       console.error(`[MCP Connect] Config not found for ${serverId}`);
@@ -381,7 +389,7 @@ export const connectMcpServerAtom = atom(
 
     let client: Client | null = null;
     let transport: Transport | null = null;
-
+    let targetInstanceId;
     try {
       client = new Client({ name: 'Daan MCP Client', version: '1.0.0' }); // Basic client info
 
@@ -412,11 +420,27 @@ export const connectMcpServerAtom = atom(
         console.log(
           `[MCP Connect] Using MiniappTransport for ${config.id}, target: ${config.targetMiniappId}`,
         );
-        transport = new MiniappTransport(
+        const bridgeRegistry: MiniappBridgeRegistry = set(miniAppRegistryAtom);
+        const miniappTransport = new MiniappTransport(
           config.targetMiniappId,
           bridgeRegistry,
-          getter,
+          () => get(activeMiniappInstancesAtom),
         );
+        transport = miniappTransport; // Assign to transport variable
+
+        // We need the instance ID *after* transport.start() succeeds to register it.
+        // transport.start() finds and stores it internally, but doesn't expose it easily.
+        // Let's modify start() slightly OR find instance ID here first.
+        const activeInstances = get(activeMiniappInstancesAtom); // Use passed getter
+        const targetInstance = activeInstances.find(
+          (inst) => inst.definitionId === config.targetMiniappId,
+        );
+        if (!targetInstance) {
+          throw new Error(
+            `MiniappTransport Error: No active instance found for target Miniapp Definition ID: ${config.targetMiniappId}. Please start the Miniapp.`,
+          );
+        }
+        targetInstanceId = targetInstance.instanceId; // Store for registration
       } else {
         throw new Error(
           `Invalid server type (${config.type}) or missing URL for ${config.id}`,
@@ -425,6 +449,10 @@ export const connectMcpServerAtom = atom(
 
       // Attempt connection
       await client.connect(transport); // This also starts the transport
+      // === Register transport after successful connect ===
+      if (transport instanceof MiniappTransport && targetInstanceId) {
+        registerMiniappTransportForInstance(set, targetInstanceId, transport); // Use Jotai 'set'
+      }
 
       // Fetch capabilities after successful connection
       console.log(
@@ -526,6 +554,15 @@ export const connectMcpServerAtom = atom(
       toast.success(`MCP Server "${config.name}" connected.`);
     } catch (error: any) {
       console.error(`[MCP Connect] Failed to connect to ${serverId}:`, error);
+      // === Ensure unregistration if connect failed after registration attempt ===
+      if (transport instanceof MiniappTransport && targetInstanceId) {
+        // Check if it was registered before error
+        if (
+          get(activeMiniappTransportsAtom).get(targetInstanceId) === transport
+        ) {
+          unregisterMiniappTransportForInstance(set, targetInstanceId);
+        }
+      }
       toast.error(`Failed to connect to "${config.name}": ${error.message}`);
       // Ensure client/transport are closed if partially initialized
       if (client) {

@@ -155,12 +155,11 @@ export interface StreamCallbacks {
  */
 export async function handleLlmCall(
   get: Getter,
-  options: LlmCallParams,
+  options: Omit<LlmCallParams, 'requestId'>,
   callbacks: StreamCallbacks,
   signal: AbortSignal,
-): Promise<void> {
+) {
   const { model, messages, stream, ...callOptions } = options;
-  const { requestId: miniappRequestId } = options; // Extract for logging/cleanup
 
   try {
     // 1. Resolve API Key and Endpoint
@@ -196,7 +195,7 @@ export async function handleLlmCall(
       );
 
       let fullContent = '';
-      let finalResult: any = null;
+      let finalResult = null;
 
       for await (const chunk of streamResponse) {
         if (signal.aborted) throw new Error('Operation aborted');
@@ -228,6 +227,7 @@ export async function handleLlmCall(
         };
       }
       callbacks.onComplete(finalResult);
+      return finalResult;
     } else {
       // Non-streaming
       const response = await openai.chat.completions.create(
@@ -243,18 +243,17 @@ export async function handleLlmCall(
         usage: response.usage, // Include usage if available
       };
       callbacks.onComplete(resultWithReason);
+      return resultWithReason;
     }
   } catch (error: any) {
     if (error.name === 'AbortError') {
-      console.log(
-        `Miniapp LLM Service: Call ${miniappRequestId} aborted successfully.`,
-      );
+      console.log(`Miniapp LLM Service: Call aborted successfully.`);
       // Don't propagate abort errors back to miniapp via onError, just stop sending data
       // Cleanup is handled by handleLlmAbort or the caller's finally block
       return; // Stop execution here for abort
     }
     console.error(
-      `Miniapp LLM Service: Error during call ${miniappRequestId} for model ${model}:`,
+      `Miniapp LLM Service: Error during call for model ${model}:`,
       error,
     );
     callbacks.onError(

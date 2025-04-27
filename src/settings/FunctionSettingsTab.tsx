@@ -13,6 +13,7 @@ import { Switch } from '@/components/ui/Switch';
 import {
   defaultModelAtom,
   defaultSummaryModelAtom,
+  enableMiniappFeatureAtom,
   generateSummaryAtom,
   groupedAvailableModelsAtom, // Import atom to get available models
 } from '@/store/index';
@@ -27,16 +28,19 @@ export const FunctionSettingsTab: React.FC = () => {
     defaultSummaryModelAtom,
   );
   const [defaultModel, setDefaultModel] = useAtom(defaultModelAtom);
+  const [enableMiniappFeature, setEnableMiniappFeature] = useAtom(
+    enableMiniappFeatureAtom,
+  );
   // Get the list of available models using useAtomValue, similar to RightSidebar[1][2]
   const groupedModels = useAtomValue(groupedAvailableModelsAtom);
 
   return (
     <div className="space-y-4 p-4">
-      <h3 className="text-lg font-semibold">Function Settings</h3>
+      <h3 className="text-lg font-semibold mb-4">Function Settings</h3>
       {/* Increased vertical spacing for better separation */}
       <div className="space-y-5">
         {/* Summary Chat Title Toggle */}
-        <div className="flex items-center justify-between">
+        <div className="flex items-center justify-between h-8">
           <Label className="cursor-not-allowed" htmlFor="generateSummary">
             Summary Chat Title
           </Label>
@@ -44,11 +48,22 @@ export const FunctionSettingsTab: React.FC = () => {
             checked={generateSummary}
             id="generateSummary"
             onCheckedChange={setGenerateSummary}
-            title="Summary generation not implemented" // Tooltip text
+            title="Summary generation not implemented"
+          />
+        </div>
+        <div className="flex items-center justify-between h-8">
+          <Label className="cursor-not-allowed" htmlFor="generateSummary">
+            Enable Miniapp Feature
+          </Label>
+          <Switch
+            checked={enableMiniappFeature}
+            id="enableMiniappFeature"
+            onCheckedChange={setEnableMiniappFeature}
+            title="Enable Miniapp Feature"
           />
         </div>
         {/* Default  Model Select */}
-        <div className="flex items-center justify-between">
+        <div className="flex items-center justify-between h-8">
           <Label htmlFor="defaultModelSelect">Default Model</Label>
           {/* Use the Select component, similar to RightSidebar[1] */}
           <Select
@@ -90,7 +105,7 @@ export const FunctionSettingsTab: React.FC = () => {
           </Select>
         </div>
         {/* Default Summary Model Select */}
-        <div className="flex items-center justify-between">
+        <div className="flex items-center justify-between h-8">
           <Label htmlFor="defaultSummaryModelSelect">
             Default Summary Model
           </Label>

@@ -30,7 +30,7 @@ export function GeneralInfoSection({
   return (
     <div className="space-y-4">
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-6">
-        <div className="sm:col-span-1">
+        <div className="sm:col-span-1 space-y-2">
           <Label htmlFor="miniapp-icon">Icon</Label>
           <IconInput
             id="miniapp-icon"
@@ -39,7 +39,7 @@ export function GeneralInfoSection({
           />
           <p className="text-muted-foreground mt-1 text-xs">Emoji (e.g., 🚀)</p>
         </div>
-        <div className="sm:col-span-5">
+        <div className="sm:col-span-5 space-y-2">
           <Label htmlFor="miniapp-name">
             Name <span className="text-destructive">*</span>
           </Label>
@@ -53,7 +53,7 @@ export function GeneralInfoSection({
         </div>
       </div>
 
-      <div>
+      <div className="space-y-2">
         <Label htmlFor="miniapp-desc">Description</Label>
         <Textarea
           id="miniapp-desc"
@@ -65,7 +65,7 @@ export function GeneralInfoSection({
       </div>
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-        <div>
+        <div className="space-y-2">
           <Label htmlFor="window-width">Default Window Width</Label>
           <Input
             id="window-width"
@@ -80,7 +80,7 @@ export function GeneralInfoSection({
             placeholder="Width in pixels"
           />
         </div>
-        <div>
+        <div className="space-y-2">
           <Label htmlFor="window-height">Default Window Height</Label>
           <Input
             id="window-height"
@@ -97,7 +97,7 @@ export function GeneralInfoSection({
         </div>
       </div>
 
-      <div className="flex items-center space-x-2">
+      <div className="flex items-center space-x-2 mb-2">
         <Switch
           id="miniapp-enabled"
           checked={enabled}

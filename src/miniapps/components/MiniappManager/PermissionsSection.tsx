@@ -53,62 +53,81 @@ export function PermissionsSection({
       </p>
 
       {/* Boolean Permissions */}
-      <div className="space-y-3 rounded-md border p-4">
-        <h4 className="mb-2 font-medium">General Permissions</h4>
-        {/* --- Storage Permission --- */}
-        <div className="flex items-center space-x-3">
-          <Checkbox
-            id="perm-storage"
-            // Default to true unless explicitly false
-            checked={currentPermissions.useStorage !== false}
-            onCheckedChange={(checked) =>
-              handleBoolChange('useStorage', !!checked)
-            }
-          />
-          <Label htmlFor="perm-storage" className="cursor-pointer font-normal">
-            Allow Storage Access (`hostApi.storage.*`)
-            <p className="text-xs text-muted-foreground">
-              Allows the Miniapp to store and retrieve its own data persistently
-              using IndexedDB. Generally safe.
-            </p>
-          </Label>
-        </div>
-        {/* --- LLM Permission (for Req 2 later) --- */}
-        <div className="flex items-center space-x-3">
-          <Checkbox
-            id="perm-llm"
-            checked={currentPermissions.llmAccess === true} // Default to false unless explicitly true
-            onCheckedChange={(checked) =>
-              handleBoolChange('llmAccess', !!checked)
-            }
-          />
-          <Label htmlFor="perm-llm" className="cursor-pointer font-normal">
-            Allow LLM Access (`hostApi.llm.*`)
-            <p className="text-xs text-muted-foreground">
-              Allows the Miniapp to make calls to configured Language Models via
-              the host, potentially incurring costs and accessing sensitive API
-              keys managed by the host.
-            </p>
-          </Label>
-        </div>
-        <div className="flex items-center space-x-3 pt-2">
-          <Checkbox
-            id="perm-llm"
-            checked={currentPermissions.llmAccess === true} // Default false
-            onCheckedChange={(checked) =>
-              handleBoolChange('llmAccess', !!checked)
-            }
-          />
-          <Label htmlFor="perm-llm" className="cursor-pointer font-normal">
-            Allow LLM Access (`hostApi.llm.*`)
-            <p className="text-xs text-muted-foreground">
-              Allows the Miniapp to make calls to configured Language Models via
-              the host. This may incur API costs and uses host-managed API keys.
-              Use with caution.
-            </p>
-          </Label>
-        </div>
-        {/* Add more boolean permissions here (e.g., generic callMiniapp if desired) */}
+      <div className="rounded-md border">
+        <h4 className="mb-2 p-4 font-medium">General Permissions</h4>
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="border-b">
+              <th className="p-4 text-left font-medium text-muted-foreground">
+                Permission
+              </th>
+              <th className="p-4 text-left font-medium text-muted-foreground">
+                Description
+              </th>
+              <th className="p-4 pr-6 text-center font-medium text-muted-foreground">
+                Allow
+              </th>
+            </tr>
+          </thead>
+          <tbody>
+            {/* --- Storage Permission --- */}
+            <tr className="border-b">
+              <td className="p-4 align-top">
+                <Label
+                  htmlFor="perm-storage"
+                  className="cursor-pointer font-normal"
+                >
+                  Storage Access{' '}
+                  <code className="text-neutral-500">hostApi.storage.*</code>
+                </Label>
+              </td>
+              <td className="p-4 align-top text-xs text-muted-foreground">
+                Allows the Miniapp to store and retrieve its own data
+                persistently using IndexedDB. Generally safe.
+              </td>
+              <td className="p-4 pr-6 text-center align-top">
+                <Checkbox
+                  id="perm-storage"
+                  // Default to true unless explicitly false
+                  checked={currentPermissions.useStorage !== false}
+                  onCheckedChange={(checked) =>
+                    handleBoolChange('useStorage', !!checked)
+                  }
+                />
+              </td>
+            </tr>
+
+            {/* --- LLM Permission --- */}
+            {/* Note: Removed duplicate LLM entry from original code */}
+            <tr className="border-b">
+              <td className="p-4 align-top">
+                <Label
+                  htmlFor="perm-llm"
+                  className="cursor-pointer font-normal"
+                >
+                  LLM Access{' '}
+                  <code className="text-neutral-500">hostApi.llm.*</code>
+                </Label>
+              </td>
+              <td className="p-4 align-top text-xs text-muted-foreground">
+                Allows the Miniapp to make calls to configured Language Models
+                via the host, potentially incurring costs and accessing
+                sensitive API keys managed by the host.
+              </td>
+              <td className="p-4 pr-6 text-center align-top">
+                <Checkbox
+                  id="perm-llm"
+                  checked={currentPermissions.llmAccess === true} // Default to false unless explicitly true
+                  onCheckedChange={(checked) =>
+                    handleBoolChange('llmAccess', !!checked)
+                  }
+                />
+              </td>
+            </tr>
+
+            {/* Add more boolean permissions here as table rows (<tr>...</tr>) */}
+          </tbody>
+        </table>
       </div>
 
       {/* Array Permissions */}
@@ -124,7 +143,8 @@ export function PermissionsSection({
           <MultiSelect
             placeholder="Select readable Miniapps..."
             options={miniappOptions}
-            value={currentPermissions.readConfig ?? []}
+            modalPopover
+            defaultValue={currentPermissions.readConfig ?? []}
             onValueChange={(selected) =>
               handleArrayChange('readConfig', selected)
             }

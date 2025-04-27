@@ -33,7 +33,7 @@ export function DependenciesSection({
         to run. The host application will check these dependencies before
         activation.
       </p>
-      <div>
+      <div className="space-y-2">
         <Label>Required Miniapps</Label>
         <MultiSelect
           placeholder="Select dependencies..."

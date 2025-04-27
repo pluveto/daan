@@ -1,19 +1,24 @@
+import { z } from 'zod';
+
 export type ValidRoles = 'user' | 'assistant' | 'system';
 
-export interface McpToolDefinition {
-  name: string; // Tool name, unique within the Miniapp's MCP server
-  description: string;
-  inputSchema: any; // JSON Schema object for input arguments
-  outputSchema?: any; // Optional: Define expected output structure
-}
+export const McpToolDefinitionSchema = z.object({
+  name: z.string(),
+  description: z.string().optional(),
+  inputSchema: z.any(),
+  outputSchema: z.any().optional(),
+});
 
-export interface MiniappMcpDefinition {
-  serverInfo: {
-    name: string; // Display name for this MCP server (e.g., "My Miniapp Tools")
-    version: string; // Version of the MCP implementation in the Miniapp
-  };
-  tools: McpToolDefinition[];
-}
+export const MiniappMcpDefinitionSchema = z.object({
+  serverInfo: z.object({
+    name: z.string(),
+    version: z.string(),
+  }),
+  tools: McpToolDefinitionSchema.array(),
+});
+
+export type McpToolDefinition = z.infer<typeof McpToolDefinitionSchema>;
+export type MiniappMcpDefinition = z.infer<typeof MiniappMcpDefinitionSchema>;
 
 interface BaseToolCallInfo {
   callId: string; // Unique ID for this specific tool call instance

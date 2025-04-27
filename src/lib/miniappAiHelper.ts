@@ -1,113 +1,8 @@
 // src/lib/miniappAiHelper.ts
+import { defaultModelAtom } from '@/store';
 import { Getter } from 'jotai';
 import { toast } from 'sonner';
-// Assuming the host has a way to make LLM calls, similar to miniappLlmService
-// We might need to import or define a function like this:
-// import { hostLlmCall } from './hostLlmUtils'; // Placeholder for actual host LLM call function
-
-// --- Placeholder for the actual host LLM calling function ---
-// This needs to be implemented based on your host's capabilities.
-// It should take a prompt and return the LLM's text response.
-// For simplicity, let's assume a non-streaming function exists.
-async function hostLlmCall(
-  get: Getter,
-  prompt: string,
-  model?: string,
-): Promise<string> {
-  // TODO: Replace this with your actual host LLM call implementation.
-  // This might involve:
-  // 1. Selecting an appropriate model (e.g., from settings).
-  // 2. Getting API keys/endpoints.
-  // 3. Calling the OpenAI API (or other provider) directly using necessary parameters.
-  // 4. Handling errors robustly.
-  console.warn(
-    'hostLlmCall: Placeholder implementation used. Replace with actual LLM call.',
-  );
-  toast.warning('AI Generation: Using placeholder LLM response.');
-
-  // Example using a hypothetical direct OpenAI call (needs proper setup)
-  /*
-    try {
-        const targetModelId = model || get(defaultModelAtom); // Use specified or default
-        const { apiKey, baseUrl, modelName } = resolveApiConfig(targetModelId, get); // Reuse logic from miniappLlmService?
-        if (!apiKey) throw new Error("LLM API Key not configured for host.");
-
-        const openai = new OpenAI({ apiKey, baseURL: baseUrl || undefined, dangerouslyAllowBrowser: true });
-        const response = await openai.chat.completions.create({
-            model: modelName,
-            messages: [{ role: 'user', content: prompt }],
-            temperature: 0.5, // Lower temp for more predictable code gen
-            max_tokens: 3000, // Adjust as needed
-            stream: false,
-        });
-        const content = response.choices[0]?.message?.content;
-        if (!content) throw new Error("LLM returned empty content.");
-        return content;
-    } catch (error: any) {
-        console.error("Error in hostLlmCall placeholder:", error);
-        throw new Error(`Host LLM Call failed: ${error.message}`);
-    }
-    */
-
-  // Placeholder response for development without actual LLM call
-  return `
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AI Generated Placeholder</title>
-    <style>
-      body { padding: 1rem; }
-      .output { margin-top: 1rem; border: 1px solid #ccc; padding: 0.5rem; min-height: 50px; background: #f9f9f9; }
-    </style>
-</head>
-<body class="daan-ui"> <h1>AI Generated App</h1>
-    <p>Based on description: <em>${prompt.split('User Request:')[1]?.split('\n')[0]?.trim() || 'N/A'}</em></p>
-    <button id="action-btn">Click Me</button>
-    <div id="output" class="output">Output area...</div>
-
-    <script>
-      // Vanilla JS - NO React/Vue etc.
-      (async () => {
-          console.log('AI Generated Miniapp Script Loaded');
-          // Check if hostApi exists
-          if (!window.hostApi) {
-              console.error("hostApi not found!");
-              document.getElementById('output').textContent = 'Error: hostApi not available.';
-              return;
-          }
-
-          const btn = document.getElementById('action-btn');
-          const outputDiv = document.getElementById('output');
-
-          // Example: Use storage API
-          const counterKey = 'aiAppCounter';
-          let count = await window.hostApi.storage.getItem(counterKey) || 0;
-          outputDiv.textContent = 'Click count (loaded from storage): ' + count;
-
-          btn.addEventListener('click', async () => {
-              outputDiv.textContent = 'Button clicked! Incrementing count...';
-              count++;
-              await window.hostApi.storage.setItem(counterKey, count);
-              outputDiv.textContent = 'Click count (saved to storage): ' + count;
-              window.hostApi.log('AI App Button clicked, new count:', count);
-          });
-
-           // Example: Get LLM models (requires llmAccess permission)
-           try {
-               const models = await window.hostApi.llm.getModels();
-               console.log("Available LLM Models:", models);
-           } catch (err) {
-               console.warn("Could not get LLM models (maybe no permission?):", err.message);
-           }
-
-      })();
-    </script>
-    </body>
-</html>
-    `;
-}
+import { handleLlmCall } from './miniappLlmService';
 
 /**
  * Constructs the prompt for the LLM to generate/modify Miniapp code.
@@ -196,8 +91,26 @@ export async function generateOrModifyMiniappCode(
   try {
     toast.info('Generating code with AI...');
     // TODO: Select appropriate model for code generation if possible
-    const modelForCodeGen = 'openai::gpt-4o'; // Example: Use a capable model
-    const rawResponse = await hostLlmCall(get, prompt /*, modelForCodeGen */);
+    const rawResponse = (
+      await handleLlmCall(
+        get,
+        {
+          model: get(defaultModelAtom),
+          messages: [{ role: 'user', content: prompt }],
+          stream: false,
+        },
+        {
+          onChunk: (chunk) => {},
+          onComplete: () => {},
+          onError: () => {},
+        },
+        new AbortController().signal,
+      )
+    )?.content;
+
+    if (!rawResponse) {
+      throw new Error('LLM returned empty response.');
+    }
 
     // Basic cleanup: Remove potential markdown code fences if the LLM didn't follow instructions
     const cleanedHtml = rawResponse

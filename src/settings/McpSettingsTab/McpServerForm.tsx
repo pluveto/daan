@@ -24,6 +24,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/Select';
+import { Switch } from '@/components/ui/Switch';
 import { Textarea } from '@/components/ui/Textarea';
 import { isDesktopEnv } from '@/lib/env';
 import { cn } from '@/lib/utils';
@@ -41,6 +42,17 @@ interface McpServerFormProps {
   onSubmit: (data: McpServerFormData) => void;
   editingServer: McpServerConfig | null;
 }
+
+const formInitialState: () => Partial<McpServerFormData> = () => ({
+  name: '',
+  description: '',
+  type: 'sse',
+  url: '',
+  command: undefined,
+  args: [],
+  targetMiniappId: undefined,
+  autoApproveTools: false,
+});
 
 export const McpServerForm: React.FC<McpServerFormProps> = ({
   isOpen,
@@ -70,18 +82,8 @@ export const McpServerForm: React.FC<McpServerFormProps> = ({
   const form = useForm<McpServerFormData>({
     // Use the specific Zod type
     mode: 'onChange',
-    resolver: zodResolver(mcpServerFormSchema),
-    defaultValues: {
-      // Set defaults matching the schema
-      name: '',
-      description: '',
-      type: 'sse', // Default to SSE
-      url: '',
-      command: undefined,
-      args: [],
-      targetMiniappId: undefined, // Add default for new field
-      autoApproveTools: false,
-    },
+    resolver: zodResolver(mcpServerFormSchema) as any,
+    defaultValues: formInitialState(),
   });
 
   const serverType = form.watch('type');
@@ -110,29 +112,21 @@ export const McpServerForm: React.FC<McpServerFormProps> = ({
         form.reset(formData);
       } else {
         // Reset to defaults for adding new
-        form.reset({
-          name: '',
-          description: '',
-          type: 'sse',
-          url: '',
-          command: undefined,
-          args: [],
-          targetMiniappId: undefined,
-          autoApproveTools: false,
-        });
+        form.reset(formInitialState());
       }
     }
   }, [isOpen, editingServer, form]);
 
   const handleFormSubmit = (data: McpServerFormData) => {
-    // Clear undefined fields based on type before submitting, schema refinement helps but explicit clear can be safer
-    let finalData = { ...data };
+    let finalData: any = { ...data };
     if (data.type !== 'sse') finalData.url = undefined;
     if (data.type !== 'stdio') {
       finalData.command = undefined;
       finalData.args = undefined;
     }
-    if (data.type !== 'miniapp') finalData.targetMiniappId = undefined;
+    if (data.type !== 'miniapp') {
+      finalData.targetMiniappId = undefined;
+    }
 
     onSubmit(finalData);
     onOpenChange(false);

@@ -69,7 +69,6 @@ import { MiniappEditor } from './MiniappEditor';
 
 export function MiniappList() {
   const [definitions, setDefinitions] = useAtom(miniappsDefinitionAtom);
-  const getDefinitions = (): MiniappDefinition[] => definitions;
   const activeInstances = useAtomValue(activeMiniappInstancesAtom); // Get running instances
   const closeInstance = useSetAtom(closeMiniappAtom); // Get atom to close instances
 
@@ -158,11 +157,11 @@ export function MiniappList() {
 
   // Add handleExport functions
   const handleExportDef = (def: MiniappDefinition) => {
-    exportMiniappDefinition(def);
+    exportMiniappDefinition(def as any);
   };
 
   const handleExportData = (def: MiniappDefinition) => {
-    exportMiniappWithData(def); // This is async but fire-and-forget is okay here
+    exportMiniappWithData(def as any);
   };
 
   // Sort definitions, e.g., by name

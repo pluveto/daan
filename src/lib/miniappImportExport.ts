@@ -3,7 +3,12 @@ import {
   getAllDataForMiniapp,
   setMiniappDataItem,
 } from '@/miniapps/persistence';
-import type { MiniappDefinition } from '@/types';
+import {
+  MiniappMcpDefinitionSchema,
+  type CustomCharacter,
+  type MiniappDefinition,
+} from '@/types';
+import _ from 'lodash';
 import { toast } from 'sonner';
 import { v4 as uuidv4 } from 'uuid'; // Import uuid
 import { z } from 'zod';
@@ -32,6 +37,7 @@ const MiniappImportDefinitionSchema = z
     dependencies: z.array(z.string()).optional(),
     requiredApis: z.array(z.string()).optional(), // Include this field
     permissions: z.record(z.any()).optional(), // Define more strictly later if needed
+    mcpDefinition: MiniappMcpDefinitionSchema.optional(),
     // createdAt/updatedAt are handled during import logic, not required in file
     createdAt: z.number().optional(),
     updatedAt: z.number().optional(),
@@ -211,6 +217,7 @@ export async function importMiniappFromFile(
         dependencies: [],
         requiredApis: [],
         permissions: { useStorage: true }, // Default sensible permission
+        mcpDefinition: undefined,
       };
 
       if (definitionExists && existingDefinition) {
@@ -264,6 +271,9 @@ export async function importMiniappFromFile(
             importedDefinitionData.permissions ??
             existingDefinition.permissions ??
             defaultValues.permissions,
+          mcpDefinition:
+            importedDefinitionData.mcpDefinition ??
+            existingDefinition.mcpDefinition,
           // Preserve existing ID and createdAt, update updatedAt
           id: existingDefinition.id,
           createdAt: existingDefinition.createdAt,
@@ -377,4 +387,146 @@ export async function importMiniappFromFile(
 
     reader.readAsText(file);
   });
+}
+
+/**
+ * Generates Markdown content suitable for publishing a Miniapp to the GitHub Issues marketplace.
+ * @param definition The MiniappDefinition to format.
+ * @param author GitHub username (optional, defaults to 'Unknown').
+ * @returns A string containing the formatted Markdown.
+ */
+export function formatMiniappForPublishing(
+  definition: MiniappDefinition,
+  author: string = 'UnknownAuthor',
+): string {
+  // Prepare metadata, ensuring required fields have fallbacks
+  const metadata = {
+    name: definition.name || 'Untitled Miniapp',
+    icon: definition.icon || '📦',
+    version: '1.0.0', // Default version, user should update
+    author: author,
+    description: definition.description?.split('\n')[0] || 'No description.', // Use first line
+    tags: [], // User should add tags manually
+    license: 'Specify License', // User should update
+    // permissions: definition.permissions // Optionally include permissions metadata
+  };
+
+  const htmlContent = definition.htmlContent || '';
+
+  // Prepare definition for JSON block (remove potentially sensitive or irrelevant fields for publishing?)
+  // Keep most fields as they define the miniapp
+  const definitionForJson = {
+    // id: "placeholder-id-generated-on-install", // Omit ID
+    name: metadata.name,
+    icon: metadata.icon,
+    description: definition.description || '', // Include full description here
+    configSchema: definition.configSchema,
+    defaultConfig: definition.defaultConfig,
+    defaultWindowSize: definition.defaultWindowSize,
+    permissions: definition.permissions,
+    mcpDefinition: definition.mcpDefinition,
+    dependencies: definition.dependencies,
+    // Omit createdAt, updatedAt, enabled
+  };
+
+  _.omitBy(definitionForJson, _.isUndefined);
+
+  const jsonString = JSON.stringify({ definition: definitionForJson }, null, 2);
+
+  // Construct YAML Frontmatter string manually
+  let frontmatter = '---\n';
+  Object.entries(metadata).forEach(([key, value]) => {
+    if (value !== undefined && value !== null) {
+      frontmatter += `${key}: ${JSON.stringify(value)}\n`; // Ensure proper quoting/escaping
+    }
+  });
+  frontmatter += '---\n';
+
+  // Assemble the final Markdown
+  const markdown = `
+${frontmatter}
+## Overview
+
+${definition.description || '*(Please add a detailed description here)*'}
+
+<!-- Add more details, usage instructions, screenshots etc. using Markdown -->
+
+
+## Installation Data
+
+\`\`\`json
+${jsonString}
+\`\`\`
+
+## HTML Content
+
+\`\`\`html
+${htmlContent}
+\`\`\`
+`;
+  return markdown.trim();
+}
+
+/**
+ * Generates Markdown content suitable for publishing a Character to the GitHub Issues marketplace.
+ * @param character The CustomCharacter object to format.
+ * @param author GitHub username (optional, defaults to 'Unknown').
+ * @returns A string containing the formatted Markdown.
+ */
+export function formatCharacterForPublishing(
+  character: CustomCharacter,
+  author: string = 'UnknownAuthor',
+): string {
+  // Prepare metadata
+  const metadata = {
+    name: character.name || 'Untitled Character',
+    icon: character.icon || '👤',
+    version: '1.0.0', // Default version, user should update
+    author: author,
+    description: character.description?.split('\n')[0] || 'A custom character.', // Use first line or default
+    tags: ['character'], // Default tag, user can add more
+    // license: "Specify License", // License might not be applicable
+  };
+
+  // Prepare definition for JSON block
+  const definitionForJson = {
+    // id: "placeholder-id-generated-on-install", // Omit ID
+    name: metadata.name,
+    icon: metadata.icon,
+    description: character.description || '',
+    prompt: character.prompt,
+    model: character.model,
+    maxHistory: character.maxHistory,
+    // Omit sort, createdAt, updatedAt
+  };
+
+  const jsonString = JSON.stringify({ definition: definitionForJson }, null, 2);
+
+  // Construct YAML Frontmatter string
+  let frontmatter = '---\n';
+  Object.entries(metadata).forEach(([key, value]) => {
+    if (value !== undefined && value !== null) {
+      frontmatter += `${key}: ${JSON.stringify(value)}\n`;
+    }
+  });
+  frontmatter += '---\n';
+
+  // Assemble the final Markdown
+  const markdown = `
+${frontmatter}
+## Overview
+
+${character.description || '*(Please add a detailed description for this character)*'}
+
+<!-- Add more details about the character's personality, purpose, etc. -->
+
+## Installation Data
+
+\`\`\`json
+${jsonString}
+\`\`\`
+
+
+`;
+  return markdown.trim();
 }

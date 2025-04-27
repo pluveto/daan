@@ -8,6 +8,7 @@ import {
   registerLlmCall,
   StreamCallbacks,
 } from '@/lib/miniappLlmService';
+import { routeMessageToMiniMcpAtom } from '@/lib/MiniappTransport';
 import {
   getAllMiniappDataKeys, // NEW
   getMiniappDataItem, // NEW
@@ -22,13 +23,13 @@ import {
 } from '@/store/miniapp';
 import type { MiniappInstance, MiniappPermissions } from '@/types/miniapp'; // Ensure types are imported
 import { LlmCallParams } from '@/types/miniapp-dto';
-import { JSONRPCResponse } from '@moinfra/mcp-client-sdk/types.js';
+import { JSONRPCMessage } from '@moinfra/mcp-client-sdk/types.js';
 import { invoke } from '@tauri-apps/api/core'; // If using Tauri
 import Ajv from 'ajv';
-import { useAtomValue } from 'jotai'; // Use useAtomValue for reading atoms in hooks
+import { useAtomValue, useSetAtom } from 'jotai'; // Use useAtomValue for reading atoms in hooks
 import { useAtomCallback } from 'jotai/utils';
 import { useCallback, useEffect, useRef } from 'react';
-import { useMiniappBridgeContext } from '../components/MiniappBridgeContext';
+import { useMiniappBridgeRegistry } from './useMiniappBridgeRegistry';
 
 // Type for pending requests from Miniapp to Host
 interface PendingRequest {
@@ -65,7 +66,7 @@ export function useMiniappBridge(
   // definitionId: string, // We can derive definitionId from instanceId now
 ) {
   const { registerSendMessage, unregisterSendMessage, getSendMessage } =
-    useMiniappBridgeContext();
+    useMiniappBridgeRegistry();
 
   // Get atoms needed (read-only access here is fine)
   const allDefinitions = useAtomValue(miniappsDefinitionAtom);
@@ -584,7 +585,7 @@ export function useMiniappBridge(
       console.log(
         `useMiniappBridge: Registering sendMessage for ${instanceId} (Def: ${definitionId})`,
       );
-      registerSendMessage(instanceId, sendMessageToMiniapp);
+      registerSendMessage({ id: instanceId, func: sendMessageToMiniapp });
     } else {
       console.warn(
         'useMiniappBridge: Cannot register sender, instanceId is missing.',
@@ -610,99 +611,105 @@ export function useMiniappBridge(
     sendMessageToMiniapp,
   ]);
 
+  const routeMessageToMiniMcp = useSetAtom(routeMessageToMiniMcpAtom);
   // Effect to listen for messages FROM this iframe
   useEffect(() => {
-    const handleMessage = (event: MessageEvent) => {
+    const handleMiniappMessage = (event: MessageEvent) => {
       if (event.source !== iframeRef.current?.contentWindow) return;
       const { type, payload, requestId, error } = event.data;
-
-      if (type === 'apiRequest' && payload?.apiName && requestId) {
-        // Trigger the processApiRequest callback
-        processApiRequest([payload.apiName, payload.args, requestId])
-          .then((result) => {
-            if (iframeRef.current) {
-              // Check iframe still exists
-              sendMessageToMiniapp('apiResponse', result, requestId);
-            }
-          })
-          .catch((err) => {
-            console.error(
-              `Host Bridge (${instanceId}): Error processing API request '${payload.apiName}' (Req ID: ${requestId}):`,
-              err,
-            );
-            if (iframeRef.current) {
-              // Check iframe still exists
-              sendMessageToMiniapp(
-                'apiResponse',
-                null,
-                requestId,
-                err?.message || 'Unknown processing error',
-              );
-            }
-          });
-      } else if (
-        type === 'mcpResponse' &&
+      let wasRouted = false;
+      if (
+        type === 'mcpIncomingMessage' &&
         payload &&
         typeof payload.id !== 'undefined'
       ) {
-        // Payload should be the JSON-RPC Response object
         console.debug(
-          `Host Bridge (${instanceId}): Received mcpResponse for ID ${payload.id}`,
+          `Host Bridge (${instanceId}): Received mcpIncomingMessage for ID ${payload.id}`,
         );
-        // Route it to the static handler in MiniappTransport which uses the global map
-        routeMcpResponseToTransport(payload as JSONRPCResponse);
+        // Route using the helper, passing the getter
+        wasRouted = routeMessageToMiniMcp(
+          instanceId,
+          payload as JSONRPCMessage,
+        );
       }
-      // --- Response from another Miniapp (for inter-app call initiated elsewhere) ---
-      else if (
-        type === 'functionResponse' &&
-        requestId &&
-        pendingInterAppRequests.current.has(requestId)
-      ) {
-        // Process a response TO an inter-app call *initiated by another miniapp* targeting this one
-        const promiseFuncs = pendingInterAppRequests.current.get(requestId);
-        if (promiseFuncs) {
-          console.log(
-            `Host Bridge (${instanceId}): Received response for inter-app call ${requestId}`,
-            payload,
-            error,
-          );
-          if (error) {
-            promiseFuncs.reject(new Error(error));
-          } else {
-            promiseFuncs.resolve(payload);
-          }
-          pendingInterAppRequests.current.delete(requestId);
+      if (!wasRouted) {
+        if (type === 'apiRequest' && payload?.apiName && requestId) {
+          // Trigger the processApiRequest callback
+          processApiRequest([payload.apiName, payload.args, requestId])
+            .then((result) => {
+              if (iframeRef.current) {
+                // Check iframe still exists
+                sendMessageToMiniapp('apiResponse', result, requestId);
+              }
+            })
+            .catch((err) => {
+              console.error(
+                `Host Bridge (${instanceId}): Error processing API request '${payload.apiName}' (Req ID: ${requestId}):`,
+                err,
+              );
+              if (iframeRef.current) {
+                // Check iframe still exists
+                sendMessageToMiniapp(
+                  'apiResponse',
+                  null,
+                  requestId,
+                  err?.message || 'Unknown processing error',
+                );
+              }
+            });
         }
-      }
-      // --- Handle other message types if needed ---
-      else if (type) {
-        // Ignore known types handled elsewhere (like responses to host calls)
-        const knownResponseTypes = [
-          'apiResponse',
-          'functionResponse',
-          'llmCallResponseChunk',
-          'llmCallResponseFinal',
-          'llmCallError',
-          'mcpResponse',
-        ];
-        if (!knownResponseTypes.includes(type)) {
+        // --- Response from another Miniapp (for inter-app call initiated elsewhere) ---
+        else if (
+          type === 'functionResponse' &&
+          requestId &&
+          pendingInterAppRequests.current.has(requestId)
+        ) {
+          // Process a response TO an inter-app call *initiated by another miniapp* targeting this one
+          const promiseFuncs = pendingInterAppRequests.current.get(requestId);
+          if (promiseFuncs) {
+            console.log(
+              `Host Bridge (${instanceId}): Received response for inter-app call ${requestId}`,
+              payload,
+              error,
+            );
+            if (error) {
+              promiseFuncs.reject(new Error(error));
+            } else {
+              promiseFuncs.resolve(payload);
+            }
+            pendingInterAppRequests.current.delete(requestId);
+          }
+        }
+        // --- Handle other message types if needed ---
+        else if (type) {
+          // Ignore known types handled elsewhere (like responses to host calls)
+          const knownResponseTypes = [
+            'apiResponse',
+            'functionResponse',
+            'llmCallResponseChunk',
+            'llmCallResponseFinal',
+            'llmCallError',
+            'mcpResponse',
+          ];
+          if (!knownResponseTypes.includes(type)) {
+            console.warn(
+              `Host Bridge (${instanceId}): Received unhandled message type from Miniapp: '${type}'`,
+              event.data,
+            );
+          }
+        } else {
           console.warn(
-            `Host Bridge (${instanceId}): Received unhandled message type from Miniapp: '${type}'`,
+            `Host Bridge (${instanceId}): Received malformed message from Miniapp:`,
             event.data,
           );
         }
-      } else {
-        console.warn(
-          `Host Bridge (${instanceId}): Received malformed message from Miniapp:`,
-          event.data,
-        );
       }
     };
 
-    window.addEventListener('message', handleMessage);
+    window.addEventListener('message', handleMiniappMessage);
     console.log(`Host Bridge (${instanceId}): Message listener added.`);
     return () => {
-      window.removeEventListener('message', handleMessage);
+      window.removeEventListener('message', handleMiniappMessage);
       console.log(`Host Bridge (${instanceId}): Message listener removed.`);
       // Cleanup pending inter-app requests is handled in the registration effect
     };

@@ -1,12 +1,16 @@
 // src/lib/MiniappTransport.ts
-import { activeMiniappInstancesAtom } from '@/store/miniapp';
-import type { MiniappBridgeRegistry, SendMessageFunc } from '@/types';
+import { activeMiniappTransportsAtom } from '@/store/miniapp';
+import type {
+  MiniappBridgeRegistry,
+  MiniappInstance,
+  SendMessageFunc,
+} from '@/types';
 import type {
   Transport,
   TransportSendOptions,
 } from '@moinfra/mcp-client-sdk/shared/transport.js';
 import type { JSONRPCMessage } from '@moinfra/mcp-client-sdk/types.js';
-import { Getter } from 'jotai';
+import { atom, Getter, Setter } from 'jotai';
 import { v4 as uuidv4 } from 'uuid'; // For session ID
 
 /**
@@ -16,7 +20,7 @@ import { v4 as uuidv4 } from 'uuid'; // For session ID
 export class MiniappTransport implements Transport {
   private _targetMiniappId: string;
   private _bridgeRegistry: MiniappBridgeRegistry;
-  private _getAtomValue: Getter;
+  private _activeInstancesGetter: () => MiniappInstance[];
 
   // === Connection State ===
   private _targetInstanceId: string | null = null;
@@ -35,15 +39,16 @@ export class MiniappTransport implements Transport {
   constructor(
     targetMiniappId: string,
     bridgeRegistry: MiniappBridgeRegistry,
-    getAtomValue: Getter,
+    activeInstancesGetter: () => MiniappInstance[],
   ) {
     if (!targetMiniappId) throw new Error('targetMiniappId is required');
     if (!bridgeRegistry) throw new Error('bridgeRegistry is required');
-    if (!getAtomValue) throw new Error('getAtomValue is required');
+    if (!activeInstancesGetter)
+      throw new Error('activeInstancesGetter is required');
 
     this._targetMiniappId = targetMiniappId;
     this._bridgeRegistry = bridgeRegistry;
-    this._getAtomValue = getAtomValue;
+    this._activeInstancesGetter = activeInstancesGetter;
     this.sessionId = uuidv4(); // Generate a unique ID for this transport session
 
     console.log(
@@ -120,7 +125,7 @@ export class MiniappTransport implements Transport {
       );
     }
 
-    const activeInstances = this._getAtomValue(activeMiniappInstancesAtom);
+    const activeInstances = this._activeInstancesGetter();
     const targetInstance = activeInstances.find(
       (inst) => inst.definitionId === this._targetMiniappId,
     );
@@ -251,67 +256,100 @@ export class MiniappTransport implements Transport {
 }
 
 // --- Bridge Hook Interaction Logic ---
-
-// This map is needed in the host (e.g., within useMiniappBridge or a wrapping context/module)
-// to route incoming messages from iframes to the correct Transport instance.
-// Key: instanceId, Value: MiniappTransport instance (or Set<MiniappTransport> if multiple possible)
-const activeMiniappTransports = new Map<string, MiniappTransport>(); // Or manage this within MiniappBridgeContext
-
-/**
- * To be called by the bridge listener (`useMiniappBridge`) when an
- * 'mcpRequest' or 'mcpResponse' (or a generic 'mcpIncomingMessage') type message
- * arrives from an iframe.
- * @param instanceId The instance ID the message came from.
- * @param message The JSONRPCMessage payload.
- */
-export function routeMessageToMiniappTransport(
-  instanceId: string,
-  message: JSONRPCMessage,
-): void {
-  // TODO: Get the transport instance associated with this instanceId
-  // This lookup mechanism needs to be implemented where the transports are managed.
-  // For now, using the placeholder map:
-  const transport = activeMiniappTransports.get(instanceId);
-
-  if (transport) {
-    transport._handleBridgeMessage(message);
-  } else {
-    console.warn(
-      `Bridge Router: No active MiniappTransport found for instance ${instanceId} to route message:`,
-      message,
-    );
-  }
-}
-
 /**
  * To be called by the mechanism that creates/manages transports,
  * associating a transport with its target instance ID.
  */
 export function registerMiniappTransportForInstance(
+  set: Setter, // Pass Jotai setter
   instanceId: string,
   transport: MiniappTransport,
 ): void {
-  // TODO: Implement this where transports are managed
-  console.log(
-    `Bridge Router: Registering transport ${transport.sessionId.substring(0, 6)} for instance ${instanceId}`,
-  );
-  activeMiniappTransports.set(instanceId, transport);
-  // Setup listener for when the Miniapp instance associated with instanceId is closed/unloaded
-  // to call transport._handleBridgeDisconnect() or transport.close()
+  set(activeMiniappTransportsAtom, (prevMap) => {
+    const newMap = new Map(prevMap);
+    // If another transport was somehow registered for this instance, warn/replace?
+    if (newMap.has(instanceId)) {
+      console.warn(
+        `Bridge Router: Replacing existing transport registration for instance ${instanceId}`,
+      );
+      // Optionally close the old one? transport.close() might be called anyway.
+    }
+    console.log(
+      `Bridge Router: Registering transport ${transport.sessionId.substring(0, 6)} for instance ${instanceId}`,
+    );
+    newMap.set(instanceId, transport);
+    return newMap;
+  });
+  // TODO: Add listener for when this specific instanceId is closed/removed from activeMiniappInstancesAtom
+  // to automatically call unregisterMiniappTransportForInstance and transport.close()
 }
 
 /**
- * To be called when a transport is closed or the instance disappears.
+ * Unregisters a transport instance from the global Jotai atom map.
+ * Should be called when the transport is closed or the instance disappears.
  */
 export function unregisterMiniappTransportForInstance(
+  set: Setter, // Pass Jotai setter
   instanceId: string,
 ): void {
-  // TODO: Implement this where transports are managed
-  const transport = activeMiniappTransports.get(instanceId);
+  set(activeMiniappTransportsAtom, (prevMap) => {
+    if (prevMap.has(instanceId)) {
+      const transport = prevMap.get(instanceId);
+      console.log(
+        `Bridge Router: Unregistering transport ${transport?.sessionId.substring(0, 6)} for instance ${instanceId}`,
+      );
+      const newMap = new Map(prevMap);
+      newMap.delete(instanceId);
+      return newMap;
+    }
+    return prevMap; // Return original map if not found
+  });
+}
+
+/**
+ * Routes an incoming message from the bridge to the correct transport.
+ * To be called by useMiniappBridge's message handler.
+ */
+function routeMessageToMiniappTransport(
+  get: Getter,
+  instanceId: string,
+  message: JSONRPCMessage,
+): boolean {
+  // Return true if routed, false otherwise
+  const transportMap = get(activeMiniappTransportsAtom);
+  const transport = transportMap.get(instanceId);
+
   if (transport) {
-    console.log(
-      `Bridge Router: Unregistering transport ${transport.sessionId.substring(0, 6)} for instance ${instanceId}`,
-    );
-    activeMiniappTransports.delete(instanceId);
+    transport._handleBridgeMessage(message);
+    return true;
+  } else {
+    // Only warn if it looks like an MCP message to avoid noise
+    if ('jsonrpc' in message && message.jsonrpc === '2.0') {
+      console.warn(
+        `Bridge Router: No active MiniappTransport found for instance ${instanceId} to route MCP message:`,
+        message,
+      );
+    }
+    return false;
   }
+}
+
+export const routeMessageToMiniMcpAtom = atom(
+  null,
+  (get: Getter, set: Setter, instanceId: string, message: JSONRPCMessage) => {
+    return routeMessageToMiniappTransport(get, instanceId, message);
+  },
+);
+
+/**
+ * Notifies the relevant transport that its underlying Miniapp instance disconnected.
+ */
+export function notifyMiniappTransportOfDisconnect(
+  get: Getter,
+  instanceId: string,
+): void {
+  const transportMap = get(activeMiniappTransportsAtom);
+  const transport = transportMap.get(instanceId);
+  transport?._handleBridgeDisconnect();
+  // Unregistration should happen separately when the transport is confirmed closed or instance removed
 }

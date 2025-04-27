@@ -74,7 +74,7 @@ export function MiniappRunner({
 }: MiniappRunnerProps) {
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const { id: definitionId, name, htmlContent } = miniappDefinition;
-  const [isIframeLoaded, setIsIframeLoaded] = useState(false);
+  const [, setIsIframeLoaded] = useState(false);
   const [isNightMode] = useAtom(nightModeAtom);
 
   // Initialize bridge hook
@@ -109,7 +109,8 @@ export function MiniappRunner({
     const cssLink = `<link rel="stylesheet" href="/daan-ui-miniapp.css">`; // Link to our CSS
     const metaTags =
       `<meta http-equiv="Content-Security-Policy" content="${csp}">` +
-      `<meta name="miniapp-instance-id" content="${instanceId}">`;
+      `<meta name="miniapp-definition-id" content="${definitionId}">`;
+    `<meta name="miniapp-instance-id" content="${instanceId}">`;
 
     if (headIndex !== -1) {
       const injectionPoint = headIndex + headTag.length;

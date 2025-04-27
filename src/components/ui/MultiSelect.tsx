@@ -1,6 +1,6 @@
 // src/components/multi-select.tsx
 
-import { Badge } from '@/components/ui/badge';
+import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import {
   Command,
@@ -116,6 +116,19 @@ interface MultiSelectProps
    * Optional, can be used to add custom styles.
    */
   className?: string;
+
+  onSearch?: (
+    searchValue: string,
+    options: {
+      label: string;
+      value: string;
+      icon?: React.ComponentType<{ className?: string }>;
+    }[],
+  ) => {
+    label: string;
+    value: string;
+    icon?: React.ComponentType<{ className?: string }>;
+  }[];
 }
 
 export const MultiSelect = React.forwardRef<
@@ -134,6 +147,7 @@ export const MultiSelect = React.forwardRef<
       modalPopover = false,
       asChild = false,
       className,
+      onSearch,
       ...props
     },
     ref,
@@ -142,6 +156,45 @@ export const MultiSelect = React.forwardRef<
       React.useState<string[]>(defaultValue);
     const [isPopoverOpen, setIsPopoverOpen] = React.useState(false);
     const [isAnimating, setIsAnimating] = React.useState(false);
+
+    const [searchValue, setSearchValue] = React.useState('');
+    const [filteredOptions, setFilteredOptions] = React.useState(options);
+
+    const defaultSearchFilter = React.useCallback(
+      (search: string, opts: typeof options) => {
+        if (!search.trim()) return opts;
+        return opts.filter((option) =>
+          option.label.toLowerCase().includes(search.toLowerCase()),
+        );
+      },
+      [],
+    );
+
+    const handleSearchChange = React.useCallback(
+      (value: string) => {
+        setSearchValue(value);
+        const filtered = onSearch
+          ? onSearch(value, options)
+          : defaultSearchFilter(value, options);
+        setFilteredOptions(filtered);
+      },
+      [options, onSearch, defaultSearchFilter],
+    );
+
+    const resetSearch = React.useCallback(() => {
+      setSearchValue('');
+      setFilteredOptions(options);
+    }, [options]);
+
+    React.useEffect(() => {
+      setFilteredOptions(options);
+    }, [options]);
+
+    React.useEffect(() => {
+      if (!isPopoverOpen) {
+        resetSearch();
+      }
+    }, [isPopoverOpen, resetSearch]);
 
     const handleInputKeyDown = (
       event: React.KeyboardEvent<HTMLInputElement>,
@@ -287,29 +340,33 @@ export const MultiSelect = React.forwardRef<
           <Command>
             <CommandInput
               placeholder="Search..."
+              value={searchValue}
+              onValueChange={handleSearchChange}
               onKeyDown={handleInputKeyDown}
             />
             <CommandList>
               <CommandEmpty>No results found.</CommandEmpty>
               <CommandGroup>
-                <CommandItem
-                  key="all"
-                  onSelect={toggleAll}
-                  className="cursor-pointer"
-                >
-                  <div
-                    className={cn(
-                      'border-primary mr-2 flex h-4 w-4 items-center justify-center rounded-sm border',
-                      selectedValues.length === options.length
-                        ? 'bg-primary text-primary-foreground'
-                        : 'opacity-50 [&_svg]:invisible',
-                    )}
+                {filteredOptions.length === options.length && (
+                  <CommandItem
+                    key="all"
+                    onSelect={toggleAll}
+                    className="cursor-pointer"
                   >
-                    <CheckIcon className="h-4 w-4" />
-                  </div>
-                  <span>(Select All)</span>
-                </CommandItem>
-                {options.map((option) => {
+                    <div
+                      className={cn(
+                        'border-primary mr-2 flex h-4 w-4 items-center justify-center rounded-sm border',
+                        selectedValues.length === options.length
+                          ? 'bg-primary text-primary-foreground'
+                          : 'opacity-50 [&_svg]:invisible',
+                      )}
+                    >
+                      <CheckIcon className="h-4 w-4" />
+                    </div>
+                    <span>(Select All)</span>
+                  </CommandItem>
+                )}
+                {filteredOptions.map((option) => {
                   const isSelected = selectedValues.includes(option.value);
                   return (
                     <CommandItem
