@@ -3,7 +3,7 @@ import { Label } from '@/components/ui/Label';
 import { MultiSelect } from '@/components/ui/MultiSelect'; // Placeholder
 import { miniappsDefinitionAtom } from '@/store/miniapp';
 import { useAtomValue } from 'jotai';
-import React, { useMemo } from 'react';
+import { useMemo } from 'react';
 
 interface DependenciesSectionProps {
   dependencies: string[];
@@ -33,7 +33,7 @@ export function DependenciesSection({
         to run. The host application will check these dependencies before
         activation.
       </p>
-      <div>
+      <div className="space-y-2">
         <Label>Required Miniapps</Label>
         <MultiSelect
           placeholder="Select dependencies..."

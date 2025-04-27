@@ -26,7 +26,7 @@ import {
 import { ApiModelConfig, ApiProviderConfig, NamespacedModelId } from '@/types';
 import { useAtom } from 'jotai';
 import React, { useCallback } from 'react';
-import { LuCheck, LuPlus, LuTrash2 } from 'react-icons/lu'; // Added LuCheck, LuRotateCcw potentially if not using ValidatedInput everywhere
+import { LuPlus, LuSave, LuTrash2 } from 'react-icons/lu'; // Added LuCheck, LuRotateCcw potentially if not using ValidatedInput everywhere
 import { v4 as uuidv4 } from 'uuid';
 import ModelEditor from './ModelEditor'; // Import the updated ModelEditor
 
@@ -499,9 +499,9 @@ export const ApiSettingsTab: React.FC = () => {
 
         <Separator />
 
-        <div className="text-muted-foreground flex justify-end text-sm">
-          Click the <LuCheck className="mx-1 inline h-4 w-4" /> icon next to a
-          field to save changes.
+        <div className="text-muted-foreground flex items-center justify-end text-sm">
+          Hint: Click the <LuSave className="mx-1 inline h-4 w-4" /> icon next
+          to a field to save changes.
         </div>
       </form>
     </TooltipProvider>

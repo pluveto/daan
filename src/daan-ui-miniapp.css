@@ -1,0 +1,293 @@
+/* public/daan-ui-miniapp.css */
+/* Daan Miniapp Styles - Based on Shadcn defaults */
+
+/* Define CSS Variables (Light Mode Defaults - Adjust to match your theme) */
+.daan-ui {
+  /* Colors (from https://ui.shadcn.com/docs/theming) */
+  --background: 0 0% 100%; /* Light background */
+  --foreground: 222.2 84% 4.9%; /* Dark text */
+  --card: 0 0% 100%;
+  --card-foreground: 222.2 84% 4.9%;
+  --popover: 0 0% 100%;
+  --popover-foreground: 222.2 84% 4.9%;
+  --primary: 222.2 47.4% 11.2%; /* Dark blue/primary */
+  --primary-foreground: 210 40% 98%; /* Light text on primary */
+  --secondary: 210 40% 96.1%; /* Light gray */
+  --secondary-foreground: 222.2 47.4% 11.2%; /* Dark text on secondary */
+  --muted: 210 40% 96.1%;
+  --muted-foreground: 215.4 16.3% 46.9%; /* Gray text */
+  --accent: 210 40% 96.1%;
+  --accent-foreground: 222.2 47.4% 11.2%;
+  --destructive: 0 84.2% 60.2%; /* Red */
+  --destructive-foreground: 210 40% 98%;
+  --border: 214.3 31.8% 91.4%; /* Light border */
+  --input: 214.3 31.8% 91.4%; /* Input border */
+  --ring: 222.2 84% 4.9%; /* Focus ring */
+
+  /* Border Radius */
+  --radius: 0.5rem; /* Default Shadcn radius */
+
+  /* Font */
+  font-family:
+    system-ui,
+    -apple-system,
+    BlinkMacSystemFont,
+    'Segoe UI',
+    Roboto,
+    Oxygen,
+    Ubuntu,
+    Cantarell,
+    'Open Sans',
+    'Helvetica Neue',
+    sans-serif; /* Example font stack */
+
+  color-scheme: light;
+  box-sizing: border-box;
+}
+
+/* Dark Mode Variables */
+.daan-ui.theme-dark {
+  --background: 222.2 84% 4.9%; /* Dark background */
+  --foreground: 210 40% 98%; /* Light text */
+  --card: 222.2 84% 4.9%;
+  --card-foreground: 210 40% 98%;
+  --popover: 222.2 84% 4.9%;
+  --popover-foreground: 210 40% 98%;
+  --primary: 210 40% 98%; /* Light primary */
+  --primary-foreground: 222.2 47.4% 11.2%; /* Dark text on primary */
+  --secondary: 217.2 32.6% 17.5%; /* Dark gray */
+  --secondary-foreground: 210 40% 98%; /* Light text on secondary */
+  --muted: 217.2 32.6% 17.5%;
+  --muted-foreground: 215 20.2% 65.1%; /* Lighter gray text */
+  --accent: 217.2 32.6% 17.5%;
+  --accent-foreground: 210 40% 98%;
+  --destructive: 0 62.8% 30.6%; /* Darker Red */
+  --destructive-foreground: 210 40% 98%;
+  --border: 217.2 32.6% 17.5%; /* Dark border */
+  --input: 217.2 32.6% 17.5%; /* Input border */
+  --ring: 212.7 26.8% 83.9%; /* Lighter focus ring */
+
+  color-scheme: dark;
+}
+
+/* Apply base styles */
+.daan-ui body {
+  background-color: hsl(var(--background));
+  color: hsl(var(--foreground));
+  font-family: inherit; /* Inherit from .daan-ui */
+  margin: 0;
+  padding: 1rem; /* Add default padding inside the app */
+  min-height: 100%; /* Ensure body fills iframe height */
+  font-size: 14px;
+}
+
+/* Reset box-sizing */
+.daan-ui *,
+.daan-ui *::before,
+.daan-ui *::after {
+  box-sizing: inherit;
+}
+
+/* --- Style native elements --- */
+
+/* Buttons */
+.daan-ui button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  white-space: nowrap;
+  vertical-align: middle;
+  user-select: none;
+  border-radius: var(--radius);
+  padding: 0.5rem 1rem; /* Adjust as needed */
+  font-size: 0.875rem; /* 14px */
+  line-height: 1.25rem;
+  font-weight: 500;
+  border: 1px solid transparent;
+  cursor: pointer;
+  transition-property:
+    color, background-color, border-color, text-decoration-color, fill, stroke,
+    opacity;
+  transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+  transition-duration: 150ms;
+
+  /* Default variant (like Shadcn primary) */
+  background-color: hsl(var(--primary));
+  color: hsl(var(--primary-foreground));
+  box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+}
+.daan-ui button:hover:not(:disabled) {
+  background-color: hsl(var(--primary) / 0.9);
+}
+.daan-ui button:focus-visible {
+  outline: 2px solid hsl(var(--ring));
+  outline-offset: 2px;
+}
+.daan-ui button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Inputs, Textarea, Select */
+.daan-ui input[type='text'],
+.daan-ui input[type='password'],
+.daan-ui input[type='number'],
+.daan-ui input[type='email'],
+.daan-ui input[type='search'],
+.daan-ui input[type='url'],
+.daan-ui input[type='tel'],
+.daan-ui textarea,
+.daan-ui select {
+  display: flex;
+  width: 100%; /* Default to full width, container can limit */
+  border-radius: var(--radius);
+  border: 1px solid hsl(var(--input));
+  background-color: hsl(var(--background));
+  color: hsl(var(--foreground));
+  padding: 0.5rem 0.75rem;
+  font-size: 0.875rem;
+  line-height: 1.25rem;
+  box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+  transition:
+    border-color 0.15s ease-in-out,
+    box-shadow 0.15s ease-in-out;
+}
+.daan-ui input::placeholder,
+.daan-ui textarea::placeholder {
+  color: hsl(var(--muted-foreground));
+  opacity: 0.7;
+}
+.daan-ui input:focus-visible,
+.daan-ui textarea:focus-visible,
+.daan-ui select:focus-visible {
+  outline: 2px solid hsl(var(--ring));
+  outline-offset: 2px;
+  border-color: hsl(var(--ring));
+}
+.daan-ui input:disabled,
+.daan-ui textarea:disabled,
+.daan-ui select:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.daan-ui textarea {
+  min-height: 80px; /* Default height */
+  resize: vertical; /* Allow vertical resize */
+}
+
+.daan-ui select {
+  /* Basic appearance reset */
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%236b7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3e%3c/svg%3e");
+  background-position: right 0.5rem center;
+  background-repeat: no-repeat;
+  background-size: 1.5em 1.5em;
+  padding-right: 2.5rem;
+}
+/* Dark mode select arrow */
+.daan-ui.theme-dark select {
+  background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%239ca3af' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3e%3c/svg%3e");
+}
+
+/* Labels */
+.daan-ui label {
+  font-size: 0.875rem;
+  line-height: 1.25rem;
+  font-weight: 500;
+  display: block;
+  margin-bottom: 0.5rem;
+  color: hsl(var(--foreground));
+}
+
+/* Headings */
+.daan-ui h1 {
+  font-size: 1.875rem;
+  line-height: 2.25rem;
+  font-weight: 600;
+  margin-bottom: 1rem;
+}
+.daan-ui h2 {
+  font-size: 1.5rem;
+  line-height: 2rem;
+  font-weight: 600;
+  margin-bottom: 0.75rem;
+  border-bottom: 1px solid hsl(var(--border));
+  padding-bottom: 0.5rem;
+}
+.daan-ui h3 {
+  font-size: 1.25rem;
+  line-height: 1.75rem;
+  font-weight: 600;
+  margin-bottom: 0.5rem;
+}
+.daan-ui h4 {
+  font-size: 1.125rem;
+  line-height: 1.75rem;
+  font-weight: 600;
+  margin-bottom: 0.25rem;
+}
+
+/* Paragraphs & Links */
+.daan-ui p {
+  line-height: 1.6;
+  margin-bottom: 1rem;
+}
+.daan-ui a {
+  color: hsl(var(--primary));
+  text-decoration: underline;
+  text-decoration-offset: 2px;
+  transition: color 0.15s ease-in-out;
+}
+.daan-ui a:hover {
+  color: hsl(var(--primary) / 0.8);
+}
+
+/* Lists */
+.daan-ui ul,
+.daan-ui ol {
+  margin-left: 1.5rem;
+  margin-bottom: 1rem;
+  list-style-position: outside;
+}
+.daan-ui ul {
+  list-style-type: disc;
+}
+.daan-ui ol {
+  list-style-type: decimal;
+}
+.daan-ui li {
+  margin-bottom: 0.5rem;
+}
+
+/* Add more styles for tables, blockquotes, code etc. as needed */
+.daan-ui code {
+  font-family: monospace;
+  background-color: hsl(var(--muted));
+  color: hsl(var(--muted-foreground));
+  padding: 0.2em 0.4em;
+  font-size: 85%;
+  border-radius: calc(var(--radius) - 2px);
+}
+.daan-ui pre {
+  background-color: hsl(var(--muted));
+  color: hsl(var(--muted-foreground));
+  padding: 1rem;
+  border-radius: var(--radius);
+  overflow-x: auto;
+  margin-bottom: 1rem;
+}
+.daan-ui pre code {
+  background-color: transparent;
+  padding: 0;
+  font-size: inherit;
+  border-radius: 0;
+}
+
+/* Simple Horizontal Rule */
+.daan-ui hr {
+  border: 0;
+  height: 1px;
+  background-color: hsl(var(--border));
+  margin: 1.5rem 0;
+}

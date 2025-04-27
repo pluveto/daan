@@ -1,10 +1,23 @@
 // src/miniapps/components/MiniappManager/MiniappEditor.tsx
 import { Button } from '@/components/ui/Button';
+import { Collapsible, CollapsibleContent } from '@/components/ui/Collapsible';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/Tabs';
+import { Textarea } from '@/components/ui/Textarea';
+import { generateOrModifyMiniappCode } from '@/lib/miniappAiHelper';
+import { formatMiniappForPublishing } from '@/lib/miniappImportExport';
 import { miniappsDefinitionAtom } from '@/store/miniapp';
-import type { MiniappDefinition, MiniappPermissions } from '@/types';
+import {
+  MiniappMcpDefinition,
+  MiniappMcpDefinitionSchema,
+  type MiniappDefinition,
+  type MiniappPermissions,
+} from '@/types';
+import { CollapsibleTrigger } from '@radix-ui/react-collapsible';
 import { useAtom } from 'jotai';
-import React, { useCallback, useEffect, useState } from 'react';
+import { useAtomCallback } from 'jotai/utils';
+import { ChevronsUpDown } from 'lucide-react';
+import { useCallback, useEffect, useState } from 'react';
+import { LuCopy, LuGithub, LuLoader, LuSparkles } from 'react-icons/lu';
 import { toast } from 'sonner';
 import { v4 as uuidv4 } from 'uuid';
 import { z } from 'zod'; // For validation
@@ -12,6 +25,7 @@ import { CodeSection } from './CodeSection';
 import { ConfigurationSection } from './ConfigurationSection';
 import { DependenciesSection } from './DependenciesSection';
 import { GeneralInfoSection } from './GeneralInfoSection';
+import { McpDefinitionEditor } from './McpDefinitionEditor';
 import { PermissionsSection } from './PermissionsSection';
 import DEFAULT_HTML from './sample.html?raw'; // Import raw content
 
@@ -31,6 +45,7 @@ const miniappDefinitionSchema = z.object({
   defaultConfig: z.record(z.any()).optional().default({}),
   defaultWindowSize: sizeSchema.optional().default({ width: 800, height: 600 }),
   permissions: z.record(z.any()).optional().default({}), // Could be more specific
+  mcpDefinition: MiniappMcpDefinitionSchema.optional(),
   enabled: z.boolean(),
   createdAt: z.number(),
   updatedAt: z.number(),
@@ -47,12 +62,13 @@ interface MiniappEditorProps {
 // Define a type for the editable state, making complex fields potentially null initially
 type EditableMiniappState = Omit<
   Partial<MiniappDefinition>,
-  'configSchema' | 'defaultConfig' | 'permissions'
+  'configSchema' | 'defaultConfig' | 'permissions' | 'mcpDefinition'
 > & {
   configSchema: Record<string, any> | null;
   defaultConfig: Record<string, any> | null;
   defaultWindowSize: { width: number; height: number } | null;
   permissions: MiniappPermissions | null; // Use the specific type
+  mcpDefinition: MiniappMcpDefinition | undefined;
 };
 
 export function MiniappEditor({
@@ -63,6 +79,8 @@ export function MiniappEditor({
   const [definitions, setDefinitions] = useAtom(miniappsDefinitionAtom);
   const [isLoading, setIsLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('general');
+  const [aiDescription, setAiDescription] = useState('');
+  const [isAiLoading, setIsAiLoading] = useState(false);
 
   // State to hold the miniapp definition being edited
   const [editableState, setEditableState] =
@@ -84,6 +102,7 @@ export function MiniappEditor({
         defaultConfig: {},
         defaultWindowSize: { width: 800, height: 600 },
         permissions: { useStorage: true }, // Sensible default permissions
+        mcpDefinition: undefined,
         enabled: false,
         dependencies: [],
       };
@@ -100,6 +119,7 @@ export function MiniappEditor({
             height: 600,
           },
           permissions: existing.permissions ?? { useStorage: true },
+          mcpDefinition: undefined,
           dependencies: existing.dependencies ?? [],
         };
       } else {
@@ -122,6 +142,36 @@ export function MiniappEditor({
       setEditableState((prev) => (prev ? { ...prev, [key]: value } : null));
     },
     [],
+  );
+
+  const handleAiGenerate = useAtomCallback(
+    useCallback(
+      async (get) => {
+        // `get` provided by useAtomCallback
+        if (!editableState || isAiLoading) return;
+
+        setIsAiLoading(true);
+        try {
+          // Use editableState directly, no need to get from atom here
+          const currentHtml = editableState.htmlContent ?? '';
+          const newHtml = await generateOrModifyMiniappCode(
+            aiDescription,
+            currentHtml,
+            get,
+          );
+          // Update the editor state directly
+          handleStateChange('htmlContent', newHtml);
+          // Optionally clear the description field after success
+          // setAiDescription('');
+        } catch (error) {
+          // Error toast is handled within the helper function
+          console.error('AI Generation failed in editor:', error);
+        } finally {
+          setIsAiLoading(false);
+        }
+      },
+      [editableState, aiDescription, isAiLoading, handleStateChange], // Dependencies for inner useCallback
+    ),
   );
 
   // Handle saving
@@ -196,6 +246,74 @@ export function MiniappEditor({
     // --- End Validation ---
   };
 
+  const handleExportForPublishing = () => {
+    if (!editableState) return;
+    // Construct a definition object from the current state
+    const currentDefinitionData = {
+      id: miniappId || 'new-miniapp', // Use current ID or placeholder
+      name: editableState.name ?? 'Untitled',
+      icon: editableState.icon,
+      description: editableState.description,
+      htmlContent: editableState.htmlContent ?? '',
+      configSchema: editableState.configSchema ?? {},
+      defaultConfig: editableState.defaultConfig ?? {},
+      defaultWindowSize: editableState.defaultWindowSize ?? {
+        width: 800,
+        height: 600,
+      },
+      enabled: editableState.enabled ?? false,
+      dependencies: editableState.dependencies ?? [],
+      permissions: editableState.permissions ?? {},
+      mcpDefinition: editableState.mcpDefinition,
+      createdAt: editableState.createdAt || Date.now(), // Use existing or current time
+      updatedAt: Date.now(),
+    };
+    const author = 'GitHubUsername'; // Placeholder
+    const GITHUB_OWNER = 'pluveto';
+    const GITHUB_REPO = 'daan';
+
+    const markdownContent = formatMiniappForPublishing(
+      currentDefinitionData as MiniappDefinition,
+      author,
+    );
+
+    // Copy to clipboard and notify user
+    if (!navigator.clipboard) {
+      toast.error('Failed to access clipboard. Please copy from the console.');
+      console.log(markdownContent);
+      return;
+    }
+    navigator.clipboard
+      .writeText(markdownContent)
+      .then(() => {
+        toast.success('Marketplace Markdown copied to clipboard!', {
+          description: (
+            <span>
+              Go to GitHub Issues, create a new issue, paste this content, and
+              add the 'market-miniapp' label.
+              <a
+                href={`https://github.com/${GITHUB_OWNER}/${GITHUB_REPO}/issues/new`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="ml-2 inline-flex items-center text-blue-500 hover:underline"
+              >
+                Create Issue <LuGithub className="ml-1 h-4 w-4" />
+              </a>
+            </span>
+          ),
+          duration: 10000,
+        });
+      })
+      .catch((err) => {
+        console.error('Failed to copy Markdown:', err);
+        toast.error(
+          'Failed to access clipboard. Please copy from the console.',
+        );
+        console.log(markdownContent);
+        return;
+      });
+  };
+
   if (isLoading || !editableState) {
     // Optional: Add a spinner or loading indicator
     return <div className="p-6 text-center">Loading Editor...</div>;
@@ -207,10 +325,11 @@ export function MiniappEditor({
       <Tabs value={activeTab} onValueChange={setActiveTab}>
         <TabsList>
           <TabsTrigger value="general">General</TabsTrigger>
-          <TabsTrigger value="code">Code</TabsTrigger>
+          <TabsTrigger value="code">Code & AI</TabsTrigger>
           <TabsTrigger value="config">Configuration</TabsTrigger>
           <TabsTrigger value="permissions">Permissions</TabsTrigger>
           <TabsTrigger value="dependencies">Dependencies</TabsTrigger>
+          <TabsTrigger value="mcp">MCP</TabsTrigger>
         </TabsList>
 
         {/* Wrap content in a scrollable area if needed, DialogContent often handles this */}
@@ -227,7 +346,53 @@ export function MiniappEditor({
               onStateChange={(k, v: any) => handleStateChange(k, v)}
             />
           </TabsContent>
-          <TabsContent value="code">
+          <TabsContent value="code" className="space-y-6">
+            {/* AI Generation Section */}
+            <Collapsible className="space-x-4 px-4 py-1 border rounded-md bg-background-secondary">
+              <CollapsibleTrigger asChild>
+                <div className="flex items-center cursor-pointer ">
+                  <h4 className="text-sm font-semibold flex-1">
+                    Generate or Modify with AI
+                  </h4>
+                  <Button variant="ghost" size="sm">
+                    <ChevronsUpDown className="h-4 w-4" />
+                    <span className="sr-only">Toggle</span>
+                  </Button>
+                </div>
+              </CollapsibleTrigger>
+              <CollapsibleContent>
+                <p className="text-muted-foreground mb-2 text-sm">
+                  Describe the functionality you want to add or change in plain
+                  language. The AI will attempt to generate or update the
+                  HTML/CSS/JS code below.
+                </p>
+                <Textarea
+                  id="ai-description"
+                  placeholder="e.g., 'Create a simple counter app with increment/decrement buttons that saves the count using hostApi.storage', or 'Change the button color to blue and make it log the current config when clicked'"
+                  value={aiDescription}
+                  onChange={(e) => setAiDescription(e.target.value)}
+                  rows={3}
+                  disabled={isAiLoading}
+                />
+                <Button
+                  onClick={handleAiGenerate}
+                  disabled={!aiDescription.trim() || isAiLoading}
+                  className="my-2"
+                  size="sm"
+                >
+                  {isAiLoading ? (
+                    <LuLoader className="mr-2 h-4 w-4 animate-spin" />
+                  ) : (
+                    <LuSparkles className="mr-2 h-4 w-4" />
+                  )}
+                  {editableState.htmlContent?.trim()
+                    ? 'Modify Code with AI'
+                    : 'Generate Code with AI'}
+                </Button>
+              </CollapsibleContent>
+            </Collapsible>
+
+            {/* Existing Code Editor Section */}
             <CodeSection
               htmlContent={editableState.htmlContent ?? ''}
               onHtmlChange={(html) => handleStateChange('htmlContent', html)}
@@ -257,11 +422,20 @@ export function MiniappEditor({
               }
             />
           </TabsContent>
+          <TabsContent value="mcp">
+            <McpDefinitionEditor
+              value={editableState.mcpDefinition} // Pass current definition
+              onChange={(mcpDef) => handleStateChange('mcpDefinition', mcpDef)} // Update state
+            />
+          </TabsContent>
         </div>
       </Tabs>
 
       {/* Footer with Actions */}
       <div className="flex flex-shrink-0 justify-end space-x-2 border-t p-4">
+        <Button variant="outline" onClick={handleExportForPublishing}>
+          <LuCopy className="mr-2 h-4 w-4" /> Copy Markdown for Publishing
+        </Button>
         <Button variant="outline" onClick={onCancel}>
           Cancel
         </Button>

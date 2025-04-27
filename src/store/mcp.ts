@@ -1,10 +1,17 @@
 // src/store/mcp.ts
-import { TauriStdioTransport } from '@/lib/transport';
+import {
+  MiniappTransport,
+  registerMiniappTransportForInstance,
+  unregisterMiniappTransportForInstance,
+} from '@/lib/MiniappTransport';
+import { TauriStdioTransport } from '@/lib/TauriStdioTransport';
 import { atomWithSafeStorage } from '@/lib/utils';
 import { createBuiltinExprEvaluatorServer } from '@/mcp/builtinExprEvaluator';
 import { createBuiltinTimeServer } from '@/mcp/builtinTime'; // Import the time server creator
+import { miniAppRegistryAtom } from '@/miniapps/hooks/useMiniappBridgeRegistry';
 import type {
   Message,
+  MiniappBridgeRegistry,
   PendingToolCallInfo,
   ResultToolCallInfo,
   ToolCallInfo,
@@ -21,6 +28,11 @@ import { v4 as uuidv4 } from 'uuid';
 import { callOpenAIStreamLogic } from './apiActions';
 import { activeChatIdAtom, chatsAtom } from './chatData';
 import { updateMessagesInChat } from './messageActions';
+import {
+  activeMiniappInstancesAtom,
+  activeMiniappTransportsAtom,
+  miniappsDefinitionAtom,
+} from './miniapp';
 import { getHistoryForApi } from './regeneration';
 import { defaultMaxHistoryAtom } from './settings';
 
@@ -53,10 +65,16 @@ export interface McpServerConfigBuiltin extends McpServerConfigBase {
   // No specific connection params needed for built-in
 }
 
+export interface McpServerConfigMiniapp extends McpServerConfigBase {
+  type: 'miniapp';
+  targetMiniappId: string; // The definitionId of the Miniapp acting as the server
+}
+
 export type McpServerConfig =
   | McpServerConfigSse
   | McpServerConfigStdio
-  | McpServerConfigBuiltin;
+  | McpServerConfigBuiltin
+  | McpServerConfigMiniapp;
 
 export interface McpDiscoveredCapabilities {
   tools?: { name: string; description?: string; inputSchema?: any }[];
@@ -317,6 +335,12 @@ export const toggleMcpServerEnabledAtom = atom(
   },
 );
 
+export interface ConnectMcpServerPayload {
+  serverId: string;
+  bridgeRegistry?: MiniappBridgeRegistry; // Pass the context value
+  getter: Getter;
+}
+
 /** Action to connect to a specific MCP server. */
 export const connectMcpServerAtom = atom(
   null,
@@ -365,7 +389,7 @@ export const connectMcpServerAtom = atom(
 
     let client: Client | null = null;
     let transport: Transport | null = null;
-
+    let targetInstanceId;
     try {
       client = new Client({ name: 'Daan MCP Client', version: '1.0.0' }); // Basic client info
 
@@ -392,6 +416,31 @@ export const connectMcpServerAtom = atom(
           `[MCP Connect] Using StdioClientTransport for ${config.id}`,
         );
         transport = new TauriStdioTransport(config.command, config.args);
+      } else if (config.type === 'miniapp') {
+        console.log(
+          `[MCP Connect] Using MiniappTransport for ${config.id}, target: ${config.targetMiniappId}`,
+        );
+        const bridgeRegistry: MiniappBridgeRegistry = set(miniAppRegistryAtom);
+        const miniappTransport = new MiniappTransport(
+          config.targetMiniappId,
+          bridgeRegistry,
+          () => get(activeMiniappInstancesAtom),
+        );
+        transport = miniappTransport; // Assign to transport variable
+
+        // We need the instance ID *after* transport.start() succeeds to register it.
+        // transport.start() finds and stores it internally, but doesn't expose it easily.
+        // Let's modify start() slightly OR find instance ID here first.
+        const activeInstances = get(activeMiniappInstancesAtom); // Use passed getter
+        const targetInstance = activeInstances.find(
+          (inst) => inst.definitionId === config.targetMiniappId,
+        );
+        if (!targetInstance) {
+          throw new Error(
+            `MiniappTransport Error: No active instance found for target Miniapp Definition ID: ${config.targetMiniappId}. Please start the Miniapp.`,
+          );
+        }
+        targetInstanceId = targetInstance.instanceId; // Store for registration
       } else {
         throw new Error(
           `Invalid server type (${config.type}) or missing URL for ${config.id}`,
@@ -400,56 +449,93 @@ export const connectMcpServerAtom = atom(
 
       // Attempt connection
       await client.connect(transport); // This also starts the transport
+      // === Register transport after successful connect ===
+      if (transport instanceof MiniappTransport && targetInstanceId) {
+        registerMiniappTransportForInstance(set, targetInstanceId, transport); // Use Jotai 'set'
+      }
 
       // Fetch capabilities after successful connection
       console.log(
         `[MCP Connect] Connected to ${serverId}. Fetching capabilities...`,
       );
-      // Capabilities fetching logic
-      let toolsResult;
-      try {
-        toolsResult = await client.listTools();
-        console.log(`[MCP Connect] Tools for ${serverId}:`, toolsResult);
-      } catch (error) {
-        console.warn(
-          `[MCP Connect] Failed to list tools for ${serverId}:`,
-          error,
-        );
-        toolsResult = { tools: [] }; // Provide a default value to avoid further errors
-      }
 
-      let resourcesResult;
-      try {
-        resourcesResult = await client.listResources();
-        console.log(
-          `[MCP Connect] Resources for ${serverId}:`,
-          resourcesResult,
-        );
-      } catch (error) {
-        console.warn(
-          `[MCP Connect] Failed to list resources for ${serverId}:`,
-          error,
-        );
-        resourcesResult = { resources: [] }; // Provide a default value
-      }
-
-      let promptsResult;
-      try {
-        promptsResult = await client.listPrompts();
-        console.log(`[MCP Connect] Prompts for ${serverId}:`, promptsResult);
-      } catch (error) {
-        console.warn(
-          `[MCP Connect] Failed to list prompts for ${serverId}:`,
-          error,
-        );
-        promptsResult = { prompts: [] }; // Provide a default value
-      }
-
-      const capabilities: McpDiscoveredCapabilities = {
-        tools: toolsResult.tools || [],
-        resources: resourcesResult.resources || [],
-        prompts: promptsResult.prompts || [],
+      let capabilities: McpDiscoveredCapabilities = {
+        tools: [],
+        resources: [],
+        prompts: [],
       };
+
+      if (config.type === 'miniapp') {
+        // For Miniapp type, read capabilities from the host's definition state
+        const definitions = get(miniappsDefinitionAtom);
+        const targetDef = definitions.find(
+          (d) => d.id === config.targetMiniappId,
+        );
+        if (targetDef?.mcpDefinition) {
+          capabilities.tools = targetDef.mcpDefinition.tools.map((t) => ({
+            name: t.name,
+            description: t.description,
+            inputSchema: t.inputSchema,
+          }));
+          // Add resources/prompts if defined later
+          console.log(
+            `[MCP Connect] Loaded capabilities for Miniapp ${config.targetMiniappId} from definition.`,
+          );
+        } else {
+          console.warn(
+            `[MCP Connect] Miniapp ${config.targetMiniappId} connected, but no mcpDefinition found in host state.`,
+          );
+          toast.warning(
+            `Miniapp server "${config.name}" connected, but its capabilities are not defined.`,
+          );
+        }
+      } else {
+        // Capabilities fetching logic
+        let toolsResult;
+        try {
+          toolsResult = await client.listTools();
+          console.log(`[MCP Connect] Tools for ${serverId}:`, toolsResult);
+        } catch (error) {
+          console.warn(
+            `[MCP Connect] Failed to list tools for ${serverId}:`,
+            error,
+          );
+          toolsResult = { tools: [] }; // Provide a default value to avoid further errors
+        }
+
+        let resourcesResult;
+        try {
+          resourcesResult = await client.listResources();
+          console.log(
+            `[MCP Connect] Resources for ${serverId}:`,
+            resourcesResult,
+          );
+        } catch (error) {
+          console.warn(
+            `[MCP Connect] Failed to list resources for ${serverId}:`,
+            error,
+          );
+          resourcesResult = { resources: [] }; // Provide a default value
+        }
+
+        let promptsResult;
+        try {
+          promptsResult = await client.listPrompts();
+          console.log(`[MCP Connect] Prompts for ${serverId}:`, promptsResult);
+        } catch (error) {
+          console.warn(
+            `[MCP Connect] Failed to list prompts for ${serverId}:`,
+            error,
+          );
+          promptsResult = { prompts: [] }; // Provide a default value
+        }
+
+        capabilities = {
+          tools: toolsResult.tools || [],
+          resources: resourcesResult.resources || [],
+          prompts: promptsResult.prompts || [],
+        };
+      }
       console.log(`[MCP Connect] Capabilities for ${serverId}:`, capabilities);
 
       // Update state to 'connected'
@@ -468,6 +554,15 @@ export const connectMcpServerAtom = atom(
       toast.success(`MCP Server "${config.name}" connected.`);
     } catch (error: any) {
       console.error(`[MCP Connect] Failed to connect to ${serverId}:`, error);
+      // === Ensure unregistration if connect failed after registration attempt ===
+      if (transport instanceof MiniappTransport && targetInstanceId) {
+        // Check if it was registered before error
+        if (
+          get(activeMiniappTransportsAtom).get(targetInstanceId) === transport
+        ) {
+          unregisterMiniappTransportForInstance(set, targetInstanceId);
+        }
+      }
       toast.error(`Failed to connect to "${config.name}": ${error.message}`);
       // Ensure client/transport are closed if partially initialized
       if (client) {

@@ -2,7 +2,6 @@
 import { Label } from '@/components/ui/Label';
 import Editor from '@monaco-editor/react';
 import { useTheme } from 'next-themes'; // pnpm add next-themes
-import React from 'react';
 
 interface CodeSectionProps {
   htmlContent: string;

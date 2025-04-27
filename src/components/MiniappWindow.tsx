@@ -61,7 +61,7 @@ interface MiniappWindowProps {
 
 export const MiniappWindow: React.FC<MiniappWindowProps> = memo(
   ({ instance }) => {
-    const { instanceId, definitionId, minimized } = instance; // Destructure updated instance
+    const { instanceId, definitionId /* minimized */ } = instance; // Destructure updated instance
     const winboxRef = useRef<WinBox | null>(null); // Ref to hold the WinBox instance
 
     useEffect(() => {
@@ -94,28 +94,6 @@ export const MiniappWindow: React.FC<MiniappWindowProps> = memo(
       // Important: Return null here. If definition isn't ready, don't render WinBox.
       return null;
     }
-
-    // const handleCreate = useCallback((params: WindowContentProps) => {
-    //     winboxRef.current = winboxInstance;
-    //     registerWinBoxInstance(instanceId, winboxInstance);
-
-    //     // Ensure initial minimized state matches global state when created
-    //     if (minimized && !winboxInstance.minimized) {
-    //         console.log(`Initial sync: Minimizing WinBox ${instanceId} based on global state.`);
-    //         winboxInstance.minimize(true); // true = silent / no animation
-    //     } else if (!minimized && winboxInstance.minimized) {
-    //         console.log(`Initial sync: Restoring WinBox ${instanceId} based on global state.`);
-    //         winboxInstance.restore(true);
-    //     }
-    // }, [instanceId, minimized]); // Include minimized in dep array for initial sync
-
-    // Cleanup ref on unmount
-    // useEffect(() => {
-    //     return () => {
-    //         unregisterWinBoxInstance(instanceId);
-    //         winboxRef.current = null; // Clear the ref
-    //     };
-    // }, [instanceId]);
 
     // Called when user clicks the close button in WinBox
     const handleWinBoxClose = useCallback(() => {

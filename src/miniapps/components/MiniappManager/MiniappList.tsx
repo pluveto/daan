@@ -18,6 +18,13 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/Dialog';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/DropdownMenu'; // Import Dropdown
 import { Switch } from '@/components/ui/Switch';
 import {
   Table,
@@ -33,16 +40,30 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from '@/components/ui/Tooltip';
-// Import Tooltip
+import {
+  exportMiniappDefinition,
+  exportMiniappWithData,
+} from '@/lib/miniappImportExport'; // Import export functions
+
 import {
   activeMiniappInstancesAtom, // To check for running instances
   closeMiniappAtom, // To close running instances if needed
   miniappsDefinitionAtom,
 } from '@/store/miniapp';
+import { MiniappDefinition } from '@/types';
 import { formatDateLabel } from '@/utils/dateUtils'; // Assuming you have a date formatter
-import { useAtom, useAtomValue, useSetAtom } from 'jotai';
+import { useAtom, useAtomValue, useSetAtom } from 'jotai'; // Import Getter
 import React, { useState } from 'react';
-import { LuInfo, LuPackage, LuPencil, LuTrash2 } from 'react-icons/lu'; // Added icons
+import {
+  LuDownload,
+  LuEllipsis,
+  LuFileJson,
+  LuInfo,
+  LuPackage,
+  LuPackagePlus,
+  LuPencil,
+  LuTrash2,
+} from 'react-icons/lu'; // Add/adjust icons
 import { toast } from 'sonner';
 import { MiniappEditor } from './MiniappEditor';
 
@@ -134,6 +155,15 @@ export function MiniappList() {
     }
   };
 
+  // Add handleExport functions
+  const handleExportDef = (def: MiniappDefinition) => {
+    exportMiniappDefinition(def as any);
+  };
+
+  const handleExportData = (def: MiniappDefinition) => {
+    exportMiniappWithData(def as any);
+  };
+
   // Sort definitions, e.g., by name
   const sortedDefinitions = React.useMemo(() => {
     return [...definitions].sort((a, b) => a.name.localeCompare(b.name));
@@ -144,9 +174,9 @@ export function MiniappList() {
       {/* Wrap with TooltipProvider */}
       <div className="space-y-4 p-4">
         <div className="flex items-center justify-between">
-          <h3 className="text-lg font-medium">Manage Miniapps</h3>
-          <Button onClick={handleAddNew} size="sm">
-            Add New Miniapp
+          <h3 className="text-lg font-medium">Miniapps</h3>
+          <Button onClick={handleAddNew} size="sm" variant="outline">
+            <LuPackagePlus className="mr-2 h-4 w-4" /> Add New Miniapp
           </Button>
         </div>
 
@@ -247,74 +277,86 @@ export function MiniappList() {
                               </TooltipContent>
                             </Tooltip>
                           )}
-
-                          {/* Edit Button */}
-                          <Tooltip delayDuration={200}>
-                            <TooltipTrigger asChild>
+                          {/* Actions Dropdown */}
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
                               <Button
                                 variant="ghost"
                                 size="icon"
-                                onClick={() => handleEdit(def.id)}
                                 className="h-7 w-7"
                               >
-                                <LuPencil className="h-4 w-4" />
-                                <span className="sr-only">Edit</span>
+                                <LuEllipsis className="h-4 w-4" />
+                                <span className="sr-only">Actions</span>
                               </Button>
-                            </TooltipTrigger>
-                            <TooltipContent>Edit Miniapp</TooltipContent>
-                          </Tooltip>
-
-                          {/* Delete Button with Confirmation */}
-
-                          <AlertDialog>
-                            <AlertDialogTrigger asChild>
-                              <Tooltip delayDuration={200}>
-                                <TooltipTrigger asChild>
-                                  {/* Use AlertDialogTrigger to wrap the button */}
-                                  <Button
-                                    variant="ghost"
-                                    size="icon"
-                                    className="text-destructive hover:bg-destructive/10 hover:text-destructive h-7 w-7"
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end">
+                              <DropdownMenuItem
+                                onClick={() => handleEdit(def.id)}
+                              >
+                                <LuPencil className="mr-2 h-4 w-4" /> Edit
+                              </DropdownMenuItem>
+                              <DropdownMenuSeparator />
+                              <DropdownMenuItem
+                                onClick={() => handleExportDef(def)}
+                              >
+                                <LuFileJson className="mr-2 h-4 w-4" /> Export
+                                Definition
+                              </DropdownMenuItem>
+                              <DropdownMenuItem
+                                onClick={() => handleExportData(def)}
+                              >
+                                <LuDownload className="mr-2 h-4 w-4" /> Export
+                                with Data
+                              </DropdownMenuItem>
+                              <DropdownMenuSeparator />
+                              {/* Delete Confirmation remains inside AlertDialog */}
+                              <AlertDialog>
+                                <AlertDialogTrigger asChild>
+                                  {/* Must be focusable element for trigger */}
+                                  <DropdownMenuItem
+                                    className="text-destructive focus:bg-destructive/10 focus:text-destructive"
+                                    onSelect={(e) => e.preventDefault()} // Prevent closing dropdown immediately
                                   >
-                                    <LuTrash2 className="h-4 w-4" />
-                                    <span className="sr-only">Delete</span>
-                                  </Button>
-                                </TooltipTrigger>
-                                <TooltipContent>Delete Miniapp</TooltipContent>
-                              </Tooltip>
-                            </AlertDialogTrigger>
-                            {/* Define AlertDialog Content (associated with the trigger above) */}
-                            <AlertDialogContent>
-                              <AlertDialogHeader>
-                                <AlertDialogTitle>
-                                  Are you absolutely sure?
-                                </AlertDialogTitle>
-                                <AlertDialogDescription>
-                                  This action cannot be undone. This will
-                                  permanently delete the
-                                  <strong className="px-1">{def.name}</strong>
-                                  Miniapp definition.
-                                  {isRunning && (
-                                    <span className="text-destructive block pt-2 font-semibold">
-                                      Warning: {runningInstanceCount}
-                                      instance(s) of this Miniapp are currently
-                                      running and will be closed.
-                                    </span>
-                                  )}
-                                </AlertDialogDescription>
-                              </AlertDialogHeader>
-                              <AlertDialogFooter>
-                                <AlertDialogCancel>Cancel</AlertDialogCancel>
-                                {/* Action calls the final delete logic */}
-                                <AlertDialogAction
-                                  onClick={() => handleDelete(def.id)}
-                                  className="bg-destructive text-destructive-foreground hover:bg-destructive/90" // Destructive variant style
-                                >
-                                  Yes, Delete Definition
-                                </AlertDialogAction>
-                              </AlertDialogFooter>
-                            </AlertDialogContent>
-                          </AlertDialog>
+                                    <LuTrash2 className="mr-2 h-4 w-4" />{' '}
+                                    Delete...
+                                  </DropdownMenuItem>
+                                </AlertDialogTrigger>
+                                <AlertDialogContent>
+                                  {/* ... AlertDialog Header, Desc, Footer ... */}
+                                  <AlertDialogHeader>
+                                    <AlertDialogTitle>
+                                      Are you sure?
+                                    </AlertDialogTitle>
+                                    <AlertDialogDescription>
+                                      This will permanently delete the{' '}
+                                      <strong className="px-1">
+                                        {def.name}
+                                      </strong>{' '}
+                                      Miniapp definition.
+                                      {isRunning && (
+                                        <span className="text-destructive block pt-2 font-semibold">
+                                          Warning: {runningInstanceCount}{' '}
+                                          instance(s) running and will be
+                                          closed.
+                                        </span>
+                                      )}
+                                    </AlertDialogDescription>
+                                  </AlertDialogHeader>
+                                  <AlertDialogFooter>
+                                    <AlertDialogCancel>
+                                      Cancel
+                                    </AlertDialogCancel>
+                                    <AlertDialogAction
+                                      onClick={() => handleDelete(def.id)}
+                                      className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                                    >
+                                      Yes, Delete Definition
+                                    </AlertDialogAction>
+                                  </AlertDialogFooter>
+                                </AlertDialogContent>
+                              </AlertDialog>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
                         </div>
                       </TableCell>
                     </TableRow>

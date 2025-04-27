@@ -5,6 +5,7 @@ import {
   createNewChatAtom,
   customCharactersAtom,
   deleteChatAtom,
+  enableMiniappFeatureAtom,
   isCharacterEditorOpenAtom,
   isConversationSearchOpenAtom,
   isSystemSettingsDialogOpenAtom,
@@ -42,6 +43,7 @@ export const LeftSidebar: React.FC = () => {
   const deleteChat = useSetAtom(deleteChatAtom);
   const togglePinChat = useSetAtom(togglePinChatAtom);
   const clearUnpinnedChats = useSetAtom(clearUnpinnedChatsAtom);
+  const enableMiniappFeature = useAtomValue(enableMiniappFeatureAtom);
 
   // --- Event Handlers (Defined here to interact with atoms/state) ---
   const handleSettingsClick = () => setIsSystemSettingsOpen(true);
@@ -149,7 +151,7 @@ export const LeftSidebar: React.FC = () => {
         onInstantiateCharacterClick={handleInstantiateCharacterClick}
       />
       {/* MiniApp Section */}
-      <MiniappSection /> {/* Add the new section here */}
+      {enableMiniappFeature && <MiniappSection />}
       {/* Conversation section now combines Search and List */}
       <div className="flex flex-1 flex-col overflow-hidden">
         {/* Added wrapper for flex-1 layout */}
