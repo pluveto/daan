@@ -183,8 +183,8 @@ async function fetchMarketplaceItems(
   totalCount: number;
 }> {
   try {
-    // Construct search query: label + user query + is:open + is:issue
-    let q = `repo:${GITHUB_OWNER}/${GITHUB_REPO} is:issue is:open label:"${label}"`;
+    // Construct search query: label + user query +  is:issue
+    let q = `repo:${GITHUB_OWNER}/${GITHUB_REPO} is:issue label:"${label}"`;
     if (query?.trim()) {
       if (query.trim().startsWith('repo:')) {
         q = query.trim();
