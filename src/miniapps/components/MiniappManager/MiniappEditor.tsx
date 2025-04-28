@@ -274,13 +274,11 @@ export function MiniappEditor({
       createdAt: editableState.createdAt || Date.now(), // Use existing or current time
       updatedAt: Date.now(),
     };
-    const author = 'GitHubUsername'; // Placeholder
     const GITHUB_OWNER = 'pluveto';
     const GITHUB_REPO = 'daan';
 
     const markdownContent = formatMiniappForPublishing(
       currentDefinitionData as MiniappDefinitionEntity,
-      author,
     );
 
     // Copy to clipboard and notify user

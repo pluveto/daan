@@ -19,6 +19,7 @@ export const isRightSidebarOpenAtom = atomWithSafeStorage(
 
 /** Controls the visibility of the character editor/creator view. */
 export const isCharacterEditorOpenAtom = atom(false);
+export const isCharacterMarketplaceOpenAtom = atom(false);
 
 /** ID of the message currently being edited, or null if none. */
 export const editingMessageIdAtom = atom<string | null>(null);

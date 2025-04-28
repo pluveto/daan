@@ -9,6 +9,7 @@ import {
   DialogTitle,
 } from '@/components/ui/Dialog';
 import {
+  Form,
   FormControl,
   FormDescription,
   FormField,
@@ -33,7 +34,7 @@ import { miniappsDefinitionAtom } from '@/store/miniapp'; // Import definitions 
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useAtomValue } from 'jotai'; // Import useAtomValue
 import React, { useEffect, useMemo } from 'react';
-import { Form, useForm } from 'react-hook-form';
+import { useForm } from 'react-hook-form';
 import { McpServerFormData, mcpServerFormSchema } from './schema';
 
 interface McpServerFormProps {
@@ -85,6 +86,8 @@ export const McpServerForm: React.FC<McpServerFormProps> = ({
     resolver: zodResolver(mcpServerFormSchema) as any,
     defaultValues: formInitialState(),
   });
+
+  console.log('form', form);
 
   const serverType = form.watch('type');
 
@@ -159,7 +162,7 @@ export const McpServerForm: React.FC<McpServerFormProps> = ({
       <Form {...form}>
         <form
           onSubmit={form.handleSubmit(handleFormSubmit)}
-          className="space-y-4"
+          className="space-y-5"
         >
           {/* Name */}
           <FormField

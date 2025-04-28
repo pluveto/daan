@@ -431,20 +431,14 @@ export function formatMiniappForPublishing(
 
   _.omitBy(definitionForJson, _.isUndefined);
 
-  const jsonString = JSON.stringify({ definition: definitionForJson }, null, 2);
-
-  // Construct YAML Frontmatter string manually
-  let frontmatter = '---\n';
-  Object.entries(metadata).forEach(([key, value]) => {
-    if (value !== undefined && value !== null) {
-      frontmatter += `${key}: ${JSON.stringify(value)}\n`; // Ensure proper quoting/escaping
-    }
-  });
-  frontmatter += '---\n';
+  const jsonString = JSON.stringify(
+    { ...metadata, ...definitionForJson },
+    null,
+    2,
+  );
 
   // Assemble the final Markdown
   const markdown = `
-${frontmatter}
 ## Overview
 
 ${definition.description || '*(Please add a detailed description here)*'}
@@ -500,20 +494,14 @@ export function formatCharacterForPublishing(
     // Omit sort, createdAt, updatedAt
   };
 
-  const jsonString = JSON.stringify({ definition: definitionForJson }, null, 2);
-
-  // Construct YAML Frontmatter string
-  let frontmatter = '---\n';
-  Object.entries(metadata).forEach(([key, value]) => {
-    if (value !== undefined && value !== null) {
-      frontmatter += `${key}: ${JSON.stringify(value)}\n`;
-    }
-  });
-  frontmatter += '---\n';
+  const jsonString = JSON.stringify(
+    { ...metadata, ...definitionForJson },
+    null,
+    2,
+  );
 
   // Assemble the final Markdown
   const markdown = `
-${frontmatter}
 ## Overview
 
 ${character.description || '*(Please add a detailed description for this character)*'}

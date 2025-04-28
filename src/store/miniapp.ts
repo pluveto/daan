@@ -23,6 +23,7 @@ export const miniappsConfigAtom = atom<Record<string, MiniappConfig>>({});
 export const activeMiniappInstancesAtom = atom<MiniappInstance[]>([]); // Type updated
 export const activeMiniappInstanceOrderAtom = atom<string[]>([]);
 export const isMiniappSearchOpenAtom = atom<boolean>(false);
+export const isMiniappMarketplaceOpenAtom = atom<boolean>(false);
 
 // --- WinBox Instance Registry (Not part of Jotai state) ---
 // This map holds references to the active WinBox instances, managed outside React state.

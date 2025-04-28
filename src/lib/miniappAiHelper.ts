@@ -28,19 +28,38 @@ The Miniapp runs in an iframe and communicates with the host application via a '
 - hostApi.registerFunction(name, handler): Registers a function callable by the host/other apps. Handler can be async.
 - hostApi.unregisterFunction(name): Unregisters a function.
 - hostApi.llm.getModels(): Gets available LLM models. Returns Promise<LlmModelInfo[]>. (Requires 'llmAccess' permission)
-- hostApi.llm.call(options): Initiates an LLM call via the host. Requires options: { requestId: string, model: string, messages: Array<{role, content}>, stream: boolean, ... }. Returns Promise<void>. Listen for DOM events 'daan:llmChunk', 'daan:llmFinal', 'daan:llmError' with details containing the requestId. (Requires 'llmAccess' permission)
+- hostApi.llm.call(options): Initiates an LLM call via the host. Requires options: { requestId: string, model: string | undefined, messages: Array<{role, content}>, stream: boolean, ... }. Returns Promise<void>. Listen for DOM events 'daan:llmChunk', 'daan:llmFinal', 'daan:llmError' with details containing the requestId. (Requires 'llmAccess' permission)
+  - When model param is set to undefined, the host will use the default model set in the host settings.
+  - options.stream decide whether to stream the response (true) or get it all at once (false). when false, data will be received in 'daan:llmFinal' event.
 - hostApi.llm.abort(requestId): Aborts an ongoing LLM call. Returns Promise<void>. (Requires 'llmAccess' permission)
 All async hostApi methods return Promises that resolve/reject based on host execution.
+
+Event format detail:
+
+CustomEvent('daan:llmChunk', {
+  detail: { requestId, chunk: (string) },
+})
+CustomEvent('daan:llmFinal', {
+  detail: {
+    requestId,
+    result: (string),
+    finishReason:
+      (string),
+  },
+})
+CustomEvent('daan:llmError', { detail: { requestId, error } })
 `;
 
   const constraints = `
 CONSTRAINTS:
 - You MUST generate a single, complete HTML file.
+- Do NOT generate a title app title like <h1>Some Util</h1> because the host window will provide a title.
 - Include ALL necessary CSS within <style> tags and ALL JavaScript within <script> tags in the HTML file. Do NOT assume external files.
 - Use ONLY VANILLA JAVASCRIPT. Do NOT use React, Vue, jQuery, or any other frameworks or libraries unless explicitly provided via a standard browser API.
 - State must be managed manually within the script.
-- The host automatically includes 'hostApi.js', making 'window.hostApi' available. Do NOT include it yourself.
-- For styling, the host injects '/daan-ui-miniapp.css'. Native HTML elements (button, input, p, h1, etc.) will be styled automatically if the <body> tag has the class "daan-ui". Add this class to the body tag for standard styling. The host manages theme switching via 'theme-light'/'theme-dark' classes on the body. Your CSS should primarily use CSS variables provided by the host (e.g., --background, --foreground, --primary, --radius).
+- The host automatically includes 'host-api.js', making 'window.hostApi' available. Do NOT include it yourself.
+- For styling, the host auto injects 'miniapp.css' Do NOT include it yourself. Native HTML elements (button, input, p, h1, etc.) will be styled automatically if the <body> tag has the class "daan-ui". Add this class to the body tag for standard styling. The host manages theme switching via 'theme-light'/'theme-dark' classes on the body. Your CSS should primarily use CSS variables provided by the host (e.g., --background, --foreground, --primary, --radius).
+- Miniapps run in a tiny window, so ensure the UI is optimized for small screens, with clear and concise text and buttons and very compact layouts.
 - Ensure the generated code is secure and avoids common pitfalls like injection vulnerabilities if processing external data (though primarily rely on hostApi for external interactions).
 `;
 

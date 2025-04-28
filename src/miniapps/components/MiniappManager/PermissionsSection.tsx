@@ -77,7 +77,7 @@ export function PermissionsSection({
                   htmlFor="perm-storage"
                   className="cursor-pointer font-normal"
                 >
-                  Storage Access{' '}
+                  Storage Access
                   <code className="text-neutral-500">hostApi.storage.*</code>
                 </Label>
               </td>
@@ -105,7 +105,7 @@ export function PermissionsSection({
                   htmlFor="perm-llm"
                   className="cursor-pointer font-normal"
                 >
-                  LLM Access{' '}
+                  LLM Access
                   <code className="text-neutral-500">hostApi.llm.*</code>
                 </Label>
               </td>

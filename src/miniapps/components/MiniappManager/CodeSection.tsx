@@ -15,10 +15,7 @@ export function CodeSection({ htmlContent, onHtmlChange }: CodeSectionProps) {
     <div className="space-y-2">
       <Label>HTML Content</Label>
       <p className="text-muted-foreground text-sm">
-        Edit the HTML, CSS, and JavaScript for your Miniapp here. Ensure you
-        include
-        <code>&lt;script src="/hostApi.js"&gt;&lt;/script&gt;</code>
-        to communicate with the host application.
+        Edit the HTML, CSS, and JavaScript for your Miniapp here.
       </p>
       <div
         className="overflow-hidden rounded-md border"

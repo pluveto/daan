@@ -198,7 +198,6 @@ export const McpDefinitionEditor: React.FC<McpDefinitionEditorProps> = ({
             </p>
           )}
           <ScrollArea className="max-h-[40vh] pr-3">
-            {' '}
             {/* Limit height */}
             <div className="space-y-4">
               {tools.map((tool, index) => (

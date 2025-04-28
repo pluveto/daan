@@ -1,12 +1,13 @@
 // src/miniapps/components/MiniappRunner/index.tsx
-import hostApiScript from '@/hostApi.js?raw';
+import hostApiScript from '@/host-api.js?raw';
+import daanUiMiniappCss from '@/miniapp.css?raw';
 import { useMiniappBridge } from '@/miniapps/hooks/useMiniappBridge';
 import { nightModeAtom } from '@/store';
 import type { MiniappDefinitionEntity } from '@/types';
 import { useAtom } from 'jotai';
 import React, { Component, useMemo, useRef, useState } from 'react';
 
-// --- Error Boundary ---
+// --- Error Boundary (remains the same) ---
 interface ErrorBoundaryProps {
   children: React.ReactNode;
   miniappName: string; // To identify which miniapp failed
@@ -83,10 +84,10 @@ export function MiniappRunner({
     // Content Security Policy (adjust as needed)
     const csp = [
       "default-src 'none'",
-      // Allow scripts: inline, self, and hostApi.js
-      "script-src 'unsafe-inline' 'self'", // Removed /hostApi.js as it's embedded now
-      // Allow styles: inline, self, and our injected CSS
-      "style-src 'unsafe-inline' 'self' /daan-ui-miniapp.css", // Allow our CSS file
+      // Allow scripts: inline, self, and embedded host-api.js
+      "script-src 'unsafe-inline' 'self'",
+      // Allow styles: inline (for injected <style>) and self (general good practice)
+      "style-src 'unsafe-inline' 'self'", // Removed /miniapp.css
       // Allow fonts: self, and potentially external sources if needed by themes
       "font-src 'self'", // Example: add data: if needed
       // Allow images: data URIs, blobs, self
@@ -103,29 +104,30 @@ export function MiniappRunner({
     const headIndex = htmlContent.toLowerCase().indexOf(headTag);
     let injectedHtml = htmlContent;
 
-    // Inject CSP, CSS Link, and instance ID meta tag into <head>
-    const cssLink = `<link rel="stylesheet" href="/daan-ui-miniapp.css">`; // Link to our CSS
+    // Inject CSP, Meta Tags, and the CSS content within a <style> tag into <head>
+    const injectedStyleTag = `<style type="text/css">${daanUiMiniappCss}</style>`; // Inject CSS content
     const metaTags =
       `<meta http-equiv="Content-Security-Policy" content="${csp}">` +
-      `<meta name="miniapp-definition-id" content="${definitionId}">`;
-    `<meta name="miniapp-instance-id" content="${instanceId}">`;
+      `<meta name="miniapp-definition-id" content="${definitionId}">` + // Fixed concatenation
+      `<meta name="miniapp-instance-id" content="${instanceId}">`;
 
     if (headIndex !== -1) {
       const injectionPoint = headIndex + headTag.length;
       injectedHtml =
         htmlContent.slice(0, injectionPoint) +
         metaTags +
-        cssLink + // Inject CSS link
+        injectedStyleTag + // Inject <style> tag instead of <link>
         htmlContent.slice(injectionPoint);
     } else {
       // Fallback if <head> tag is missing
       console.warn(
         `Miniapp "${name}" (Instance: ${instanceId}) HTML missing <head> tag. Injecting basic structure.`,
       );
-      injectedHtml = `<!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>${name}</title>${metaTags}${cssLink}</head><body>${htmlContent}</body></html>`;
+      // Inject style tag in fallback as well
+      injectedHtml = `<!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>${name}</title>${metaTags}${injectedStyleTag}</head><body>${htmlContent}</body></html>`;
     }
 
-    // Ensure hostApi.js script is included (now embedded directly for simplicity)
+    // Ensure host-api.js script is included (embedded directly)
     const hostApiScriptWrapped = `<script type="text/javascript">${hostApiScript}</script>`;
     const bodyEndIndex = injectedHtml.toLowerCase().lastIndexOf('</body>');
     if (bodyEndIndex !== -1) {
@@ -148,7 +150,18 @@ export function MiniappRunner({
       // Determine initial theme class
       const initialThemeClass = isNightMode ? 'theme-dark' : 'theme-light';
       // Inject daan-ui and theme class
-      const bodyReplacement = `<body class="daan-ui ${initialThemeClass}"${existingAttributes}>`;
+      // Ensure existing classes are preserved if any
+      let classes = `daan-ui ${initialThemeClass}`;
+      const existingClassMatch = existingAttributes.match(/class="([^"]*)"/i);
+      let attributesWithoutClass = existingAttributes;
+      if (existingClassMatch) {
+        classes += ` ${existingClassMatch[1]}`; // Append existing classes
+        attributesWithoutClass = existingAttributes.replace(
+          existingClassMatch[0],
+          '',
+        );
+      }
+      const bodyReplacement = `<body class="${classes.trim()}"${attributesWithoutClass}>`;
       injectedHtml = injectedHtml.replace(bodyTagRegex, bodyReplacement);
     } else {
       console.warn(
@@ -159,8 +172,15 @@ export function MiniappRunner({
     }
 
     return injectedHtml;
-    // Depend on isNightMode so srcDoc updates if theme changes *before* iframe load
-  }, [htmlContent, name, instanceId, hostApiScript, isNightMode]);
+    // Depend on the imported CSS content as well
+  }, [
+    htmlContent,
+    name,
+    instanceId,
+    hostApiScript,
+    daanUiMiniappCss,
+    isNightMode,
+  ]); // Added daanUiMiniappCss dependency
 
   // Handle iframe load event
   const handleIframeLoad = () => {
@@ -182,8 +202,7 @@ export function MiniappRunner({
           title={name}
           className="h-full w-full flex-grow border-0"
           onLoad={handleIframeLoad}
-          // Optional: Permissions Policy
-          // allow="clipboard-read; clipboard-write;"
+          allow="clipboard-read; clipboard-write;"
         />
       </div>
     </MiniappErrorBoundary>

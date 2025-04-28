@@ -1,6 +1,5 @@
 // src/lib/MarketplaceService.ts
 import { Octokit } from '@octokit/rest'; // pnpm add @octokit/rest gray-matter marked
-import matter from 'gray-matter'; // For parsing frontmatter
 import { marked } from 'marked'; // For potentially rendering description Markdown (optional)
 import { toast } from 'sonner';
 import { z } from 'zod';
@@ -11,7 +10,6 @@ const MarketplaceItemMetadataSchema = z
     name: z.string(),
     icon: z.string().optional(),
     version: z.string().optional(),
-    author: z.string().optional(),
     description: z.string().optional(),
     tags: z.array(z.string()).optional(),
     license: z.string().optional(),
@@ -21,17 +19,18 @@ const MarketplaceItemMetadataSchema = z
   .passthrough(); // Allow extra fields
 
 // Schema for the JSON block content
-const DefinitionContainerSchema = z.object({
-  // Allow MiniappDefinition or CustomCharacter shape, but don't strictly validate all fields here yet
-  definition: z.record(z.string(), z.any()),
-});
+const DefinitionContainerSchema = z.record(z.string(), z.any());
+
+export type MarketplaceItemMetadata = z.infer<
+  typeof MarketplaceItemMetadataSchema
+>;
 
 export interface MarketplaceItem {
   id: number; // GitHub Issue ID
   title: string; // Issue Title (might differ slightly from name)
   url: string; // HTML URL of the issue
   state: 'open' | 'closed';
-  metadata: z.infer<typeof MarketplaceItemMetadataSchema> | null; // Parsed frontmatter
+  metadata: MarketplaceItemMetadata | null; // Parsed frontmatter
   labels: string[];
   createdAt: number;
   updatedAt: number;
@@ -79,16 +78,7 @@ async function parseIssueBody(body: string | null | undefined): Promise<{
 
   try {
     // 1. Parse Frontmatter (metadata)
-    const { data: metadataRaw, content: markdownContent } = matter(body);
-    const metadataResult = MarketplaceItemMetadataSchema.safeParse(metadataRaw);
-    const metadata = metadataResult.success ? metadataResult.data : null;
-    if (!metadataResult.success) {
-      console.warn(
-        'MarketplaceService: Failed to parse frontmatter:',
-        metadataResult.error,
-      );
-      // Continue without metadata, but maybe log?
-    }
+    let markdownContent = body;
 
     // 2. Extract Definition JSON (excluding htmlContent potentially)
     let definition: Record<string, any> | null = null;
@@ -99,7 +89,7 @@ async function parseIssueBody(body: string | null | undefined): Promise<{
         const definitionContainerResult =
           DefinitionContainerSchema.safeParse(parsedJson);
         if (definitionContainerResult.success) {
-          definition = definitionContainerResult.data.definition;
+          definition = definitionContainerResult.data;
         } else {
           console.warn(
             'MarketplaceService: Failed to parse definition container JSON:',
@@ -117,6 +107,9 @@ async function parseIssueBody(body: string | null | undefined): Promise<{
         'MarketplaceService: Could not find JSON definition block in issue body.',
       );
     }
+
+    const metadata =
+      MarketplaceItemMetadataSchema.safeParse(definition).data ?? null;
 
     // --- NEW: Extract HTML Content ---
     const htmlString = extractCodeBlock(markdownContent, 'html'); // Use helper
@@ -177,6 +170,7 @@ async function fetchMarketplaceItems(
 
     console.log(
       `MarketplaceService: Found ${response.data.total_count} items (fetched ${response.data.items.length}).`,
+      response.data.items,
     );
 
     const items = await Promise.all(
@@ -189,7 +183,7 @@ async function fetchMarketplaceItems(
           // if (!metadata?.name) return null;
 
           return {
-            id: issue.id,
+            id: issue.number,
             title: issue.title,
             url: issue.html_url,
             state: issue.state as 'open' | 'closed',
@@ -246,8 +240,15 @@ async function fetchItemDetails(
       return null;
     }
 
+    if (!longDescriptionHtml) {
+      console.error(
+        `MarketplaceService: No valid description html found in issue #${issueNumber}.`,
+      );
+      return null;
+    }
+
     return {
-      id: issue.id,
+      id: issue.number,
       title: issue.title,
       url: issue.html_url,
       state: issue.state as 'open' | 'closed',

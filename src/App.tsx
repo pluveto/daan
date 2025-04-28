@@ -28,7 +28,9 @@ import {
 import { useAtom, useAtomValue, useSetAtom } from 'jotai';
 import { VisuallyHidden } from 'radix-ui';
 import { useEffect } from 'react';
+import { CharacterMarketplaceDialog } from './components/CharacterMarketplaceDialog';
 import FastImport from './components/FastImport';
+import { MiniappMarketplaceDialog } from './components/MiniappMarketplaceDialog';
 import { MiniappSearchDialog } from './components/MiniappSearchDialog';
 import { MiniappWindowManager } from './components/MiniappWindowManager';
 import { Toaster } from './components/ui/Toaster';
@@ -118,6 +120,9 @@ function App() {
       <FastImport />
       <SystemSettingsDialog />
       <MiniappSearchDialog />
+      <MiniappMarketplaceDialog />
+      <CharacterMarketplaceDialog />
+
       {/* Left Sidebar */}
       {isDesktop ? (
         <div

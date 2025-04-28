@@ -8,6 +8,7 @@ import {
   enableMiniappFeatureAtom,
   // --- End new atoms ---
   isCharacterEditorOpenAtom,
+  isCharacterMarketplaceOpenAtom,
   isConversationSearchOpenAtom,
   isLoadingCharactersAtom, // Use sorted metadata atom
   isLoadingChatListAtom,
@@ -48,6 +49,9 @@ export const LeftSidebar: React.FC = () => {
 
   const [activeChatId, setActiveChatId] = useAtom(activeChatIdAtom);
   const setIsCharacterEditorOpen = useSetAtom(isCharacterEditorOpenAtom);
+  const setIsCharacterMarketplaceOpen = useSetAtom(
+    isCharacterMarketplaceOpenAtom,
+  );
   const setIsSystemSettingsOpen = useSetAtom(isSystemSettingsDialogOpenAtom);
   const setConversationSearchOpen = useSetAtom(isConversationSearchOpenAtom);
   const createNewChat = useSetAtom(createNewChatAtom); // Action atom refactored
@@ -64,6 +68,8 @@ export const LeftSidebar: React.FC = () => {
     clearUnpinnedChats(); // Calls refactored action
   };
   const handleAddCharacterClick = () => setIsCharacterEditorOpen(true);
+  const handleOpenChartMarketplaceClick = () =>
+    setIsCharacterMarketplaceOpen(true); // TODO: Implement this
   const handleInstantiateCharacterClick = async (
     character: CharacterEntity,
   ) => {
@@ -151,10 +157,11 @@ export const LeftSidebar: React.FC = () => {
 
       {/* Character Section - Pass loading state */}
       <CharacterSection
-        characters={characters ?? []} // Handle null state
+        characters={characters ?? []}
         isLoading={isLoadingChars}
         onAddCharacterClick={handleAddCharacterClick}
         onInstantiateCharacterClick={handleInstantiateCharacterClick}
+        onOpenMarketplaceClick={handleOpenChartMarketplaceClick}
       />
 
       {/* MiniApp Section (unchanged logic) */}

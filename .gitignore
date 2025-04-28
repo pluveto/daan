@@ -6,3 +6,4 @@ dist/
 tsconfig.tsbuildinfo
 vite.config.ts.timestamp-*
 project_bundle.md
+.env.development
