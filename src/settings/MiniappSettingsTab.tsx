@@ -1,18 +1,15 @@
 import { Button } from '@/components/ui/Button';
 import { importMiniappFromFile } from '@/lib/miniappImportExport'; // Import the function
 import { MiniappList } from '@/miniapps/components/MiniappManager/MiniappList';
-import { miniappsDefinitionAtom } from '@/store/miniapp'; // Import atom
-import { useAtomValue, useSetAtom } from 'jotai'; // Import useSetAtom, useAtomValue
-import React, { useCallback, useRef } from 'react';
+import { miniappDataServiceAtom } from '@/store/miniapp'; // Import atom
+import { useAtomValue } from 'jotai'; // Import useSetAtom, useAtomValue
+import React, { useRef } from 'react';
 import { LuUpload } from 'react-icons/lu'; // Import icon
 import { toast } from 'sonner';
 
 export function MiniappSettingsTab() {
   const fileInputRef = useRef<HTMLInputElement>(null);
-  // We need both getter and setter for import
-  const definitions = useAtomValue(miniappsDefinitionAtom);
-  const setDefinitions = useSetAtom(miniappsDefinitionAtom);
-  const getDefinitions = useCallback(() => definitions, [definitions]);
+  const miniappDataService = useAtomValue(miniappDataServiceAtom);
 
   const handleFileSelect = async (
     event: React.ChangeEvent<HTMLInputElement>,
@@ -33,7 +30,7 @@ export function MiniappSettingsTab() {
     toast.info(`Importing Miniapp from "${file.name}"...`);
     try {
       // Pass the getter and setter to the import function
-      await importMiniappFromFile(file, getDefinitions, setDefinitions);
+      await importMiniappFromFile(file, miniappDataService);
       // Success message is handled within importMiniappFromFile
     } catch (error) {
       // Error toast is handled within importMiniappFromFile

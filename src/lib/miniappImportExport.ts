@@ -1,12 +1,9 @@
 // src/lib/miniappImportExport.ts
-import {
-  getAllDataForMiniapp,
-  setMiniappDataItem,
-} from '@/miniapps/persistence';
+import { MiniappDataService } from '@/services/MiniappDataService';
 import {
   MiniappMcpDefinitionSchema,
   type CustomCharacter,
-  type MiniappDefinition,
+  type MiniappDefinitionEntity,
 } from '@/types';
 import _ from 'lodash';
 import { toast } from 'sonner';
@@ -102,6 +99,7 @@ export function exportMiniappDefinition(
  * @param definition The MiniappDefinition object to export.
  */
 export async function exportMiniappWithData(
+  service: MiniappDataService,
   definition: MiniappImportDefinition,
 ): Promise<void> {
   try {
@@ -109,7 +107,7 @@ export async function exportMiniappWithData(
     if (!definition.id) {
       throw new Error('Cannot export data for a Miniapp without an ID.');
     }
-    const data = await getAllDataForMiniapp(definition.id);
+    const data = await service.getAllDataItems(definition.id);
     const exportData: MiniappExportFileData = {
       version: 1,
       type: 'miniapp',
@@ -141,10 +139,7 @@ export async function exportMiniappWithData(
  */
 export async function importMiniappFromFile(
   file: File,
-  getDefinitions: () => MiniappDefinition[],
-  setDefinitions: (
-    fn: (prev: MiniappDefinition[]) => MiniappDefinition[],
-  ) => void,
+  service: MiniappDataService,
 ): Promise<void> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -187,7 +182,7 @@ export async function importMiniappFromFile(
       const importedDefinitionData = importedData.definition; // Data parsed by Zod
       const importedMiniappData = importedData.data;
 
-      const currentDefinitions = getDefinitions();
+      const currentDefinitions = await service.getAllDefinitions();
       // Use ID from file if present, otherwise generate one (for potentially malformed exports)
       const idFromFile = importedDefinitionData.id || uuidv4();
       const existingDefinitionIndex = currentDefinitions.findIndex(
@@ -198,14 +193,14 @@ export async function importMiniappFromFile(
         ? currentDefinitions[existingDefinitionIndex]
         : null;
 
-      let finalDefinition: MiniappDefinition;
+      let finalDefinition: MiniappDefinitionEntity;
       const now = Date.now();
 
       // --- Handle Conflicts / Prepare Final Definition ---
 
       // Define default values for a new MiniappDefinition
       const defaultValues: Omit<
-        MiniappDefinition,
+        MiniappDefinitionEntity,
         'id' | 'name' | 'htmlContent' | 'createdAt' | 'updatedAt'
       > = {
         icon: '📦',
@@ -316,17 +311,22 @@ export async function importMiniappFromFile(
 
       // --- Update State: Definition ---
       try {
-        setDefinitions((prev) => {
-          if (definitionExists) {
-            // Overwrite existing
-            return prev.map((def) =>
-              def.id === finalDefinition.id ? finalDefinition : def,
-            );
-          } else {
-            // Add new
-            return [...prev, finalDefinition];
-          }
-        });
+        // setDefinitions((prev) => {
+        //   if (definitionExists) {
+        //     // Overwrite existing
+        //     return prev.map((def) =>
+        //       def.id === finalDefinition.id ? finalDefinition : def,
+        //     );
+        //   } else {
+        //     // Add new
+        //     return [...prev, finalDefinition];
+        //   }
+        // });
+        if (definitionExists) {
+          await service.updateDefinition(finalDefinition);
+        } else {
+          await service.createDefinition(finalDefinition);
+        }
         // Toast success after definition is updated
         toast.success(
           `Miniapp "${finalDefinition.name}" ${definitionExists ? 'updated' : 'installed'} successfully.`,
@@ -344,18 +344,18 @@ export async function importMiniappFromFile(
       // --- Update State: Data (if included) ---
       if (importedMiniappData && Object.keys(importedMiniappData).length > 0) {
         // Use the final ID (in case it was preserved during overwrite)
-        const targetId = finalDefinition.id;
+        const definitionId = finalDefinition.id;
         toast.info(
-          `Importing data for "${finalDefinition.name}" (ID: ${targetId})...`,
+          `Importing data for "${finalDefinition.name}" (ID: ${definitionId})...`,
         );
         let dataImportErrors = 0;
         const importPromises = Object.entries(importedMiniappData).map(
           async ([key, value]) => {
             try {
-              await setMiniappDataItem(targetId, key, value);
+              await service.upsertDataItem({ definitionId, key, value });
             } catch (error) {
               console.error(
-                `Import error: Failed to import data key '${key}' for ${targetId}:`,
+                `Import error: Failed to import data key '${key}' for ${definitionId}:`,
                 error,
               );
               dataImportErrors++;
@@ -396,7 +396,7 @@ export async function importMiniappFromFile(
  * @returns A string containing the formatted Markdown.
  */
 export function formatMiniappForPublishing(
-  definition: MiniappDefinition,
+  definition: MiniappDefinitionEntity,
   author: string = 'UnknownAuthor',
 ): string {
   // Prepare metadata, ensuring required fields have fallbacks

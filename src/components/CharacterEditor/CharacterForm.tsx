@@ -21,11 +21,12 @@ import {
   SelectValue,
 } from '@/components/ui/Select';
 import { Textarea } from '@/components/ui/Textarea';
+import { UpdateCharacterDto } from '@/services/ChatDataService';
 import { groupedAvailableModelsAtom } from '@/store';
 import { CustomCharacter, NamespacedModelId, PartialCharacter } from '@/types';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useAtomValue } from 'jotai';
-import React from 'react';
+import React, { useEffect } from 'react';
 import { SubmitHandler, useForm, useWatch } from 'react-hook-form';
 import { LuLoader } from 'react-icons/lu';
 import { CharacterFormData, characterSchema } from './validation';
@@ -35,8 +36,11 @@ interface CharacterFormProps {
   globalDefaultMaxHistory: number | null;
   isAutoFilling: boolean;
   canAutoFill: boolean;
-  onSave: (data: PartialCharacter) => void;
-  onAutoFill: (data: PartialCharacter) => Promise<PartialCharacter | undefined>;
+  onSave: (data: UpdateCharacterDto) => Promise<void>;
+  onAutoFill: (
+    id: string,
+    data: PartialCharacter,
+  ) => Promise<PartialCharacter | null>;
 }
 
 export const CharacterForm: React.FC<CharacterFormProps> = ({
@@ -70,6 +74,15 @@ export const CharacterForm: React.FC<CharacterFormProps> = ({
     // Default values are set via reset in useEffect
   });
 
+  useEffect(() => {
+    console.debug(
+      'dirty',
+      form.formState.isDirty,
+      'valid',
+      form.formState.isValid,
+    );
+  }, [form.formState.isDirty, form.formState.isValid]);
+
   // Watch model for Select rendering logic
   const currentModelValue = useWatch({ control: form.control, name: 'model' });
   const isModelInAvailableList = availableModelIds.includes(
@@ -80,7 +93,7 @@ export const CharacterForm: React.FC<CharacterFormProps> = ({
   const onSubmit: SubmitHandler<CharacterFormData> = (
     data: CharacterFormData,
   ) => {
-    const processedData: PartialCharacter = {
+    const processedData: UpdateCharacterDto = {
       id: characterData.id,
       name: data.name.trim(),
       icon: data.icon?.trim() || '👤',
@@ -104,7 +117,7 @@ export const CharacterForm: React.FC<CharacterFormProps> = ({
   const handleAutoFillClick = async () => {
     if (canAutoFill) {
       const tempData = form.getValues();
-      const autoFilledData = await onAutoFill({
+      const autoFilledData = await onAutoFill(characterData.id, {
         ...tempData,
         model: tempData.model as NamespacedModelId,
       });

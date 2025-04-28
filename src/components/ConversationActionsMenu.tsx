@@ -1,4 +1,4 @@
-// src/components/ConversationActionsMenu.tsx
+// src/components/ConversationActionsMenu.tsx (Updated - Phase 5)
 import {
   AlertDialog,
   AlertDialogAction,
@@ -10,7 +10,6 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from '@/components/ui/AlertDialog';
-// Import AlertDialog
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -21,25 +20,31 @@ import {
   DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from '@/components/ui/DropdownMenu';
-import { downloadJson } from '@/lib/download';
 import { readFileAsText } from '@/lib/file';
 import {
-  activeChatAtom,
-  chatsAtom,
-  clearUnpinnedChatsAtom, // Use clear action
+  activeChatDataAtom, // Use derived atom for active chat data
+
+  // --- Use new atoms/actions ---
+  chatListMetadataAtom, // Use sorted metadata list
+  clearUnpinnedChatsAtom,
   createNewChatAtom,
   deleteChatAtom,
-  deleteChatsNewerThanAtom, // Import new atom
-  deleteChatsOlderThanAtom, // Import new atom
-  forkChatAtom, // Import new atom
-  importChatsAtom, // Import new atom
-  sortedChatsAtom, // Need sorted chats for above/below logic
+  deleteChatsNewerThanAtom,
+  deleteChatsOlderThanAtom,
+  exportAllChatsAtom,
+  exportCurrentChatAtom,
+  forkChatAtom,
+  // --- Import/Export Actions ---
+  importChatsAtom, // Use metadata list
+  sortedChatsMetadataAtom,
   togglePinChatAtom,
 } from '@/store/index';
-import { Chat } from '@/types';
-// Import necessary atoms
-import { useAtomValue, useSetAtom } from 'jotai'; // Import jotai hooks
-import React, { useMemo, useRef } from 'react'; // Import useRef
+// --- Remove unused imports ---
+// import { Chat } from '@/types'; // No longer needed directly
+// import { downloadJson } from '@/lib/download'; // Handled by actions now
+// --- End Remove ---
+import { useAtomValue, useSetAtom } from 'jotai';
+import React, { useMemo, useRef } from 'react';
 import {
   LuArchiveRestore,
   LuArrowDownToLine,
@@ -54,16 +59,17 @@ import {
   LuTrash2,
   LuUpload,
 } from 'react-icons/lu';
-import { toast } from 'sonner'; // For feedback
+import { toast } from 'sonner';
 import { Button } from './ui/Button';
 
 export const ConversationActionsMenu: React.FC = () => {
-  // Get state values
-  const activeChat = useAtomValue(activeChatAtom);
-  const chats = useAtomValue(chatsAtom);
-  const sortedChats = useAtomValue(sortedChatsAtom); // Get sorted chats
+  // --- Get state values using new atoms ---
+  const activeChat = useAtomValue(activeChatDataAtom); // Reads activeChatDataAtom indirectly
+  const chatMetadata = useAtomValue(chatListMetadataAtom); // Read metadata list
+  const sortedMetadata = useAtomValue(sortedChatsMetadataAtom); // Read sorted metadata list
+  // --- End new atoms ---
 
-  // Get action setters
+  // --- Action setters (remain mostly the same, point to refactored actions) ---
   const createNewChat = useSetAtom(createNewChatAtom);
   const togglePinChat = useSetAtom(togglePinChatAtom);
   const deleteChat = useSetAtom(deleteChatAtom);
@@ -71,37 +77,43 @@ export const ConversationActionsMenu: React.FC = () => {
   const forkChat = useSetAtom(forkChatAtom);
   const deleteOlder = useSetAtom(deleteChatsOlderThanAtom);
   const deleteNewer = useSetAtom(deleteChatsNewerThanAtom);
-  const importChats = useSetAtom(importChatsAtom);
+  const importChats = useSetAtom(importChatsAtom); // Use refactored import action
+  const exportAll = useSetAtom(exportAllChatsAtom); // Use refactored export action
+  const exportCurrent = useSetAtom(exportCurrentChatAtom); // Use refactored export action
+  // --- End Action setters ---
 
-  // Ref for hidden file input
   const importFileInputRef = useRef<HTMLInputElement>(null);
 
-  // Calculate dynamic disabled states and values
-  const chatList = useMemo(() => Object.values(chats), [chats]); // UseMemo for efficiency
-  const hasChats = chatList.length > 0;
+  // --- Calculate dynamic states based on new atoms ---
+  const hasChats = useMemo(
+    () => chatMetadata !== null && chatMetadata.length > 0,
+    [chatMetadata],
+  );
   const isChatActive = !!activeChat;
+  // isChatPinned can now directly use the loaded active chat data
   const isChatPinned = activeChat?.isPinned ?? false;
 
+  // Calculate index based on sorted metadata
   const activeChatIndex = useMemo(() => {
-    if (!activeChat) return -1;
-    return sortedChats.findIndex((c) => c.id === activeChat.id);
-  }, [activeChat, sortedChats]);
+    if (!activeChat || !sortedMetadata) return -1;
+    return sortedMetadata.findIndex((c) => c.id === activeChat.id);
+  }, [activeChat, sortedMetadata]);
 
-  // Can delete if not the first chat in the sorted list (ignoring pins for simplicity here, adjust if needed)
-  const canDeleteAbove = isChatActive && activeChatIndex > 0;
-  // Can delete if not the last chat in the sorted list
+  // Logic for enabling delete above/below remains the same, but uses recalculated index
   const canDeleteBelow =
     isChatActive &&
-    activeChatIndex < sortedChats.length - 1 &&
-    activeChatIndex !== -1;
+    activeChatIndex !== -1 &&
+    activeChatIndex < sortedMetadata.length - 1; // Corrected logic: can delete if not last
+  const canDeleteAbove = isChatActive && activeChatIndex > 0; // Corrected logic: can delete if not first
 
+  // Calculate hasUnpinned based on metadata
   const hasUnpinned = useMemo(
-    () => chatList.some((c) => !c.isPinned),
-    [chatList],
+    () => chatMetadata?.some((c) => !c.isPinned) ?? false,
+    [chatMetadata],
   );
+  // --- End dynamic state calculation ---
 
-  // --- Action Handlers ---
-
+  // --- Action Handlers (Simplified: just call the action atom) ---
   const handlePinToggle = () => {
     if (activeChat) {
       togglePinChat(activeChat.id);
@@ -110,8 +122,6 @@ export const ConversationActionsMenu: React.FC = () => {
       );
     }
   };
-
-  // Use AlertDialog for destructive actions
   const handleDeleteCurrent = () => {
     if (activeChat) {
       deleteChat(activeChat.id);
@@ -123,8 +133,6 @@ export const ConversationActionsMenu: React.FC = () => {
     clearUnpinnedChats();
     toast.success('Unpinned conversations deleted');
   };
-
-  // TODO: Implement handlers using new atoms
   const handleFork = () => {
     if (activeChat) {
       forkChat(activeChat.id);
@@ -145,68 +153,46 @@ export const ConversationActionsMenu: React.FC = () => {
       toast.success('Newer conversations deleted');
     }
   };
+  // --- End Action Handlers ---
 
   // --- Import/Export Handlers ---
   const handleTriggerImport = () => {
     importFileInputRef.current?.click();
   };
-
   const handleFileImport = async (
     event: React.ChangeEvent<HTMLInputElement>,
   ) => {
     const file = event.target.files?.[0];
     if (!file) return;
-
     if (file.type !== 'application/json') {
       toast.error('Invalid file type. Please select a JSON file.');
       return;
     }
-
     try {
-      const fileContent = await readFileAsText(file); // Use helper
+      const fileContent = await readFileAsText(file);
       const importedData = JSON.parse(fileContent);
-
-      // Basic validation (check if it's an array)
-      if (!Array.isArray(importedData)) {
-        throw new Error(
-          'Invalid JSON format: Expected an array of conversations.',
-        );
-      }
-      // TODO: Add more robust validation for the Chat structure within the array
-
-      importChats(importedData as Chat[]); // Call the import atom action
-      toast.success(
-        `${importedData.length} conversation(s) imported successfully!`,
-      );
+      // Call the refactored importChats atom action
+      importChats(importedData); // Action handles validation, processing, toasts
     } catch (error) {
       console.error('Import failed:', error);
       toast.error(
-        `Import failed: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        `Import failed: ${error instanceof Error ? error.message : 'Could not read file'}`,
       );
     } finally {
-      // Reset file input value to allow importing the same file again
       if (importFileInputRef.current) {
         importFileInputRef.current.value = '';
       }
     }
   };
-
   const handleExportAll = () => {
-    if (!hasChats) return;
-    const allChats = Object.values(chats); // Get all chat objects
-    downloadJson(allChats, 'all_conversations.json'); // Use helper
-    toast.success('All conversations exported.');
+    exportAll(); // Call the refactored export action
   };
-
   const handleExportCurrent = () => {
-    if (!activeChat) return;
-    downloadJson(
-      [activeChat],
-      `conversation_${activeChat.name.replace(/\s+/g, '_')}.json`,
-    ); // Use helper
-    toast.success('Current conversation exported.');
+    exportCurrent(); // Call the refactored export action
   };
+  // --- End Import/Export Handlers ---
 
+  // --- Render ---
   return (
     <>
       {/* Hidden File Input for Import */}
@@ -219,16 +205,18 @@ export const ConversationActionsMenu: React.FC = () => {
       />
 
       <DropdownMenu>
+        {/* Trigger (unchanged) */}
         <DropdownMenuTrigger asChild>
           <Button variant="ghost" size="xs">
             <LuEllipsis className="h-4 w-4" />
             <span className="sr-only">Conversation Actions</span>
           </Button>
         </DropdownMenuTrigger>
+
+        {/* Content (use updated variables/handlers) */}
         <DropdownMenuContent align="end" className="w-56">
-          {/* Actions related to creating/modifying */}
+          {/* --- Menu Items --- */}
           <DropdownMenuItem onClick={() => createNewChat()}>
-            {/* Direct call */}
             <LuCirclePlus className="mr-2 h-4 w-4" />
             <span>New Conversation</span>
           </DropdownMenuItem>
@@ -253,11 +241,13 @@ export const ConversationActionsMenu: React.FC = () => {
             <span>Import Conversation(s)...</span>
           </DropdownMenuItem>
           <DropdownMenuSub>
+            {/* Disable Export sub-menu if no chats exist */}
             <DropdownMenuSubTrigger disabled={!hasChats}>
               <LuDownload className="mr-2 h-4 w-4" />
               <span>Export...</span>
             </DropdownMenuSubTrigger>
             <DropdownMenuSubContent>
+              {/* Disable items based on state */}
               <DropdownMenuItem onClick={handleExportAll} disabled={!hasChats}>
                 <LuFileJson className="mr-2 h-4 w-4" />
                 <span>All conversations (JSON)</span>
@@ -274,17 +264,14 @@ export const ConversationActionsMenu: React.FC = () => {
 
           <DropdownMenuSeparator />
 
-          {/* Destructive Actions - Wrap with AlertDialog Trigger */}
+          {/* Destructive Actions with Confirmation Dialogs */}
+          {/* Delete Below */}
           <AlertDialog>
             <AlertDialogTrigger asChild>
               <DropdownMenuItem
-                // Prevent default dropdown closing
-                onSelect={(e) => {
-                  e.preventDefault();
-                }}
+                onSelect={(e) => e.preventDefault()} // Prevent closing menu
                 disabled={!isChatActive || !canDeleteBelow}
                 variant="destructive"
-                // Add aria-disabled for accessibility
                 aria-disabled={!isChatActive || !canDeleteBelow}
                 className={
                   !isChatActive || !canDeleteBelow
@@ -298,17 +285,16 @@ export const ConversationActionsMenu: React.FC = () => {
             </AlertDialogTrigger>
             <AlertDialogContent>
               <AlertDialogHeader>
-                <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
+                <AlertDialogTitle>Are you sure?</AlertDialogTitle>
                 <AlertDialogDescription>
-                  This action cannot be undone. This will permanently delete all
-                  conversations created before the current one (excluding pinned
-                  conversations).
+                  Delete all unpinned conversations created before the current
+                  one?
                 </AlertDialogDescription>
               </AlertDialogHeader>
               <AlertDialogFooter>
                 <AlertDialogCancel>Cancel</AlertDialogCancel>
                 <AlertDialogAction
-                  className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                  className="bg-destructive..."
                   onClick={handleDeleteBelow}
                 >
                   Delete Below
@@ -317,6 +303,7 @@ export const ConversationActionsMenu: React.FC = () => {
             </AlertDialogContent>
           </AlertDialog>
 
+          {/* Delete Above */}
           <AlertDialog>
             <AlertDialogTrigger asChild>
               <DropdownMenuItem
@@ -336,17 +323,16 @@ export const ConversationActionsMenu: React.FC = () => {
             </AlertDialogTrigger>
             <AlertDialogContent>
               <AlertDialogHeader>
-                <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
+                <AlertDialogTitle>Are you sure?</AlertDialogTitle>
                 <AlertDialogDescription>
-                  This action cannot be undone. This will permanently delete all
-                  conversations created after the current one (excluding pinned
-                  conversations).
+                  Delete all unpinned conversations created after the current
+                  one?
                 </AlertDialogDescription>
               </AlertDialogHeader>
               <AlertDialogFooter>
                 <AlertDialogCancel>Cancel</AlertDialogCancel>
                 <AlertDialogAction
-                  className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                  className="bg-destructive..."
                   onClick={handleDeleteAbove}
                 >
                   Delete Above
@@ -355,13 +341,12 @@ export const ConversationActionsMenu: React.FC = () => {
             </AlertDialogContent>
           </AlertDialog>
 
+          {/* Delete Unpinned */}
           <AlertDialog>
             <AlertDialogTrigger asChild>
               <DropdownMenuItem
-                onSelect={(e) => {
-                  e.preventDefault();
-                }}
-                disabled={!hasUnpinned}
+                onSelect={(e) => e.preventDefault()}
+                disabled={!hasUnpinned} // Disable if no unpinned chats
                 variant="destructive"
                 aria-disabled={!hasUnpinned}
                 className={
@@ -376,16 +361,15 @@ export const ConversationActionsMenu: React.FC = () => {
             </AlertDialogTrigger>
             <AlertDialogContent>
               <AlertDialogHeader>
-                <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
+                <AlertDialogTitle>Are you sure?</AlertDialogTitle>
                 <AlertDialogDescription>
-                  This action cannot be undone. This will permanently delete all
-                  conversations that are not pinned.
+                  Delete all conversations that are not pinned?
                 </AlertDialogDescription>
               </AlertDialogHeader>
               <AlertDialogFooter>
                 <AlertDialogCancel>Cancel</AlertDialogCancel>
                 <AlertDialogAction
-                  className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                  className="bg-destructive..."
                   onClick={handleClearUnpinned}
                 >
                   Delete Unpinned
@@ -394,6 +378,7 @@ export const ConversationActionsMenu: React.FC = () => {
             </AlertDialogContent>
           </AlertDialog>
 
+          {/* Delete Current */}
           <AlertDialog>
             <AlertDialogTrigger asChild>
               <DropdownMenuItem
@@ -413,16 +398,16 @@ export const ConversationActionsMenu: React.FC = () => {
             </AlertDialogTrigger>
             <AlertDialogContent>
               <AlertDialogHeader>
-                <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
+                <AlertDialogTitle>Are you sure?</AlertDialogTitle>
                 <AlertDialogDescription>
-                  This action cannot be undone. This will permanently delete the
-                  current conversation and all its messages.
+                  Permanently delete the current conversation "
+                  {activeChat?.name || 'this chat'}"?
                 </AlertDialogDescription>
               </AlertDialogHeader>
               <AlertDialogFooter>
                 <AlertDialogCancel>Cancel</AlertDialogCancel>
                 <AlertDialogAction
-                  className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                  className="bg-destructive..."
                   onClick={handleDeleteCurrent}
                 >
                   Delete Current

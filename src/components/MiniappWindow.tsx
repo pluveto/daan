@@ -7,7 +7,7 @@ import {
   registerWinBoxInstance,
   unregisterWinBoxInstance, // Keep for getting definition
 } from '@/store/miniapp';
-import { MiniappDefinition, MiniappInstance } from '@/types';
+import { MiniappDefinitionEntity, MiniappInstance } from '@/types';
 import { atom, useAtomValue, useSetAtom } from 'jotai';
 import React, { memo, useCallback, useEffect, useRef } from 'react'; // Removed useState, useEffect
 import WinBox, { WinBoxPropType } from 'react-winbox'; // Import WinBox
@@ -19,7 +19,7 @@ const MIN_HEIGHT = 150;
 
 // --- Helper: Window Content Component (Memoized - unchanged) ---
 interface WindowContentProps {
-  definition: MiniappDefinition;
+  definition: MiniappDefinitionEntity;
   instanceId: string;
 }
 const WindowContent: React.FC<WindowContentProps> = memo(

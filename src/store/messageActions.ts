@@ -1,199 +1,263 @@
-import type { Message } from '@/types';
+// src/store/messageActions.ts (Corrected - Phase 3 Fix)
+import type { MessageEntity, ToolCallInfo } from '@/types'; // Use internal type
 import { atom } from 'jotai';
+import { toast } from 'sonner';
+import { v4 as uuidv4 } from 'uuid';
 import { abortControllerAtom, isAssistantLoadingAtom } from './apiState';
-import { activeChatIdAtom, chatsAtom, type ChatsRecord } from './chatData';
+import {
+  _activeChatIdAtom,
+  activeChatDataAtom,
+  activeChatMessagesAtom,
+  loadChatListMetadataAtom,
+} from './chatActions';
+import { searchServiceAtom } from './search';
+import { chatDataServiceAtom } from './service';
 import { editingMessageIdAtom } from './uiState';
 
-// --- Helper Function ---
+// --- Message Actions (Interacting with the active chat) ---
 
-/**
- * Immutable helper to update messages within a specific chat in the ChatsRecord.
- * @param chats The current ChatsRecord state.
- * @param chatId The ID of the chat to update.
- * @param messageUpdater A function that receives the current messages array and returns the updated messages array.
- * @param updateTimestamp Whether to update the chat's `updatedAt` timestamp. Defaults to true.
- * @returns The new ChatsRecord state with the updated chat.
- */
-export const updateMessagesInChat = (
-  chats: ChatsRecord,
-  chatId: string,
-  messageUpdater: (messages: Message[]) => Message[],
-  updateTimestamp: boolean = true,
-): ChatsRecord => {
-  const chatToUpdate = chats[chatId];
-  if (!chatToUpdate) {
-    console.warn(`Chat with ID ${chatId} not found for message update.`);
-    return chats; // Return original state if chat not found
-  }
-
-  const newMessages = messageUpdater(chatToUpdate.messages);
-
-  // Avoid creating new objects if messages didn't actually change
-  if (newMessages === chatToUpdate.messages && !updateTimestamp) {
-    return chats;
-  }
-
-  // Only update timestamp if messages changed or explicitly requested
-  const finalTimestamp =
-    newMessages !== chatToUpdate.messages || updateTimestamp
-      ? Date.now()
-      : chatToUpdate.updatedAt;
-
-  const updatedChat = {
-    ...chatToUpdate,
-    messages: newMessages,
-    updatedAt: finalTimestamp,
-  };
-
-  return {
-    ...chats,
-    [chatId]: updatedChat,
-  };
-};
-
-// --- Message Action Atoms ---
-
-/** Adds a new message or updates an existing one in the *active* chat. */
-export const upsertMessageInActiveChatAtom = atom(
+/** Adds a new message to the active chat's DB store and updates UI state. */
+export const addMessageToActiveChatAtom = atom(
   null,
-  (get, set, message: Message) => {
-    const activeId = get(activeChatIdAtom);
+  async (
+    get,
+    set,
+    messageContent: Pick<
+      MessageEntity,
+      'role' | 'content' | 'toolCallInfo' | 'isHidden'
+    > & { id?: string },
+  ) => {
+    const activeId = get(_activeChatIdAtom);
     if (!activeId) {
-      console.warn('Cannot upsert message: No active chat.');
-      return;
+      toast.error('Cannot add message: No active chat.');
+      console.error('[addMessageToActiveChatAtom] No active chat ID.');
+      return null;
     }
-
-    // O(1) chat access, O(M) message update (where M is message count)
-    set(chatsAtom, (prevChats) =>
-      updateMessagesInChat(
-        prevChats,
-        activeId,
-        (currentMessages) => {
-          const existingMsgIndex = currentMessages.findIndex(
-            (m) => m.id === message.id,
-          );
-          let newMessages: Message[];
-
-          if (existingMsgIndex > -1) {
-            // Update existing message
-            newMessages = [...currentMessages];
-            const isCurrentlyStreaming =
-              newMessages[existingMsgIndex].isStreaming;
-            // Preserve properties not explicitly provided in the incoming message
-            newMessages[existingMsgIndex] = {
-              ...newMessages[existingMsgIndex], // Keep old values
-              ...message, // Overwrite with new values
-              isStreaming: message.isStreaming ?? isCurrentlyStreaming, // Keep streaming if not explicitly set to false
-            };
-          } else {
-            // Add new message
-            newMessages = [...currentMessages, message];
-          }
-          return newMessages;
-        },
-        !message.isStreaming, // Only update chat timestamp if message is not streaming
-      ),
+    const service = get(chatDataServiceAtom);
+    const messageId = messageContent.id ?? uuidv4();
+    const now = Date.now();
+    console.log(
+      `[addMessageToActiveChatAtom] Adding message (Role: ${messageContent.role}) to chat ${activeId}...`,
     );
+
+    try {
+      const messageData: MessageEntity = {
+        id: messageId,
+        chatId: activeId,
+        role: messageContent.role,
+        content: messageContent.content,
+        toolCallInfo: messageContent.toolCallInfo ?? null,
+        isHidden: messageContent.isHidden ?? false,
+        timestamp: now,
+        isStreaming: false,
+        isError: false,
+        metadata: undefined,
+        providerFormatData: undefined,
+      };
+
+      const addedMessage = await service.addMessage(messageData);
+      console.log(
+        `[addMessageToActiveChatAtom] Message ${addedMessage.id} added to DB.`,
+      );
+
+      set(activeChatMessagesAtom, (prev) => [...prev, addedMessage]);
+
+      try {
+        // Update chat's timestamp in DB (Service handles setting the timestamp)
+        await service.updateChat(activeId, {}); // Pass empty object or specific non-timestamp fields if needed
+        // Update local chat state for immediate UI feedback
+        set(activeChatDataAtom, (chat) =>
+          chat ? { ...chat, updatedAt: now } : null,
+        );
+        // Refresh list metadata
+        set(loadChatListMetadataAtom);
+      } catch (updateError) {
+        console.error(
+          `[addMessageToActiveChatAtom] Failed to update chat timestamp for ${activeId}:`,
+          updateError,
+        );
+      }
+
+      return addedMessage;
+    } catch (error) {
+      console.error(
+        `[addMessageToActiveChatAtom] Failed to add message to chat ${activeId}:`,
+        error,
+      );
+      toast.error('Failed to save message.');
+      return null;
+    }
   },
 );
 
-/** Deletes a message from the *active* chat. */
-export const deleteMessageFromActiveChatAtom = atom(
+/** Updates an existing message's content, saves to DB, and updates UI state. */
+export const updateExistingMessageContentAtom = atom(
   null,
-  (get, set, messageId: string) => {
-    const activeId = get(activeChatIdAtom);
+  async (
+    get,
+    set,
+    { messageId, newContent }: { messageId: string; newContent: string },
+  ) => {
+    const activeId = get(_activeChatIdAtom);
     if (!activeId) {
-      console.warn('Cannot delete message: No active chat.');
+      console.warn('[updateExistingMessageContentAtom] No active chat ID.');
       return;
     }
 
-    // If deleting the message currently being generated, cancel the generation
-    const abortInfo = get(abortControllerAtom);
-    if (abortInfo?.messageId === messageId) {
-      console.log(
-        'Cancelling generation because the streaming message was deleted.',
+    const service = get(chatDataServiceAtom);
+    const now = Date.now();
+    console.log(
+      `[updateExistingMessageContentAtom] Updating message ${messageId} in chat ${activeId}...`,
+    );
+    try {
+      // 1. Update message in DB (includes timestamp)
+      await service.updateMessage(messageId, {
+        content: newContent,
+        timestamp: now,
+      });
+
+      // 2. Update message in UI state
+      set(activeChatMessagesAtom, (prev) =>
+        prev.map((msg) =>
+          msg.id === messageId
+            ? { ...msg, content: newContent, timestamp: now }
+            : msg,
+        ),
       );
-      abortInfo.controller.abort();
+
+      // 3. Update parent chat's timestamp in DB and UI
+      try {
+        await service.updateChat(activeId, {}); // Service handles setting updatedAt
+        set(activeChatDataAtom, (chat) =>
+          chat ? { ...chat, updatedAt: now } : null,
+        ); // Update local state
+        set(loadChatListMetadataAtom); // Refresh metadata list
+      } catch (updateError) {
+        console.error(
+          `[updateExistingMessageContentAtom] Failed to update chat timestamp for ${activeId}:`,
+          updateError,
+        );
+      }
+
+      console.log(
+        `[updateExistingMessageContentAtom] Message ${messageId} updated successfully.`,
+      );
+    } catch (error) {
+      console.error(
+        `[updateExistingMessageContentAtom] Failed to update message ${messageId}:`,
+        error,
+      );
+      toast.error('Failed to save edited message.');
+    }
+  },
+);
+
+/** Deletes a message from the active chat in the DB and updates UI state. */
+export const deleteMessageFromActiveChatAtom = atom(
+  null,
+  async (get, set, messageId: string) => {
+    const activeId = get(_activeChatIdAtom);
+    if (!activeId) {
+      console.warn('[deleteMessageFromActiveChatAtom] No active chat.');
+      return;
+    }
+
+    const abortInfo = get(abortControllerAtom);
+    if (abortInfo?.messageId === messageId && get(isAssistantLoadingAtom)) {
+      console.log(
+        `[deleteMessageFromActiveChatAtom] Cancelling generation for message ${messageId} due to deletion.`,
+      );
+      abortInfo.controller.abort('Message deleted during generation');
       set(abortControllerAtom, null);
       set(isAssistantLoadingAtom, false);
     }
 
-    let messageWasDeleted = false;
-    // O(1) chat access, O(M) message update
-    set(chatsAtom, (prevChats) =>
-      updateMessagesInChat(
-        prevChats,
-        activeId,
-        (currentMessages) => {
-          const originalLength = currentMessages.length;
-          const filteredMessages = currentMessages.filter(
-            (msg) => msg.id !== messageId,
-          );
-          messageWasDeleted = filteredMessages.length < originalLength;
-          // Return the filtered array; helper handles immutable update
-          return filteredMessages;
-        },
-        messageWasDeleted, // Only update timestamp if a message was actually deleted
-      ),
+    const service = get(chatDataServiceAtom);
+    console.log(
+      `[deleteMessageFromActiveChatAtom] Deleting message ${messageId} from chat ${activeId}...`,
     );
+    try {
+      await service.deleteMessage(messageId);
+      set(activeChatMessagesAtom, (prev) =>
+        prev.filter((msg) => msg.id !== messageId),
+      );
 
-    // If the deleted message was being edited, clear the editing state
-    if (messageWasDeleted && get(editingMessageIdAtom) === messageId) {
-      set(editingMessageIdAtom, null);
+      if (get(editingMessageIdAtom) === messageId) {
+        set(editingMessageIdAtom, null);
+      }
+      console.log(
+        `[deleteMessageFromActiveChatAtom] Message ${messageId} deleted successfully.`,
+      );
+    } catch (error) {
+      console.error(
+        `[deleteMessageFromActiveChatAtom] Failed to delete message ${messageId}:`,
+        error,
+      );
+      toast.error('Failed to delete message.');
     }
   },
 );
 
-/** Appends a chunk of content to a streaming message in the *active* chat. */
-export const appendContentToMessageAtom = atom(
+/** [Phase 4] Updates the UI state ONLY for a streaming message. Does NOT write to DB frequently. */
+export const updateStreamingMessageUIAtom = atom(
   null,
   (
     get,
     set,
-    { contentChunk, messageId }: { contentChunk: string; messageId: string },
+    {
+      messageId,
+      contentChunk,
+      toolCallInfo,
+    }: {
+      messageId: string;
+      contentChunk?: string;
+      toolCallInfo?: ToolCallInfo | null;
+    },
   ) => {
-    const activeId = get(activeChatIdAtom);
-    if (!activeId) return; // Should not happen during streaming, but safety first
-
-    // O(1) chat access, O(M) message find/update.
-    // Note: Frequent calls during streaming *will* update the state often.
-    // atomWithSafeStorage should ideally debounce/throttle writes.
-    set(chatsAtom, (prevChats) =>
-      updateMessagesInChat(
-        prevChats,
-        activeId,
-        (currentMessages) => {
-          const msgIndex = currentMessages.findIndex((m) => m.id === messageId);
-          if (msgIndex > -1) {
-            const updatedMessages = [...currentMessages];
-            const currentContent = updatedMessages[msgIndex].content ?? '';
-            updatedMessages[msgIndex] = {
-              ...updatedMessages[msgIndex],
-              content: currentContent + contentChunk,
-              isStreaming: true, // Ensure it's marked as streaming
-            };
-            return updatedMessages;
-          }
-          // Message not found (e.g., deleted while streaming), return unchanged
-          console.warn(`Message ${messageId} not found to append content.`);
-          return currentMessages;
-        },
-        false, // Do *not* update chat timestamp during streaming appends
-      ),
+    set(activeChatMessagesAtom, (prev) =>
+      prev.map((msg) => {
+        if (msg.id === messageId) {
+          const newContent =
+            contentChunk !== undefined
+              ? (msg.content ?? '') + contentChunk
+              : msg.content;
+          const newToolCallInfo =
+            toolCallInfo !== undefined ? toolCallInfo : msg.toolCallInfo;
+          return {
+            ...msg,
+            content: newContent,
+            toolCallInfo: newToolCallInfo,
+            isStreaming: true,
+          };
+        }
+        return msg;
+      }),
     );
   },
 );
 
-/** Marks a streaming message in the *active* chat as complete. */
-export const finalizeStreamingMessageAtom = atom(
+/** [Phase 4] Finalizes a message in the DB after streaming ends (success, error, or cancel). */
+export const finalizeStreamingMessageInDbAtom = atom(
   null,
-  (get, set, messageId: string) => {
-    const activeId = get(activeChatIdAtom);
-
-    // If no active chat (e.g., chat deleted before stream finished), just clean up global state.
+  async (
+    get,
+    set,
+    {
+      messageId,
+      finalContent,
+      isError,
+      toolCallInfo,
+    }: {
+      messageId: string;
+      finalContent: string;
+      isError?: boolean;
+      toolCallInfo?: ToolCallInfo | null;
+    },
+  ) => {
+    const activeId = get(_activeChatIdAtom);
     if (!activeId) {
       console.warn(
-        `Finalize called for message ${messageId} but no active chat. Resetting global state.`,
+        `[finalizeStreamingMessageInDbAtom] No active chat ID for message ${messageId}.`,
       );
       const abortInfo = get(abortControllerAtom);
       if (abortInfo?.messageId === messageId) {
@@ -203,118 +267,232 @@ export const finalizeStreamingMessageAtom = atom(
       return;
     }
 
-    let messageFoundAndFinalized = false;
-    // O(1) chat access, O(M) message find/update
-    set(chatsAtom, (prevChats) =>
-      updateMessagesInChat(
-        prevChats,
-        activeId,
-        (currentMessages) => {
-          const msgIndex = currentMessages.findIndex((m) => m.id === messageId);
-          // Only finalize if the message exists and is currently streaming
-          if (msgIndex > -1 && currentMessages[msgIndex].isStreaming) {
-            const updatedMessages = [...currentMessages];
-            updatedMessages[msgIndex] = {
-              ...updatedMessages[msgIndex],
-              isStreaming: false, // Mark as complete
-            };
-            messageFoundAndFinalized = true;
-            return updatedMessages;
-          }
-          // Message not found or not streaming, return unchanged
-          if (msgIndex === -1)
-            console.warn(`Message ${messageId} not found to finalize.`);
-          else if (!currentMessages[msgIndex].isStreaming)
-            console.warn(`Message ${messageId} was already finalized.`);
-          return currentMessages;
-        },
-        true, // Update chat timestamp when streaming finishes
-      ),
+    const service = get(chatDataServiceAtom);
+    const now = Date.now();
+    console.log(
+      `[finalizeStreamingMessageInDbAtom] Finalizing message ${messageId} in chat ${activeId} (Error: ${!!isError}).`,
     );
+    try {
+      await service.finalizeMessage({
+        id: messageId,
+        finalContent,
+        isError,
+        toolCallInfo,
+      });
 
-    // Only reset global loading state if the specific message was found and finalized.
-    // This prevents race conditions if multiple requests were somehow active.
-    const abortInfo = get(abortControllerAtom);
-    if (abortInfo?.messageId === messageId) {
-      if (messageFoundAndFinalized) {
-        console.log(`Finalized message ${messageId}, resetting loading state.`);
-      } else {
-        console.warn(
-          `Finalize called for ${messageId}, but message wasn't finalized in state. Resetting loading state anyway.`,
+      set(activeChatMessagesAtom, (prev) =>
+        prev.map((msg) =>
+          msg.id === messageId
+            ? {
+                ...msg,
+                content: finalContent,
+                isStreaming: false,
+                isError: isError ?? false,
+                toolCallInfo: toolCallInfo,
+                timestamp: now,
+              }
+            : msg,
+        ),
+      );
+
+      try {
+        await service.updateChat(activeId, {}); // Service handles setting updatedAt
+        set(activeChatDataAtom, (chat) =>
+          chat ? { ...chat, updatedAt: now } : null,
+        ); // Update local state
+        set(loadChatListMetadataAtom);
+      } catch (updateError) {
+        console.error(
+          `[finalizeStreamingMessageInDbAtom] Failed to update chat timestamp for ${activeId}:`,
+          updateError,
         );
       }
-      set(isAssistantLoadingAtom, false);
-      // Crucially, clear the controller ONLY if it matches the message being finalized.
-      set(abortControllerAtom, null);
-    } else if (messageFoundAndFinalized) {
-      // Message was finalized, but the controller was for a *different* message or already cleared.
-      // This scenario might indicate a logic issue or rapid requests.
-      console.warn(
-        `Finalized message ${messageId}, but the active abort controller was different or null.`,
+    } catch (error) {
+      console.error(
+        `[finalizeStreamingMessageInDbAtom] Failed to finalize message ${messageId} in DB:`,
+        error,
       );
-      // Ensure loading state is false just in case.
-      if (get(isAssistantLoadingAtom)) set(isAssistantLoadingAtom, false);
+      toast.error('Failed to save final message content.');
+      set(activeChatMessagesAtom, (prev) =>
+        prev.map((msg) =>
+          msg.id === messageId
+            ? {
+                ...msg,
+                content: finalContent + '\n[Save Error]',
+                isStreaming: false,
+                isError: true,
+                timestamp: now,
+              }
+            : msg,
+        ),
+      );
+    } finally {
+      const abortInfo = get(abortControllerAtom);
+      if (abortInfo?.messageId === messageId) {
+        console.log(
+          `[finalizeStreamingMessageInDbAtom] Clearing API loading state for message ${messageId}.`,
+        );
+        set(isAssistantLoadingAtom, false);
+        set(abortControllerAtom, null);
+      } else {
+        console.warn(
+          `[finalizeStreamingMessageInDbAtom] Finalize called for ${messageId}, but abort controller was for ${abortInfo?.messageId ?? 'null'}.`,
+        );
+        if (get(isAssistantLoadingAtom)) {
+          set(isAssistantLoadingAtom, false);
+        }
+      }
     }
-    // If !messageFoundAndFinalized and controller didn't match, do nothing to global state here.
   },
 );
 
-/** Sets the ID of the message currently being edited. */
+/** Clears all messages for the active chat in the DB and updates UI state. */
+/** Clears all messages for the active chat in the DB, search index, and updates UI state. */
+export const clearActiveChatMessagesAtom = atom(
+  null,
+  // Add 'get' to the signature
+  async (get, set) => {
+    const activeId = get(_activeChatIdAtom);
+    if (!activeId) {
+      toast.warning('No active chat to clear messages from.');
+      return;
+    }
+
+    const chatService = get(chatDataServiceAtom);
+    const searchService = get(searchServiceAtom); // Get search service
+    const now = Date.now();
+    console.log(
+      `[clearActiveChatMessagesAtom] Clearing messages for chat ${activeId}...`,
+    );
+
+    // 1. Get message IDs before deleting (for search index removal)
+    let messageIdsToRemove: string[] = [];
+    try {
+      const messages = await chatService.getMessagesByChatId(activeId);
+      messageIdsToRemove = messages.map((m) => m.id);
+    } catch (error) {
+      console.error(
+        `[clearActiveChatMessagesAtom] Failed to fetch messages for chat ${activeId} before clear:`,
+        error,
+      );
+      // Continue clearing DB, but log warning
+      toast.warning(
+        'Could not fetch message details before clearing. Search index might be inaccurate.',
+      );
+    }
+
+    try {
+      // 2. Delete messages from DB
+      await chatService.deleteMessagesByChatId(activeId); // Service deletes from DB
+
+      // 3. Remove messages from search index
+      if (messageIdsToRemove.length > 0) {
+        await searchService.removeChatMessagesByIds(messageIdsToRemove);
+        console.log(
+          `[clearActiveChatMessagesAtom] Messages removed from search index for chat ${activeId}.`,
+        );
+      }
+
+      // --- Post-clear state updates ---
+      set(activeChatMessagesAtom, []); // Set UI messages to empty array
+      try {
+        // Update parent chat's timestamp
+        await chatService.updateChat(activeId, {});
+        set(activeChatDataAtom, (chat) =>
+          chat ? { ...chat, updatedAt: now } : null,
+        );
+        set(loadChatListMetadataAtom);
+
+        toast.success('Chat history cleared.');
+        console.log(
+          `[clearActiveChatMessagesAtom] Messages cleared for chat ${activeId}.`,
+        );
+      } catch (updateError) {
+        console.error(
+          `[clearActiveChatMessagesAtom] Failed to update chat timestamp for ${activeId}:`,
+          updateError,
+        );
+      }
+    } catch (error) {
+      console.error(
+        `[clearActiveChatMessagesAtom] Failed to clear messages for chat ${activeId}:`,
+        error,
+      );
+      toast.error('Failed to clear chat history.');
+    }
+  },
+);
+
+/** Updates the content and toolCallInfo of an existing message. */
+export const updateMessageToolInfoAtom = atom(
+  null, // Write-only
+  async (
+    get,
+    set,
+    {
+      messageId,
+      content,
+      toolCallInfo,
+    }: { messageId: string; content: string; toolCallInfo: ToolCallInfo },
+  ) => {
+    const activeId = get(_activeChatIdAtom); // Need active chat ID for context/updates
+    if (!activeId) {
+      console.warn(
+        `[updateMessageToolInfoAtom] No active chat to update message ${messageId}.`,
+      );
+      return;
+    }
+
+    const service = get(chatDataServiceAtom);
+    const now = Date.now(); // Update timestamp when tool state changes
+    console.log(
+      `[updateMessageToolInfoAtom] Updating tool info for message ${messageId} in chat ${activeId} to type ${toolCallInfo.type}.`,
+    );
+    try {
+      // 1. Update DB
+      // Service handles updating timestamp implicitly if content/toolCallInfo changes
+      await service.updateMessage(messageId, {
+        content,
+        toolCallInfo,
+        timestamp: now,
+      });
+
+      // 2. Update UI state (active messages)
+      set(activeChatMessagesAtom, (prev) =>
+        prev.map((msg) =>
+          msg.id === messageId
+            ? { ...msg, content, toolCallInfo, timestamp: now }
+            : msg,
+        ),
+      );
+
+      // 3. Update parent chat's timestamp (optional, but good for consistency)
+      try {
+        await service.updateChat(activeId, {});
+        set(activeChatDataAtom, (chat) =>
+          chat ? { ...chat, updatedAt: now } : null,
+        );
+        set(loadChatListMetadataAtom);
+      } catch (updateError) {
+        console.error(
+          `[updateMessageToolInfoAtom] Failed to update chat timestamp for ${activeId}:`,
+          updateError,
+        );
+      }
+    } catch (error) {
+      console.error(
+        `[updateMessageToolInfoAtom] Failed to update message ${messageId}:`,
+        error,
+      );
+      toast.error('Failed to update tool call status.');
+    }
+  },
+);
+
+/** Sets the ID of the message currently being edited in the UI. */
 export const setEditingMessageIdAtom = atom(
   null,
   (_get, set, messageId: string | null) => {
     set(editingMessageIdAtom, messageId);
-  },
-);
-
-/** Updates the content of a specific message in the *active* chat, typically after editing. */
-export const updateMessageContentAtom = atom(
-  null,
-  (
-    get,
-    set,
-    { messageId, newContent }: { messageId: string; newContent: string },
-  ) => {
-    const activeId = get(activeChatIdAtom);
-    if (!activeId) {
-      console.warn('Cannot update message content: No active chat.');
-      return;
-    }
-
-    let messageUpdated = false;
-    // O(1) chat access, O(M) message find/update
-    set(chatsAtom, (prevChats) =>
-      updateMessagesInChat(
-        prevChats,
-        activeId,
-        (currentMessages) => {
-          const msgIndex = currentMessages.findIndex((m) => m.id === messageId);
-          if (msgIndex > -1) {
-            // Only update if content actually changed to prevent unnecessary state changes
-            if (currentMessages[msgIndex].content !== newContent) {
-              const updatedMessages = [...currentMessages];
-              updatedMessages[msgIndex] = {
-                ...updatedMessages[msgIndex],
-                content: newContent,
-                isStreaming: false, // Ensure editing marks streaming as false
-              };
-              messageUpdated = true;
-              return updatedMessages;
-            } else {
-              console.log(`Content for message ${messageId} is unchanged.`);
-              return currentMessages; // No change needed
-            }
-          }
-          console.warn(`Message ${messageId} not found for content update.`);
-          return currentMessages; // Message not found
-        },
-        messageUpdated, // Only update timestamp if content actually changed
-      ),
-    );
-
-    // Clear editing state after successful update
-    if (messageUpdated) {
-      set(editingMessageIdAtom, null);
-    }
   },
 );

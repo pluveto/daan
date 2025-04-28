@@ -1,130 +1,119 @@
-// src/components/ChatHistory.tsx (Optimized)
+// src/components/ChatHistory.tsx (Updated - Phase 5)
 import { cn } from '@/lib/utils';
 import {
-  activeChatAtom,
+  activeChatMessagesAtom, // Use new messages atom
   editingMessageIdAtom,
+  isLoadingActiveChatAtom, // Use loading state atom
   regenerateMessageAtom,
   showEstimatedTokensAtom,
   showTimestampsAtom,
-  updateMessageContentAtom,
+  updateExistingMessageContentAtom, // Use updated action name
 } from '@/store/index';
+import type { MessageEntity } from '@/types'; // Use internal type
 import { useAtom, useAtomValue, useSetAtom } from 'jotai';
 import React, { useCallback, useEffect, useRef } from 'react';
-// Import the memoized ChatMessageItem
-import { ChatMessageItem } from './ChatMessageItem';
+import { ChatMessageItem } from './ChatMessageItem'; // Expects AppInternalMessage now
 
 interface ChatHistoryProps {
   className?: string;
 }
 
 export const ChatHistory: React.FC<ChatHistoryProps> = ({ className }) => {
-  const [activeChat] = useAtom(activeChatAtom);
-  const messages = activeChat?.messages ?? [];
+  // Read new state atoms
+  const messages = useAtomValue(activeChatMessagesAtom);
+  const isLoading = useAtomValue(isLoadingActiveChatAtom); // Use loading state if needed for display
+
   const [editingId, setEditingId] = useAtom(editingMessageIdAtom);
-  // const [editContent, setEditContent] = useState(''); // REMOVED - State moved to child
-  const updateMessageContent = useSetAtom(updateMessageContentAtom);
+  const updateMessageContent = useSetAtom(updateExistingMessageContentAtom); // Use refactored action
   const showTimestamps = useAtomValue(showTimestampsAtom);
   const showEstimatedTokens = useAtomValue(showEstimatedTokensAtom);
-  const regenerateResponse = useSetAtom(regenerateMessageAtom); // Stable setter
+  const regenerateResponse = useSetAtom(regenerateMessageAtom);
 
   const scrollRef = useRef<HTMLDivElement>(null);
   const isNearBottomRef = useRef(true);
 
-  // --- Scrolling Logic (largely unchanged, dependencies are stable) ---
+  // --- Scrolling Logic (largely unchanged) ---
   const checkScrollPosition = useCallback(() => {
     const element = scrollRef.current;
     if (element) {
-      const threshold = 50; // User is considered "near bottom" if within 50px
+      const threshold = 50;
       isNearBottomRef.current =
         element.scrollHeight - element.scrollTop - element.clientHeight <
         threshold;
     }
-  }, []); // No dependencies needed
+  }, []);
 
   const scrollToBottom = useCallback((behavior: ScrollBehavior = 'smooth') => {
     const element = scrollRef.current;
     if (element) {
       element.scrollTo({ top: element.scrollHeight, behavior });
     }
-  }, []); // No dependencies needed
+  }, []);
 
   useEffect(() => {
     const element = scrollRef.current;
     if (element) {
       element.addEventListener('scroll', checkScrollPosition, {
         passive: true,
-      }); // Use passive listener
+      });
       return () => element.removeEventListener('scroll', checkScrollPosition);
     }
-  }, [checkScrollPosition]); // Stable dependency
+  }, [checkScrollPosition]);
 
-  // Auto-scroll effect
+  // Auto-scroll effect - Re-evaluate based on messages array changes
   useEffect(() => {
-    const lastMessage = messages.at(-1);
-    // Scroll if a new message is added OR the last one is streaming, AND user is near bottom
-    const shouldScroll =
-      (messages.length > 0 || lastMessage?.isStreaming) &&
-      isNearBottomRef.current;
-
-    if (shouldScroll) {
-      // RAF ensures scroll happens after paint, smoother experience
+    // Only scroll if the user is near the bottom
+    if (isNearBottomRef.current) {
+      // Use requestAnimationFrame for smoother scrolling after render
       requestAnimationFrame(() => {
-        // Small delay helps ensure content (especially streaming) is rendered before scroll
-        const delay = lastMessage?.isStreaming ? 50 : 0;
+        // Optional slight delay can help ensure layout completes, especially for streaming
         setTimeout(() => {
-          // Double-check if still near bottom after delay, user might have scrolled up
+          // Double-check if still near bottom after delay
           if (isNearBottomRef.current) {
-            // 'auto' is instant, good for streaming updates
+            const lastMessage = messages.at(-1);
+            // 'auto' is instant, good for rapid streaming updates
             scrollToBottom(lastMessage?.isStreaming ? 'auto' : 'smooth');
           }
-        }, delay);
+        }, 50); // Small delay (adjust as needed)
       });
     }
-    // Check scroll position immediately when messages change (e.g., initial load)
-    // checkScrollPosition(); // Optional: Check immediately if needed
-  }, [messages, scrollToBottom]); // Rerun only when messages array ref changes or scrollToBottom changes (it shouldn't)
+    // Run when the messages array reference changes (new message added, deleted, etc.)
+    // Also run when loading finishes, in case content height changed significantly
+  }, [messages, isLoading, scrollToBottom]);
 
-  // --- Editing Logic ---
-  // Effect to load content when editing starts is REMOVED - Handled inside ChatMessageItem
-
-  // useCallback for save handler - ACCEPTS new content from child
+  // --- Editing Logic (Save/Cancel passed down) ---
   const handleSaveEdit = useCallback(
-    (newContent: string) => {
-      if (!editingId) {
-        console.warn('Save attempted without an editingId');
+    (messageId: string, newContent: string) => {
+      // Accept messageId from child now
+      if (!messageId) {
+        console.warn('Save attempted without an editingId from child');
         return;
       }
-      // Content validation (trimming, non-empty) is now inside ChatMessageItem's handleSave
-
-      updateMessageContent({
-        messageId: editingId,
-        newContent: newContent, // Use the content passed from the child
-      });
-      setEditingId(null); // Exit edit mode after saving
+      // Call the refactored action
+      updateMessageContent({ messageId, newContent });
+      // Clear editing state (can also be done in ChatMessageItem on successful save)
+      setEditingId(null);
     },
-    [editingId, updateMessageContent, setEditingId], // Dependencies
+    [updateMessageContent, setEditingId], // Dependencies
   );
 
-  // useCallback for cancel handler - Passed to ChatMessageItem
   const handleCancelEdit = useCallback(() => {
     setEditingId(null);
-  }, [setEditingId]); // Stable dependency
-
-  // handleEditKeyDown is REMOVED - Logic moved into ChatMessageItem
+  }, [setEditingId]);
 
   // --- Rendering ---
   return (
     <div
       className={cn(
-        'relative flex-1 space-y-4 overflow-y-auto p-4 md:p-6', // Reduced default spacing slightly
+        'relative flex-1 space-y-4 overflow-y-auto p-4 md:p-6', // Adjusted spacing if needed
         className,
       )}
       ref={scrollRef}
-      role="log" // Better accessibility
-      aria-live="polite" // Announce new messages (assistive tech)
+      role="log"
+      aria-live="polite"
     >
-      {/* Empty State */}
-      {messages.length === 0 && (
+      {/* Empty State - Show only if NOT loading and no messages */}
+      {!isLoading && messages.length === 0 && (
         <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
           <p className="text-neutral-500 dark:text-neutral-400">
             Send a message to start the conversation.
@@ -132,47 +121,31 @@ export const ChatHistory: React.FC<ChatHistoryProps> = ({ className }) => {
         </div>
       )}
 
-      {/* Map Messages to Memoized Component */}
-      {messages.map((message) => {
-        // Filter out system messages before mapping
+      {/* Map Messages */}
+      {messages.map((message: MessageEntity) => {
+        // Explicitly type message
+        // Skip rendering system messages (if any were accidentally stored/loaded)
+        // or other non-displayable internal roles
         if (message.role === 'system') {
           return null;
         }
 
-        // Handle Dividers directly (no change needed here)
-        if (message.role === 'divider') {
-          return (
-            <div
-              aria-label="Context Cleared"
-              className="relative py-3"
-              key={message.id}
-            >
-              <div
-                aria-hidden="true"
-                className="absolute inset-0 flex items-center"
-              >
-                <div className="w-full border-t border-dashed border-neutral-300 dark:border-neutral-700"></div>
-              </div>
-              <div className="relative flex justify-center">
-                <span className="bg-white px-2 text-xs text-neutral-500 dark:bg-neutral-950 dark:text-neutral-400">
-                  Context Cleared
-                </span>
-              </div>
-            </div>
-          );
-        }
+        // Handle Dividers (If you keep using them - requires specific handling/role)
+        // if (message.role === 'divider') { ... return divider JSX ... }
 
-        // Render the memoized ChatMessageItem for user/assistant messages
+        // Render the ChatMessageItem for user/assistant/tool messages
         return (
           <ChatMessageItem
-            key={message.id} // Essential for React list updates
-            message={message}
-            isEditing={message.id === editingId} // Determine if this item is the one being edited
-            onSave={handleSaveEdit} // Pass the MODIFIED save handler
-            onCancelEdit={handleCancelEdit} // Pass stable cancel handler
+            key={message.id}
+            message={message} // Pass AppInternalMessage
+            isEditing={message.id === editingId}
+            // Pass handlers, ensuring they use message.id
+            onSave={(newContent) => handleSaveEdit(message.id, newContent)}
+            onCancelEdit={handleCancelEdit}
             showTimestamps={showTimestamps}
-            showEstimatedTokens={showEstimatedTokens}
-            onRegenerate={() => regenerateResponse(message.id)} // Pass stable setter
+            showEstimatedTokens={showEstimatedTokens} // Pass down relevant display settings
+            // Pass regenerate action correctly
+            onRegenerate={() => regenerateResponse(message.id)}
           />
         );
       })}

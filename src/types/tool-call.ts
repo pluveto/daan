@@ -23,36 +23,27 @@ export type MiniappMcpDefinition = z.infer<typeof MiniappMcpDefinitionSchema>;
 interface BaseToolCallInfo {
   callId: string; // Unique ID for this specific tool call instance
   toolName: string;
-}
-
-export interface PendingToolCallInfo extends BaseToolCallInfo {
-  type: 'pending';
   serverId: string;
   serverName: string; // User-friendly name for display
   args: any; // Parsed arguments
 }
 
+export interface PendingToolCallInfo extends BaseToolCallInfo {
+  type: 'pending';
+}
+
 export interface RunningToolCallInfo extends BaseToolCallInfo {
   type: 'running';
-  serverId: string;
-  serverName: string;
-  args: any;
 }
 
 export interface ResultToolCallInfo extends BaseToolCallInfo {
   type: 'result';
   isError: false;
-  serverId: string;
-  serverName: string;
-  args: any;
 }
 
 export interface ErrorToolCallInfo extends BaseToolCallInfo {
   type: 'error';
   isError: true;
-  serverId?: string;
-  serverName?: string;
-  args?: any;
   errorMessage?: string;
 }
 

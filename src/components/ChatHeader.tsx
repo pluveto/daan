@@ -1,6 +1,9 @@
-import { isLeftSidebarOpenAtom, isRightSidebarOpenAtom } from '@/store/index';
-import type { Chat } from '@/types';
-import { useAtom } from 'jotai';
+import {
+  activeChatAtom,
+  isLeftSidebarOpenAtom,
+  isRightSidebarOpenAtom,
+} from '@/store/index';
+import { useAtom, useAtomValue } from 'jotai';
 import React from 'react';
 import {
   LuMessageSquare,
@@ -11,10 +14,9 @@ import {
 } from 'react-icons/lu';
 import { Button } from './ui/Button';
 
-interface ChatHeaderProps {
-  chat: Chat | null;
-}
-export const ChatHeader: React.FC<ChatHeaderProps> = ({ chat }) => {
+interface ChatHeaderProps {}
+export const ChatHeader: React.FC<ChatHeaderProps> = ({}) => {
+  const chat = useAtomValue(activeChatAtom);
   const [isLeftOpen, setIsLeftOpen] = useAtom(isLeftSidebarOpenAtom);
   const [isRightOpen, setIsRightOpen] = useAtom(isRightSidebarOpenAtom);
 

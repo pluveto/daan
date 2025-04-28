@@ -1,16 +1,18 @@
-import { CustomCharacter } from '@/types';
-import React from 'react';
-import { LuEllipsis, LuPlus } from 'react-icons/lu';
+// src/components/CharacterSection.tsx (Updated - Phase 5)
+import { CharacterEntity } from '@/types'; // Use internal type
+import { LuLoader, LuPlus } from 'react-icons/lu'; // Add spinner
 import { Button } from './ui/Button';
 
 interface CharacterSectionProps {
-  characters: CustomCharacter[];
+  characters: CharacterEntity[]; // Use internal type
+  isLoading: boolean; // Add loading prop
   onAddCharacterClick: () => void;
-  onInstantiateCharacterClick: (character: CustomCharacter) => void;
+  onInstantiateCharacterClick: (character: CharacterEntity) => void;
 }
 
 export const CharacterSection: React.FC<CharacterSectionProps> = ({
   characters,
+  isLoading,
   onAddCharacterClick,
   onInstantiateCharacterClick,
 }) => {
@@ -20,14 +22,6 @@ export const CharacterSection: React.FC<CharacterSectionProps> = ({
         <div className="flex-1 font-medium tracking-wider uppercase">
           Characters
         </div>
-        <Button
-          variant="ghost"
-          size="xs"
-          onClick={onAddCharacterClick}
-          aria-label="Open Character Editor"
-        >
-          <LuEllipsis className="h-4 w-4" />
-        </Button>
       </div>
       <div className="mb-2 flex max-h-24 flex-wrap gap-1 overflow-y-auto rounded border-b p-2 dark:border-neutral-700">
         <Button
@@ -41,6 +35,7 @@ export const CharacterSection: React.FC<CharacterSectionProps> = ({
         >
           <LuPlus className="h-4 w-4" />
         </Button>
+        {isLoading && <LuLoader className="h-8 w-8 animate-spin" />}
         {characters.map((item) => (
           <Button
             aria-label={`Select ${item.name}`}

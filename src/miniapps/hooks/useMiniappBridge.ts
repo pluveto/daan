@@ -9,15 +9,10 @@ import {
   StreamCallbacks,
 } from '@/lib/miniappLlmService';
 import { routeMessageToMiniMcpAtom } from '@/lib/MiniappTransport';
-import {
-  getAllMiniappDataKeys, // NEW
-  getMiniappDataItem, // NEW
-  removeMiniappDataItem, // NEW
-  saveMiniappConfig,
-  setMiniappDataItem, // NEW
-} from '@/miniapps/persistence';
+import {} from '@/services/IndexedDBMiniappService';
 import {
   activeMiniappInstancesAtom,
+  miniappDataServiceAtom,
   miniappsConfigAtom,
   miniappsDefinitionAtom,
 } from '@/store/miniapp';
@@ -276,7 +271,7 @@ export function useMiniappBridge(
 
         // Permission check (use checkPermission defined within useMiniappBridge or pass permissions)
         checkApiCallPermission(apiName, args); // Assumes checkApiCallPermission is accessible or redefined here
-
+        const miniappDataService = get(miniappDataServiceAtom);
         // --- Process based on API name ---
         switch (apiName) {
           // --- Storage APIs --- (Use definitionId for storage partitioning)
@@ -286,24 +281,28 @@ export function useMiniappBridge(
             // Basic validation (persistence layer does more)
             if (typeof key !== 'string' || key.length === 0)
               throw new Error("Invalid 'key' for storageSetItem");
-            await setMiniappDataItem(definitionId, key, value);
+            await miniappDataService.upsertDataItem({
+              definitionId,
+              key,
+              value,
+            });
             return { success: true };
           }
           case 'storageGetItem': {
             const key = args?.key;
             if (typeof key !== 'string' || key.length === 0)
               throw new Error("Invalid 'key' for storageGetItem");
-            return await getMiniappDataItem(definitionId, key); // Returns value or undefined
+            return await miniappDataService.getDataItem(definitionId, key); // Returns value or undefined
           }
           case 'storageRemoveItem': {
             const key = args?.key;
             if (typeof key !== 'string' || key.length === 0)
               throw new Error("Invalid 'key' for storageRemoveItem");
-            await removeMiniappDataItem(definitionId, key);
+            await miniappDataService.removeDataItem(definitionId, key);
             return { success: true };
           }
           case 'storageGetAllKeys': {
-            return await getAllMiniappDataKeys(definitionId); // Returns string[]
+            return await miniappDataService.getAllDataKeys(definitionId); // Returns string[]
           }
 
           // --- Config APIs ---
@@ -340,7 +339,10 @@ export function useMiniappBridge(
               }
             }
             // Save config via persistence function
-            await saveMiniappConfig(definitionId, newConfig);
+            await miniappDataService.upsertConfig({
+              definitionId,
+              config: newConfig,
+            });
             // NOTE: This does NOT automatically update the `allConfigs` atom value used by this hook instance.
             // The change will be visible on next app load or if the atom is manually updated elsewhere.
             // Consider using `set(miniappsConfigAtom, ...)` here if immediate reflection is needed,

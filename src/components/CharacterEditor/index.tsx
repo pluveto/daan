@@ -7,17 +7,18 @@ import {
   DialogTitle,
   DialogTrigger,
 } from '@/components/ui/Dialog';
+import { UpdateCharacterDto } from '@/services/ChatDataService';
 import {
   addCharacterAtom,
   apiKeyAtom,
   autoFillCharacterAtom,
-  customCharactersAtom,
   defaultMaxHistoryAtom,
   deleteCharacterAtom,
   duplicateCharacterAtom,
   importCharactersAtom,
   isCharacterAutoFillingAtom,
   isCharacterEditorOpenAtom,
+  loadedCharactersAtom,
   moveCharacterAtom,
   updateCharacterAtom,
 } from '@/store/index';
@@ -32,7 +33,7 @@ type PartialCharacter = Partial<CustomCharacter>;
 
 export const CharacterEditor: React.FC = () => {
   const [isOpen, setIsOpen] = useAtom(isCharacterEditorOpenAtom);
-  const [characters] = useAtom(customCharactersAtom); // Still need set for direct updates if needed
+  const characters = useAtomValue(loadedCharactersAtom) ?? [];
   const globalDefaultMaxHistory = useAtomValue(defaultMaxHistoryAtom);
   const apiKey = useAtomValue(apiKeyAtom); // For auto-fill check
   const isAutoFilling = useAtomValue(isCharacterAutoFillingAtom);
@@ -97,15 +98,15 @@ export const CharacterEditor: React.FC = () => {
     setSelectedCharacterId(id);
   }, []);
 
-  const handleAddCharacter = useCallback(() => {
-    const newId = addCharacter(); // Call atom, get new ID
+  const handleAddCharacter = useCallback(async () => {
+    const newId = await addCharacter(); // Call atom, get new ID
     // Selection will be handled by the CharacterList component's click handler
     return newId;
   }, [addCharacter]);
 
   const handleDeleteCharacter = useCallback(
-    (id: string): boolean => {
-      const deleted = deleteCharacter(id); // Call atom
+    async (id: string): Promise<boolean> => {
+      const deleted = await deleteCharacter(id); // Call atom
       if (deleted && id === selectedCharacterId) {
         // Let useEffect handle selecting the next/previous item
         // Force re-evaluation of useEffect dependencies if needed immediately
@@ -118,16 +119,16 @@ export const CharacterEditor: React.FC = () => {
   );
 
   const handleMoveCharacter = useCallback(
-    (id: string, direction: 'up' | 'down') => {
-      moveCharacter({ id, direction });
+    async (id: string, direction: 'up' | 'down') => {
+      await moveCharacter({ id, direction });
       // Selection should remain on the moved item naturally as its ID doesn't change
     },
     [moveCharacter],
   );
 
   const handleDuplicateCharacter = useCallback(
-    (id: string): string | null => {
-      const newId = duplicateCharacter(id);
+    async (id: string): Promise<string | null> => {
+      const newId = await duplicateCharacter(id);
       // Selection will be handled by the CharacterList component's click handler
       return newId;
     },
@@ -135,21 +136,21 @@ export const CharacterEditor: React.FC = () => {
   );
 
   const handleImportCharacters = useCallback(
-    (data: unknown[]) => {
-      importCharacters(data); // Let the atom handle validation/merging
+    async (data: unknown[]) => {
+      await importCharacters(data); // Let the atom handle validation/merging
     },
     [importCharacters],
   );
 
   const handleSaveCharacter = useCallback(
-    (data: PartialCharacter) => {
+    async (data: UpdateCharacterDto) => {
       // data should already be processed by CharacterForm
       if (!data.id) {
         toast.error('Cannot save: Character ID missing.');
         return;
       }
       // No need for name check here, react-hook-form handles it
-      updateCharacter(data as PartialCharacter & { id: string });
+      await updateCharacter(data);
       toast.success(`Character "${data.name}" saved.`);
       // Form's isDirty state will reset automatically if reset() is called after save,
       // or manually call reset in the form's onSubmit success if needed.
@@ -158,11 +159,12 @@ export const CharacterEditor: React.FC = () => {
   );
 
   const handleTriggerAutoFill = useCallback(
-    async (data: PartialCharacter) => {
+    async (id: string, data: PartialCharacter) => {
       if (apiKey) {
-        return await triggerAutoFill(data);
+        return await triggerAutoFill(id, data);
       } else {
         toast.error('Cannot Auto-Fill: API Key not set in settings.');
+        return null;
       }
     },
     [apiKey, triggerAutoFill],

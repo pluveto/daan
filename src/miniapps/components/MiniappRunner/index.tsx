@@ -2,7 +2,7 @@
 import hostApiScript from '@/hostApi.js?raw';
 import { useMiniappBridge } from '@/miniapps/hooks/useMiniappBridge';
 import { nightModeAtom } from '@/store';
-import type { MiniappDefinition } from '@/types';
+import type { MiniappDefinitionEntity } from '@/types';
 import { useAtom } from 'jotai';
 import React, { Component, useMemo, useRef, useState } from 'react';
 
@@ -62,7 +62,7 @@ class MiniappErrorBoundary extends Component<
 
 // --- Runner Props ---
 interface MiniappRunnerProps {
-  miniappDefinition: MiniappDefinition;
+  miniappDefinition: MiniappDefinitionEntity;
   instanceId: string;
 }
 // --- Runner Component ---

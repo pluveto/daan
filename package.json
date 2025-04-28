@@ -1,6 +1,6 @@
 {
   "name": "@pluveto/daan",
-  "version": "0.3.1",
+  "version": "0.4.0-beta.1",
   "author": "Pluveto <zijing.zhang@proton.me>",
   "repository": {
     "type": "git",
@@ -49,6 +49,7 @@
     "copy-to-clipboard": "^3.3.3",
     "date-fns": "^4.1.0",
     "date-fns-tz": "^3.2.0",
+    "dexie": "^4.0.11",
     "dompurify": "^3.2.5",
     "gray-matter": "^4.0.3",
     "idb": "^8.0.2",
@@ -56,6 +57,7 @@
     "lodash": "^4.17.21",
     "lucide-react": "^0.488.0",
     "marked": "^15.0.11",
+    "minisearch": "^7.1.2",
     "next-themes": "^0.4.6",
     "openai": "^4.95.0",
     "prettier-plugin-organize-imports": "^4.1.0",
