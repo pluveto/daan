@@ -13,7 +13,7 @@ import {
   setMiniappOrderAtom,
   toggleMinimizeMiniappAtom,
 } from '@/store/miniapp';
-import { MiniappDefinition, MiniappInstance } from '@/types';
+import { MiniappDefinitionEntity, MiniappInstance } from '@/types';
 import {
   closestCenter,
   DndContext,
@@ -36,7 +36,7 @@ import React from 'react';
 import { LuPackage, LuPlus } from 'react-icons/lu'; // Default icon
 
 interface SortableMiniappIconProps {
-  instance: MiniappInstance & { definition?: MiniappDefinition };
+  instance: MiniappInstance & { definition?: MiniappDefinitionEntity };
   onFocus: (instanceId: string) => void;
   onToggleMinimize: (instanceId: string) => void;
 }

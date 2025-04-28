@@ -9,7 +9,7 @@ import { miniappsDefinitionAtom } from '@/store/miniapp';
 import {
   MiniappMcpDefinition,
   MiniappMcpDefinitionSchema,
-  type MiniappDefinition,
+  type MiniappDefinitionEntity,
   type MiniappPermissions,
 } from '@/types';
 import { CollapsibleTrigger } from '@radix-ui/react-collapsible';
@@ -61,7 +61,7 @@ interface MiniappEditorProps {
 
 // Define a type for the editable state, making complex fields potentially null initially
 type EditableMiniappState = Omit<
-  Partial<MiniappDefinition>,
+  Partial<MiniappDefinitionEntity>,
   'configSchema' | 'defaultConfig' | 'permissions' | 'mcpDefinition'
 > & {
   configSchema: Record<string, any> | null;
@@ -179,19 +179,20 @@ export function MiniappEditor({
     if (!editableState) return; // Should not happen if loaded
 
     const now = Date.now();
-    const definitionToSave: Partial<MiniappDefinition> & { id?: string } = {
-      ...editableState,
-      // Ensure required fields have defaults if somehow null/undefined
-      configSchema: editableState.configSchema ?? {},
-      defaultConfig: editableState.defaultConfig ?? {},
-      defaultWindowSize: editableState.defaultWindowSize ?? {
-        width: 800,
-        height: 600,
-      },
-      permissions: editableState.permissions ?? { useStorage: true },
-      dependencies: editableState.dependencies ?? [],
-      updatedAt: now,
-    };
+    const definitionToSave: Partial<MiniappDefinitionEntity> & { id?: string } =
+      {
+        ...editableState,
+        // Ensure required fields have defaults if somehow null/undefined
+        configSchema: editableState.configSchema ?? {},
+        defaultConfig: editableState.defaultConfig ?? {},
+        defaultWindowSize: editableState.defaultWindowSize ?? {
+          width: 800,
+          height: 600,
+        },
+        permissions: editableState.permissions ?? { useStorage: true },
+        dependencies: editableState.dependencies ?? [],
+        updatedAt: now,
+      };
 
     if (isCreateMode) {
       definitionToSave.id = uuidv4();
@@ -211,13 +212,18 @@ export function MiniappEditor({
 
       // Update or Add the definition
       if (isCreateMode) {
-        setDefinitions((prev) => [...prev, validatedData as MiniappDefinition]); // Add new
+        setDefinitions((prev) => [
+          ...prev,
+          validatedData as MiniappDefinitionEntity,
+        ]); // Add new
         toast.success(`Miniapp "${validatedData.name}" created.`);
       } else {
         setDefinitions(
           (prev) =>
             prev.map((d) =>
-              d.id === miniappId ? (validatedData as MiniappDefinition) : d,
+              d.id === miniappId
+                ? (validatedData as MiniappDefinitionEntity)
+                : d,
             ), // Update existing
         );
         toast.success(`Miniapp "${validatedData.name}" updated.`);
@@ -273,7 +279,7 @@ export function MiniappEditor({
     const GITHUB_REPO = 'daan';
 
     const markdownContent = formatMiniappForPublishing(
-      currentDefinitionData as MiniappDefinition,
+      currentDefinitionData as MiniappDefinitionEntity,
       author,
     );
 

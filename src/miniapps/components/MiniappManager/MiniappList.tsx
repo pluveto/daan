@@ -47,10 +47,11 @@ import {
 
 import {
   activeMiniappInstancesAtom, // To check for running instances
-  closeMiniappAtom, // To close running instances if needed
+  closeMiniappAtom,
+  miniappDataServiceAtom, // To close running instances if needed
   miniappsDefinitionAtom,
 } from '@/store/miniapp';
-import { MiniappDefinition } from '@/types';
+import { MiniappDefinitionEntity } from '@/types';
 import { formatDateLabel } from '@/utils/dateUtils'; // Assuming you have a date formatter
 import { useAtom, useAtomValue, useSetAtom } from 'jotai'; // Import Getter
 import React, { useState } from 'react';
@@ -71,6 +72,7 @@ export function MiniappList() {
   const [definitions, setDefinitions] = useAtom(miniappsDefinitionAtom);
   const activeInstances = useAtomValue(activeMiniappInstancesAtom); // Get running instances
   const closeInstance = useSetAtom(closeMiniappAtom); // Get atom to close instances
+  const miniappDataService = useAtomValue(miniappDataServiceAtom);
 
   const [editingMiniappId, setEditingMiniappId] = useState<string | null>(null);
   const [isEditorOpen, setIsEditorOpen] = useState(false);
@@ -156,12 +158,12 @@ export function MiniappList() {
   };
 
   // Add handleExport functions
-  const handleExportDef = (def: MiniappDefinition) => {
+  const handleExportDef = (def: MiniappDefinitionEntity) => {
     exportMiniappDefinition(def as any);
   };
 
-  const handleExportData = (def: MiniappDefinition) => {
-    exportMiniappWithData(def as any);
+  const handleExportData = (def: MiniappDefinitionEntity) => {
+    exportMiniappWithData(miniappDataService, def as any);
   };
 
   // Sort definitions, e.g., by name

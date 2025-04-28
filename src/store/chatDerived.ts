@@ -1,41 +1,40 @@
-// src/store/chatDerived.ts
-import {
+// src/store/chatDerived.ts (Refactored - Phase 3/4)
+import type { ChatMetadata } from '@/services/ChatDataService'; // Import metadata type
+import { NamespacedModelId } from '@/types';
+import type {
   ApiModelConfig,
   ApiProviderConfig,
-  type Chat,
-  type NamespacedModelId,
-} from '@/types';
-// Use NamespacedModelId
+  GroupedModels,
+} from '@/types/api'; // Keep API types
+import type { ChatEntity } from '@/types/internal'; // Use new internal chat type
 import { atom, Getter } from 'jotai';
-import { activeChatIdAtom, chatsAtom } from './chatData';
+import {
+  activeChatDataAtom, // Use this instead of looking up in chatsAtom
+  chatListMetadataAtom,
+} from './chatActions';
 import {
   apiProvidersAtom,
   defaultMaxTokensAtom,
   defaultTemperatureAtom,
   defaultTopPAtom,
-} from './settings';
-
-// Import the source of truth
+} from './settings'; // Settings remain the same
 
 // --- Derived Atoms ---
 
-/** Derives the currently active chat object based on activeChatIdAtom. O(1) lookup. */
-export const activeChatAtom = atom<Chat | null>((get) => {
-  const chats = get(chatsAtom);
-  const activeId = get(activeChatIdAtom);
-  return activeId ? (chats[activeId] ?? null) : null;
+/** Derives the currently active chat object (AppInternalChat) based on activeChatDataAtom. */
+export const activeChatAtom = atom<ChatEntity | null>((get) => {
+  // Simply return the value of the atom that holds the loaded active chat data
+  return get(activeChatDataAtom);
 });
 
-/** Derives the list of available model IDs from enabled providers. */
+/** Derives the list of available model IDs from enabled providers. (No changes needed) */
 export const availableModelsAtom = atom<NamespacedModelId[]>((get) => {
   const providers = get(apiProvidersAtom);
   const enabledModels: NamespacedModelId[] = [];
 
   providers.forEach((provider) => {
-    // Only include models from enabled providers
     if (provider.enabled) {
       provider.models.forEach((model) => {
-        // The model ID is already namespaced (e.g., "openai::gpt-4o")
         enabledModels.push(model.id);
       });
     }
@@ -44,31 +43,38 @@ export const availableModelsAtom = atom<NamespacedModelId[]>((get) => {
   return enabledModels;
 });
 
-/** Derives a sorted list of chats for display purposes (e.g., in the sidebar). */
-export const sortedChatsAtom = atom<Chat[]>((get) => {
-  const chats = get(chatsAtom);
-  const chatList = Object.values(chats);
-  return chatList.sort((a, b) => {
+/** Derives a sorted list of chat metadata for display (e.g., in the sidebar). */
+export const sortedChatsMetadataAtom = atom<ChatMetadata[]>((get) => {
+  // Read the metadata loaded from the service
+  const metadataList = get(chatListMetadataAtom);
+
+  // Handle null state (before initial load)
+  if (metadataList === null) {
+    return [];
+  }
+
+  // Sort the metadata array: Pinned first, then by updatedAt descending
+  // Create a mutable copy before sorting
+  return [...metadataList].sort((a, b) => {
+    // Pinned chats always come first
     if (a.isPinned !== b.isPinned) {
-      return a.isPinned ? -1 : 1;
+      return a.isPinned ? -1 : 1; // Pinned first (true sorts before false)
     }
+    // Otherwise, sort by last updated time, newest first
     return b.updatedAt - a.updatedAt;
   });
 });
 
-/** Groups available models by provider for dropdowns/selects. */
+/** Groups available models by provider for dropdowns/selects. (No changes needed) */
 export const groupedAvailableModelsAtom = atom((get) => {
   const providers = get(apiProvidersAtom);
-  const groups: {
-    providerName: string;
-    models: { id: NamespacedModelId; name: string }[];
-  }[] = [];
+  const groups: GroupedModels = [];
 
   providers.forEach((provider) => {
     if (provider.enabled && provider.models.length > 0) {
       groups.push({
-        providerName: provider.name, // Use the user-friendly provider name
-        models: provider.models.map((m) => ({ id: m.id, name: m.name })), // Map to simpler structure for UI
+        providerName: provider.name,
+        models: provider.models.map((m) => ({ id: m.id, name: m.name })),
       });
     }
   });
@@ -84,7 +90,7 @@ interface EffectiveModelParams {
   topP: number | null;
 }
 
-/** Helper function to find model and provider config */
+/** Helper function to find model and provider config (No changes needed) */
 const findModelAndProvider = (
   modelId: NamespacedModelId | null,
   providers: ApiProviderConfig[],
@@ -101,11 +107,12 @@ const findModelAndProvider = (
 };
 
 /**
- * Helper function (or could be a derived atom) to get effective parameters for a given chat.
+ * Helper function to get effective parameters for a given chat.
  * Checks chat overrides -> model defaults -> provider defaults -> global defaults.
+ * Now accepts AppInternalChat.
  */
 export const getEffectiveChatParams = (
-  chat: Chat | null,
+  chat: ChatEntity | null, // Updated type
   get: Getter,
 ): EffectiveModelParams => {
   // Global defaults
@@ -122,19 +129,20 @@ export const getEffectiveChatParams = (
     };
   }
 
-  // Find model/provider config
+  // Find model/provider config using the chat's model ID
   const providers = get(apiProvidersAtom);
   const { modelConfig, providerConfig } = findModelAndProvider(
-    chat.model,
+    chat.model, // Use model from AppInternalChat
     providers,
   );
 
   // Resolve in order: Chat Override -> Model Config -> Provider Config -> Global
+  // Use ?? operator for concise nullish coalescing
   const temperature =
-    chat.temperature ?? // Chat override
-    modelConfig?.temperature ?? // Model default
-    providerConfig?.defaultTemperature ?? // Provider default
-    globalTemp; // Global default
+    chat.temperature ??
+    modelConfig?.temperature ??
+    providerConfig?.defaultTemperature ??
+    globalTemp;
 
   const maxTokens =
     chat.maxTokens ??
@@ -151,19 +159,23 @@ export const getEffectiveChatParams = (
 /** Derived atom providing the effective parameters for the *active* chat */
 export const activeChatEffectiveParamsAtom = atom<EffectiveModelParams>(
   (get) => {
+    // Read the refactored activeChatAtom
     const activeChat = get(activeChatAtom);
+    // Pass it to the updated helper function
     return getEffectiveChatParams(activeChat, get);
   },
 );
 
-/** Derived atom providing the *source* defaults (model/provider/global) for the active chat's model, *ignoring* chat overrides. Used for placeholders. */
+/** Derived atom providing the *source* defaults for the active chat's model, *ignoring* chat overrides. */
 export const activeChatSourceDefaultsAtom = atom<EffectiveModelParams>(
   (get) => {
+    // Read the refactored activeChatAtom
     const activeChat = get(activeChatAtom);
     const globalTemp = get(defaultTemperatureAtom);
     const globalMaxTokens = get(defaultMaxTokensAtom);
     const globalTopP = get(defaultTopPAtom);
 
+    // If no active chat or no model selected in the active chat
     if (!activeChat?.model) {
       return {
         temperature: globalTemp,
@@ -178,6 +190,7 @@ export const activeChatSourceDefaultsAtom = atom<EffectiveModelParams>(
       providers,
     );
 
+    // Resolve ignoring chat overrides: Model Config -> Provider Config -> Global
     const temperature =
       modelConfig?.temperature ??
       providerConfig?.defaultTemperature ??

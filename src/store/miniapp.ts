@@ -1,12 +1,13 @@
 // src/store/miniapp.ts
 import type {
   MiniappConfig,
-  MiniappDefinition,
+  MiniappDefinitionEntity,
   MiniappInstance,
 } from '@/types';
 import { atom } from 'jotai';
 // import { selectAtom } from 'jotai/utils'; // Keep if used elsewhere
 import type { MiniappTransport } from '@/lib/MiniappTransport';
+import { IndexedDBMiniappService } from '@/services/IndexedDBMiniappService';
 import { uniqueId } from 'lodash';
 import WinBox from 'react-winbox';
 
@@ -16,7 +17,7 @@ import WinBox from 'react-winbox';
 export const activeMiniappTransportsAtom = atom<Map<string, MiniappTransport>>(
   new Map(),
 );
-export const miniappsDefinitionAtom = atom<MiniappDefinition[]>([]);
+export const miniappsDefinitionAtom = atom<MiniappDefinitionEntity[]>([]);
 export const miniappsConfigAtom = atom<Record<string, MiniappConfig>>({});
 // Holds the active instances (now just their IDs)
 export const activeMiniappInstancesAtom = atom<MiniappInstance[]>([]); // Type updated
@@ -45,7 +46,7 @@ export const miniappDefinitionsByIdAtom = atom((get) => {
       acc[def.id] = def;
       return acc;
     },
-    {} as Record<string, MiniappDefinition>,
+    {} as Record<string, MiniappDefinitionEntity>,
   );
 });
 
@@ -63,7 +64,7 @@ export const miniappInstancesByIdAtom = atom((get) => {
 
 // Get currently running instances sorted by the order atom (type updated)
 export const orderedRunningMiniappsAtom = atom(
-  (get): (MiniappInstance & { definition?: MiniappDefinition })[] => {
+  (get): (MiniappInstance & { definition?: MiniappDefinitionEntity })[] => {
     const instancesById = get(miniappInstancesByIdAtom);
     const order = get(activeMiniappInstanceOrderAtom);
     const definitionsById = get(miniappDefinitionsByIdAtom);
@@ -222,3 +223,5 @@ export const toggleMinimizeMiniappAtom = atom(
     // set(setInstanceMinimizedStateAtom, { instanceId, minimized: shouldMinimize }); // REMOVED - Rely on callbacks
   },
 );
+
+export const miniappDataServiceAtom = atom(new IndexedDBMiniappService());

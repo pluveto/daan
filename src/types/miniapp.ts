@@ -1,6 +1,6 @@
 import { MiniappMcpDefinition } from './tool-call';
 
-export interface MiniappDefinition {
+export interface MiniappDefinitionEntity {
   id: string; // UUID recommended
   icon?: string;
   name: string;

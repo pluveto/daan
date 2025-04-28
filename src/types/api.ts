@@ -22,3 +22,10 @@ export interface ApiProviderConfig {
   defaultTopP?: number | null;
   models: ApiModelConfig[];
 }
+
+export type GroupedModel = {
+  providerName: string;
+  models: Array<{ id: NamespacedModelId; name: string }>;
+};
+
+export type GroupedModels = Array<GroupedModel>;

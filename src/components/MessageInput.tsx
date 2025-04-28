@@ -1,16 +1,16 @@
 // src/components/MessageInput.tsx
 import { cn } from '@/lib/utils';
-import { updateChatAtom } from '@/store/chatActions';
 import {
-  activeChatAtom,
+  _activeChatIdAtom,
+  activeChatMessagesAtom,
   cancelGenerationAtom,
-  focusInputAtom,
+  clearActiveChatMessagesAtom,
   isAssistantLoadingAtom,
   isSystemSettingsDialogOpenAtom,
   regenerateLastResponseAtom,
-  sendMessageActionAtom,
   showEstimatedTokensAtom,
   systemSettingsDialogActiveTabAtom,
+  triggerChatCompletionAtom,
 } from '@/store/index';
 import {
   isMcpToolsPopoverOpenAtom,
@@ -18,7 +18,6 @@ import {
   selectedMcpServerIdsAtom,
 } from '@/store/mcp';
 import { useAtom, useAtomValue, useSetAtom } from 'jotai';
-import _ from 'lodash';
 import React, {
   useCallback,
   useEffect,
@@ -34,39 +33,44 @@ import {
   LuSend,
   LuSquare,
 } from 'react-icons/lu';
-import { approximateTokenSize } from 'tokenx';
-// Import the new Popover content component
 import { McpToolsPopover } from './McpToolsPopover';
 import { Button } from './ui/Button';
-// Import Popover components
 import { Popover, PopoverContent, PopoverTrigger } from './ui/Popover';
 import { Textarea } from './ui/Textarea';
 
-const debounce = _.debounce;
-const DEBOUNCE_DELAY = 400;
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from '@/components/ui/AlertDialog';
+import { approximateTokenSize } from 'tokenx';
 
 export const MessageInput: React.FC = () => {
-  const [isLoading] = useAtom(isAssistantLoadingAtom);
-  const [activeChat] = useAtom(activeChatAtom);
-  const updateChat = useSetAtom(updateChatAtom);
+  const isLoading = useAtomValue(isAssistantLoadingAtom);
+  const activeChatId = useAtomValue(_activeChatIdAtom); // Read ID for actions
+  const activeMessages = useAtomValue(activeChatMessagesAtom); // Read messages for checks
   const cancelGeneration = useSetAtom(cancelGenerationAtom);
   const regenerateAction = useSetAtom(regenerateLastResponseAtom);
+  const triggerCompletion = useSetAtom(triggerChatCompletionAtom); // Use new action
+  const clearMessagesAction = useSetAtom(clearActiveChatMessagesAtom); // Use new action
   const showEstimatedTokens = useAtomValue(showEstimatedTokensAtom);
-  const triggerFocus = useAtomValue(focusInputAtom);
-  const sendMessage = useSetAtom(sendMessageActionAtom);
 
-  // MCP State
   const [isMcpPopoverOpen, setIsMcpPopoverOpen] = useAtom(
     isMcpToolsPopoverOpenAtom,
   );
   const serverStates = useAtomValue(mcpServerStatesAtom);
   const selectedServerIds = useAtomValue(selectedMcpServerIdsAtom);
 
+  // Local input state
   const [input, setInputRaw] = useState<string>('');
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const [isComposing, setIsComposing] = useState(false);
-
-  // --- Check if any MCP servers are connected ---
   const hasConnectedMcpServers = useMemo(() => {
     for (const state of serverStates.values()) {
       if (state.isConnected) {
@@ -76,76 +80,49 @@ export const MessageInput: React.FC = () => {
     return false;
   }, [serverStates]);
 
-  // --- State Synchronization ---
   useEffect(() => {
-    setInputRaw(activeChat?.input ?? '');
-  }, [activeChat]);
+    setInputRaw('');
+    // Auto-resize on chat change too
+    requestAnimationFrame(() => adjustTextareaHeight(textareaRef.current));
+  }, [activeChatId]);
 
-  // --- Debounced Global State Update ---
-  const debouncedUpdateGlobalInput = useCallback(
-    debounce((value: string) => {
-      if (activeChat) {
-        updateChat({ id: activeChat.id, input: value });
+  const adjustTextareaHeight = useCallback(
+    (element: HTMLTextAreaElement | null) => {
+      if (element) {
+        element.style.height = 'auto';
+        element.style.height = `${element.scrollHeight}px`;
       }
-    }, DEBOUNCE_DELAY),
-    [activeChat?.id, updateChat],
+    },
+    [],
   );
-  useEffect(() => {
-    return () => {
-      debouncedUpdateGlobalInput.cancel();
-    };
-  }, [debouncedUpdateGlobalInput]);
-
-  // --- Effect for focusing input ---
-  useEffect(() => {
-    if (triggerFocus > 0 && textareaRef.current) {
-      textareaRef.current?.focus();
-    }
-  }, [triggerFocus]);
 
   // --- Input Change Handler ---
   const handleInputChange = useCallback(
     (e: React.ChangeEvent<HTMLTextAreaElement>) => {
       const newValue = e.target.value;
       setInputRaw(newValue);
-      debouncedUpdateGlobalInput(newValue);
-      // Auto-resize textarea height based on content
-      if (textareaRef.current) {
-        textareaRef.current.style.height = 'auto'; // Reset height
-        textareaRef.current.style.height = `${textareaRef.current.scrollHeight}px`; // Set to scroll height
-      }
+      // debouncedUpdateGlobalInput(newValue); // Save draft if implemented
+      adjustTextareaHeight(e.target);
     },
-    [debouncedUpdateGlobalInput],
+    [adjustTextareaHeight], // Remove debouncedUpdateGlobalInput if not used
   );
-
-  // Adjust height on initial load/chat change
-  useEffect(() => {
-    if (textareaRef.current) {
-      setTimeout(() => {
-        // Needs timeout to allow rendering
-        textareaRef.current!.style.height = 'auto';
-        textareaRef.current!.style.height = `${textareaRef.current!.scrollHeight}px`;
-      }, 0);
-    }
-  }, [input, activeChat?.id]);
 
   // --- Send Message Handler ---
   const handleSend = useCallback(() => {
     const trimmedInput = input.trim();
-    if (!trimmedInput || !activeChat || isLoading) {
+    if (!trimmedInput || !activeChatId || isLoading) {
       return;
     }
-    debouncedUpdateGlobalInput.cancel();
-    sendMessage(trimmedInput);
-    setInputRaw(''); // Clear local input *immediately*
-    // Reset textarea height after clearing
-    if (textareaRef.current) {
-      textareaRef.current.style.height = 'auto';
-    }
-    setTimeout(() => textareaRef.current?.focus(), 50);
-  }, [input, activeChat, isLoading, sendMessage, debouncedUpdateGlobalInput]);
+    // Call the new trigger action, passing chat ID and content
+    triggerCompletion(activeChatId, trimmedInput);
+    setInputRaw(''); // Clear local input immediately
+    requestAnimationFrame(() => {
+      // Ensure textarea height resets after clearing
+      adjustTextareaHeight(textareaRef.current);
+      textareaRef.current?.focus(); // Refocus after sending
+    });
+  }, [input, activeChatId, isLoading, triggerCompletion, adjustTextareaHeight]);
 
-  // --- Keyboard Handler ---
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
       if (
@@ -162,65 +139,91 @@ export const MessageInput: React.FC = () => {
     [isLoading, handleSend, input, isComposing],
   );
 
+  // --- Clear History Handler ---
+  const handleClearHistory = useCallback(() => {
+    // Confirmation is inside the AlertDialog trigger
+    clearMessagesAction(); // Call the refactored action
+  }, [clearMessagesAction]);
+
   // --- Derived State & Memos ---
   const canRegenerate = useMemo(
     () =>
       !isLoading &&
-      activeChat &&
-      activeChat.messages.some((m) => m.role === 'assistant' && !m.isStreaming),
-    [isLoading, activeChat],
+      activeMessages.some((m) => m.role === 'assistant' && !m.isStreaming),
+    [isLoading, activeMessages],
   );
-
+  const hasHistory = useMemo(() => activeMessages.length > 0, [activeMessages]);
   const numTokens = useMemo(
     () => (showEstimatedTokens ? approximateTokenSize(input) : 0),
     [showEstimatedTokens, input],
   );
 
+  // --- MCP Settings Opener ---
   const setIsOpen = useSetAtom(isSystemSettingsDialogOpenAtom);
-  const setActiveTab = useSetAtom(systemSettingsDialogActiveTabAtom); // Default tab
-
+  const setActiveTab = useSetAtom(systemSettingsDialogActiveTabAtom);
   const handleOpenMcpSettings = useCallback(() => {
     setIsOpen(true);
     setActiveTab('mcp');
   }, [setIsOpen, setActiveTab]);
 
+  // --- Render ---
   return (
     <div
       className={cn(
         'flex flex-shrink-0 flex-col border-t border-neutral-200 bg-neutral-50 px-4 pt-2 pb-4 dark:border-neutral-700 dark:bg-neutral-900/50',
       )}
     >
+      {/* Main container class */}
       {/* Top Toolbar Area */}
       <div className="flex items-center space-x-1 pb-2">
-        {/* Clear History Button */}
-        <Button
-          aria-label="Clear chat history"
-          className={cn(
-            'flex-shrink-0',
-            activeChat && activeChat.messages.length > 0 && 'text-destructive',
-          )}
-          disabled={
-            !activeChat || isLoading || activeChat.messages.length === 0
-          }
-          onClick={() => {
-            if (activeChat) {
-              updateChat({ id: activeChat.id, messages: [] });
-            }
-          }}
-          size="xs"
-          variant="ghost"
-          title="Clear chat history"
-        >
-          <LuPaintbrush className="h-4 w-4" />
-        </Button>
-        {/* Regenerate Button */}
+        {/* Clear History Button with Confirmation */}
+        <AlertDialog>
+          <AlertDialogTrigger asChild>
+            <Button
+              aria-label="Clear chat history"
+              className={cn(
+                'flex-shrink-0',
+                hasHistory && 'text-destructive hover:bg-destructive/10', // Style when history exists
+                (!hasHistory || isLoading || !activeChatId) &&
+                  'cursor-not-allowed opacity-50',
+              )}
+              disabled={!hasHistory || isLoading || !activeChatId}
+              size="xs"
+              variant="ghost"
+              title="Clear chat history"
+            >
+              <LuPaintbrush className="h-4 w-4" />
+            </Button>
+          </AlertDialogTrigger>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Clear Chat History?</AlertDialogTitle>
+              <AlertDialogDescription>
+                This will permanently delete all messages in the current chat.
+                This action cannot be undone.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancel</AlertDialogCancel>
+              <AlertDialogAction
+                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                onClick={handleClearHistory} // Call clear action on confirm
+              >
+                Clear History
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+
+        {/* Regenerate Button (logic unchanged) */}
         <Button
           aria-label="Regenerate last response"
           className={cn(
             'flex-shrink-0',
-            (!canRegenerate || isLoading) && 'cursor-not-allowed opacity-50',
+            (!canRegenerate || isLoading || !activeChatId) &&
+              'cursor-not-allowed opacity-50',
           )}
-          disabled={!canRegenerate || isLoading}
+          disabled={!canRegenerate || isLoading || !activeChatId}
           onClick={regenerateAction}
           size="xs"
           variant="ghost"
@@ -228,6 +231,7 @@ export const MessageInput: React.FC = () => {
         >
           <LuRefreshCw className="h-4 w-4" />
         </Button>
+
         {/* MCP Tools Popover Trigger */}
         {!hasConnectedMcpServers && (
           <Button
@@ -281,15 +285,14 @@ export const MessageInput: React.FC = () => {
           </span>
         )}
       </div>
-
       {/* Bottom Section: Input Area + Send Button */}
       <div className="flex items-end space-x-2">
         <Textarea
           ref={textareaRef}
           aria-label="Chat message input"
-          className="flex-1 resize-none overflow-y-hidden" // overflow-y-hidden + JS resize
-          rows={1} // Start with 1 row
-          disabled={!activeChat || isLoading}
+          className="flex-1 resize-none overflow-y-hidden"
+          rows={1}
+          disabled={!activeChatId || isLoading} // Disable if no active chat or loading
           value={input}
           onChange={handleInputChange}
           onCompositionStart={() => setIsComposing(true)}
@@ -298,19 +301,20 @@ export const MessageInput: React.FC = () => {
           placeholder={
             isLoading
               ? 'Assistant is thinking...'
-              : activeChat
-                ? "Type message or '---' to clear context..."
+              : activeChatId
+                ? 'Type message...' // Simpler placeholder
                 : 'Select or create a chat first'
           }
         />
         <Button
           aria-label={isLoading ? 'Stop generation' : 'Send message'}
-          className="flex-shrink-0 self-end"
+          className="flex-shrink-0 self-end" // Ensure button aligns correctly
           size="icon"
           title={isLoading ? 'Stop generation' : 'Send message'}
           variant={isLoading ? 'destructive' : 'default'}
           onClick={isLoading ? cancelGeneration : handleSend}
-          disabled={isLoading ? false : !input.trim() || !activeChat}
+          // Disable send if no input, no active chat, OR if assistant is loading
+          disabled={isLoading ? false : !input.trim() || !activeChatId}
         >
           {isLoading ? (
             <LuSquare className="h-5 w-5" />

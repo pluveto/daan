@@ -17,19 +17,22 @@ import { useMediaQuery } from '@/hooks/use-media-query';
 import { cn } from '@/lib/utils';
 import {
   activeChatAtom,
+  chatServiceErrorAtom,
+  initializeChatServiceAtom,
+  isChatServiceReadyAtom,
   isLeftSidebarOpenAtom,
   isRightSidebarOpenAtom,
   nightModeAtom,
-  resetStreamingStatesAtom,
+  resetGlobalStreamingStateAtom,
 } from '@/store/index';
-import { useAtom, useAtomValue } from 'jotai';
+import { useAtom, useAtomValue, useSetAtom } from 'jotai';
 import { VisuallyHidden } from 'radix-ui';
 import { useEffect } from 'react';
 import FastImport from './components/FastImport';
 import { MiniappSearchDialog } from './components/MiniappSearchDialog';
 import { MiniappWindowManager } from './components/MiniappWindowManager';
 import { Toaster } from './components/ui/Toaster';
-import { useMiniappPersistence } from './miniapps/persistence';
+import { useMiniappPersistence } from './miniapps/hooks/useMiniappPersistence';
 import { SystemSettingsDialog } from './SystemSettingsDialog'; // Import the new Dialog
 
 const appName = import.meta.env.VITE_APP_NAME || 'Daan';
@@ -40,7 +43,7 @@ function App() {
   const [isRightOpen, setIsRightOpen] = useAtom(isRightSidebarOpenAtom);
   const [isNightMode] = useAtom(nightModeAtom);
   const activeChat = useAtomValue(activeChatAtom);
-  const [, resetStreamingStates] = useAtom(resetStreamingStatesAtom);
+  const resetStreamingStates = useSetAtom(resetGlobalStreamingStateAtom);
 
   const isMobile = useMediaQuery('(max-width: 1023px)');
   const isDesktop = !isMobile;
@@ -72,6 +75,35 @@ function App() {
       setIsRightOpen(false);
     }
   }, [isMobile, setIsLeftOpen, setIsRightOpen]);
+
+  const initializeService = useSetAtom(initializeChatServiceAtom);
+  const isServiceReady = useAtomValue(isChatServiceReadyAtom);
+  const serviceError = useAtomValue(chatServiceErrorAtom);
+
+  // Initialize service on component mount
+  useEffect(() => {
+    initializeService();
+  }, [initializeService]); // Dependency array ensures it runs once
+
+  // Show loading or error state while service is initializing
+  if (serviceError) {
+    return (
+      <div className="flex h-screen items-center justify-center bg-red-100 text-red-800">
+        <p>
+          Error initializing application data: {serviceError.message}. Please
+          try refreshing or clearing site data.
+        </p>
+      </div>
+    );
+  }
+
+  if (!isServiceReady) {
+    return (
+      <div className="flex h-screen items-center justify-center">
+        <p>Loading application...</p>
+      </div>
+    );
+  }
 
   return (
     <div

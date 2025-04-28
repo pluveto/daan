@@ -1,36 +1,29 @@
 // src/components/Marketplace/MarketplaceView.tsx
-import { Button } from '@/components/ui/Button';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/Dialog';
-import { Input } from '@/components/ui/Input';
-import { ScrollArea } from '@/components/ui/ScrollArea';
+
+// *** Existing Imports ***
 import {
   MarketplaceItem,
   MarketplaceService,
   ParsedMarketplaceItem,
 } from '@/lib/MarketplaceService';
-import { customCharactersAtom } from '@/store/characterData'; // Import atoms for installation
-import { miniappsDefinitionAtom } from '@/store/miniapp'; // Import atoms for installation
-import type { CustomCharacter, MiniappDefinition } from '@/types';
-import DOMPurify from 'dompurify'; // pnpm add dompurify @types/dompurify - for safely rendering HTML description
-import { useSetAtom } from 'jotai';
 import React, { useCallback, useEffect, useState } from 'react';
-import {
-  LuDownload,
-  LuGithub,
-  LuInfo,
-  LuLoader,
-  LuSearch,
-} from 'react-icons/lu';
 import { toast } from 'sonner';
-import { v4 as uuidv4 } from 'uuid';
-import { MarketplaceItemCard } from './MarketplaceItemCard';
+
+import type { CustomCharacter } from '@/types'; // Keep Character type for structure
+// Import the service interface DTO for Miniapps
+import type { CreateMiniappDefinitionDto } from '@/services/MiniappDataService';
+
+type CreateCharacterDto = Omit<
+  CustomCharacter,
+  'id' | 'createdAt' | 'updatedAt' | 'sort' // Fields managed by the service
+>;
+
+import { chatDataServiceAtom, miniappDataServiceAtom } from '@/store';
+import { useAtomValue } from 'jotai';
+import { MarketplaceItemDetailsDialog } from './MarketplaceItemDetailsDialog';
+import { MarketplaceItemGrid } from './MarketplaceItemGrid';
+import { MarketplaceSearchBar } from './MarketplaceSearchBar';
+// Assuming MarketplaceSearchBar, MarketplaceItemGrid, MarketplaceItemDetailsDialog exist as previously refactored
 
 interface MarketplaceViewProps {
   type: 'miniapp' | 'character';
@@ -39,8 +32,9 @@ interface MarketplaceViewProps {
 export const MarketplaceView: React.FC<MarketplaceViewProps> = ({ type }) => {
   const [items, setItems] = useState<MarketplaceItem[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
-  const [isLoading, setIsLoading] = useState(false);
-  const [isDetailsLoading, setIsDetailsLoading] = useState(false);
+  const [isLoading, setIsLoading] = useState(false); // Loading search results
+  const [isDetailsLoading, setIsDetailsLoading] = useState(false); // Loading item details
+  const [isInstalling, setIsInstalling] = useState(false); // Loading state during install
   const [selectedItem, setSelectedItem] = useState<MarketplaceItem | null>(
     null,
   );
@@ -48,13 +42,13 @@ export const MarketplaceView: React.FC<MarketplaceViewProps> = ({ type }) => {
     useState<ParsedMarketplaceItem | null>(null);
   const [isDetailsOpen, setIsDetailsOpen] = useState(false);
 
-  const setMiniappDefs = useSetAtom(miniappsDefinitionAtom);
-  const setCharacterDefs = useSetAtom(customCharactersAtom);
+  const chatDataService = useAtomValue(chatDataServiceAtom);
+  const miniappDataService = useAtomValue(miniappDataServiceAtom);
 
   const fetchItems = useCallback(
     async (query?: string) => {
       setIsLoading(true);
-      setItems([]); // Clear previous items
+      setItems([]);
       try {
         const results =
           type === 'miniapp'
@@ -70,26 +64,20 @@ export const MarketplaceView: React.FC<MarketplaceViewProps> = ({ type }) => {
     [type],
   );
 
-  // Initial fetch on mount
   useEffect(() => {
     fetchItems();
-  }, [fetchItems]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [type]); // Refetch when type changes
 
   const handleSearch = () => {
     fetchItems(searchTerm);
   };
 
-  const handleKeyPress = (event: React.KeyboardEvent<HTMLInputElement>) => {
-    if (event.key === 'Enter') {
-      handleSearch();
-    }
-  };
-
   const handleViewDetails = async (item: MarketplaceItem) => {
     setSelectedItem(item);
+    setSelectedItemDetails(null);
     setIsDetailsOpen(true);
     setIsDetailsLoading(true);
-    setSelectedItemDetails(null); // Clear previous details
     try {
       const details =
         type === 'miniapp'
@@ -99,10 +87,13 @@ export const MarketplaceView: React.FC<MarketplaceViewProps> = ({ type }) => {
       if (details) {
         setSelectedItemDetails(details);
       } else {
-        // Error handled by service, close dialog?
         toast.error('Could not load item details.');
-        setIsDetailsOpen(false);
+        setIsDetailsOpen(false); // Close dialog on detail load failure
       }
+    } catch (error) {
+      console.error('Error fetching details:', error);
+      toast.error('Failed to load item details.');
+      setIsDetailsOpen(false);
     } finally {
       setIsDetailsLoading(false);
     }
@@ -111,247 +102,178 @@ export const MarketplaceView: React.FC<MarketplaceViewProps> = ({ type }) => {
   const handleInstall = async (
     itemOrDetails: MarketplaceItem | ParsedMarketplaceItem | null,
   ) => {
-    if (!itemOrDetails) return;
-    console.log(
-      'Install requested for:',
-      itemOrDetails.metadata?.name || itemOrDetails.title,
-    );
+    if (!itemOrDetails || isInstalling) return;
 
-    let details = itemOrDetails as ParsedMarketplaceItem;
-
-    // Fetch details if only basic item is available
-    if (!details.definition) {
-      setIsDetailsLoading(true); // Show loading indicator if needed
-      toast.info(
-        `Workspaceing details for ${details.metadata?.name || details.title}...`,
-      );
-      const fetchedDetails =
-        type === 'miniapp'
-          ? await MarketplaceService.getMiniappDetails(details.id)
-          : await MarketplaceService.getCharacterDetails(details.id);
-      setIsDetailsLoading(false);
-      if (!fetchedDetails?.definition) {
-        toast.error(`Failed to fetch details for installation.`);
-        return;
-      }
-      details = fetchedDetails;
-    }
-
-    if (!details.definition) {
-      toast.error('Cannot install: Definition data is missing.');
-      return;
-    }
-
-    const definitionToInstall = details.definition;
-    const installName =
-      definitionToInstall.name || details.metadata?.name || details.title;
-
-    // Generate new unique ID on install
-    const newId = uuidv4();
+    setIsInstalling(true);
+    let details: ParsedMarketplaceItem | null = null;
+    const originalItemId = itemOrDetails.id; // Keep track of the marketplace ID
 
     try {
+      // --- 1. Ensure we have full details ---
+      if ('definition' in itemOrDetails && itemOrDetails.definition) {
+        details = itemOrDetails;
+      } else {
+        toast.info(`Workspaceing details for ${itemOrDetails.title}...`);
+        setIsDetailsLoading(true); // Use details loading state visually
+        details =
+          type === 'miniapp'
+            ? await MarketplaceService.getMiniappDetails(originalItemId)
+            : await MarketplaceService.getCharacterDetails(originalItemId);
+        setIsDetailsLoading(false);
+      }
+
+      // --- 2. Validate details ---
+      if (!details?.definition) {
+        throw new Error('Definition data is missing or incomplete.');
+      }
+
+      const definitionFromMarketplace = details.definition;
+      const installName =
+        definitionFromMarketplace.name ||
+        details.metadata?.name ||
+        details.title;
+
+      // --- 3. Persist using the appropriate service ---
       if (type === 'miniapp') {
-        const newMiniappDef: MiniappDefinition = {
-          // --- Map fields carefully, ensure required ones exist ---
-          id: newId,
+        // Prepare DTO for the service
+        const createDto: CreateMiniappDefinitionDto = {
+          // Map fields from marketplace definition to our DTO
+          // Exclude id, createdAt, updatedAt (service handles these)
           name: installName,
-          icon: definitionToInstall.icon || details.metadata?.icon || '📦',
+          icon:
+            definitionFromMarketplace.icon || details.metadata?.icon || '📦',
           description:
-            definitionToInstall.description ||
+            definitionFromMarketplace.description ||
             details.metadata?.description ||
             '',
           htmlContent:
-            definitionToInstall.htmlContent ||
-            '<div>Error: HTML Content Missing</div>',
-          configSchema: definitionToInstall.configSchema || {},
-          defaultConfig: definitionToInstall.defaultConfig || {},
-          defaultWindowSize: definitionToInstall.defaultWindowSize || {
+            definitionFromMarketplace.htmlContent ||
+            '<div>Error: HTML Content Missing</div>', // Ensure validation
+          configSchema: definitionFromMarketplace.configSchema || {},
+          defaultConfig: definitionFromMarketplace.defaultConfig || {},
+          defaultWindowSize: definitionFromMarketplace.defaultWindowSize || {
             width: 800,
             height: 600,
           },
-          enabled: false, // Install disabled by default
-          dependencies: definitionToInstall.dependencies || [],
-          permissions: definitionToInstall.permissions || { useStorage: true }, // Sensible default perms
-          mcpDefinition: definitionToInstall.mcpDefinition, // Include if present
-          createdAt: Date.now(),
-          updatedAt: Date.now(),
+          dependencies: definitionFromMarketplace.dependencies || [],
+          permissions: definitionFromMarketplace.permissions || {
+            useStorage: true,
+          },
+          mcpDefinition: definitionFromMarketplace.mcpDefinition,
+          // Optionally pass the marketplace ID if the service needs it for linking/updates
+          // marketplaceId: originalItemId
         };
-        // Basic validation before adding
-        if (!newMiniappDef.htmlContent)
-          throw new Error('HTML content is missing.');
 
-        setMiniappDefs((prev) => [...prev, newMiniappDef]);
+        // Basic validation before calling service
+        if (
+          !createDto.htmlContent ||
+          createDto.htmlContent === '<div>Error: HTML Content Missing</div>'
+        ) {
+          throw new Error('HTML content is missing.');
+        }
+
+        // Call the service to create the definition
+        const savedDefinition =
+          await miniappDataService.createDefinition(createDto);
+
+        // Also save the default config
+        await miniappDataService.upsertConfig({
+          definitionId: savedDefinition.id,
+          config: savedDefinition.defaultConfig || {},
+        });
+
+        // TODO: Update UI - ideally refetch or use a more sophisticated state management
+        // Simple approach: Manually update atom (if still used)
+        // setMiniappDefs((prev) => [...prev, savedDefinition]);
+
         toast.success(`Miniapp "${installName}" installed successfully!`);
       } else {
         // Character
-        const newCharacterDef: CustomCharacter = {
-          // --- Map fields carefully ---
-          id: newId,
+        // Prepare DTO for the character service
+        const createDto: CreateCharacterDto = {
+          // Map fields, excluding id, createdAt, updatedAt, sort
           name: installName,
-          icon: definitionToInstall.icon || details.metadata?.icon || '👤',
+          icon:
+            definitionFromMarketplace.icon || details.metadata?.icon || '👤',
           description:
-            definitionToInstall.description ||
+            definitionFromMarketplace.description ||
             details.metadata?.description ||
             '',
-          prompt: definitionToInstall.prompt || '',
-          model: definitionToInstall.model || 'openai::gpt-4o', // Fallback model?
-          maxHistory: definitionToInstall.maxHistory ?? 20, // Default max history
-          createdAt: Date.now(),
-          updatedAt: Date.now(),
-          sort: Date.now(), // Use timestamp for initial sort order
+          prompt: definitionFromMarketplace.prompt || '',
+          model: definitionFromMarketplace.model || 'openai::gpt-4o', // Fallback model?
+          maxHistory: definitionFromMarketplace.maxHistory ?? 20, // Default max history
+          // Add any other fields expected by CustomCharacter/CreateCharacterDto
         };
-        // Basic validation
-        if (!newCharacterDef.prompt)
-          throw new Error('Character prompt is missing.');
 
-        setCharacterDefs((prev) => [...prev, newCharacterDef]);
+        // Basic validation
+        if (!createDto.prompt) {
+          throw new Error('Character prompt is missing.');
+        }
+
+        // Call the character service
+        await chatDataService.createCharacter(createDto);
+
+        // TODO: Update UI
+        // Simple approach: Manually update atom (if still used)
+        // setCharacterDefs((prev) => [...prev, savedCharacter]);
+
         toast.success(`Character "${installName}" installed successfully!`);
       }
-      // Close details dialog if open after install
-      setIsDetailsOpen(false);
+
+      // --- 4. Post-Install Actions ---
+      setIsDetailsOpen(false); // Close details dialog if open
     } catch (error: any) {
       console.error('Installation error:', error);
-      toast.error(`Failed to install ${installName}: ${error.message}`);
+      const installName = itemOrDetails.metadata?.name || itemOrDetails.title;
+      toast.error(
+        `Failed to install ${installName || 'item'}: ${error.message}`,
+      );
+      // Ensure loading states are reset on error
+      setIsDetailsLoading(false);
+    } finally {
+      setIsInstalling(false); // Reset installing state
     }
   };
 
+  // Handles installation request specifically from the Details Dialog
+  const handleInstallFromDialog = (details: ParsedMarketplaceItem | null) => {
+    handleInstall(details);
+  };
+
+  // Handles installation request specifically from an Item Card
+  const handleInstallFromCard = (item: MarketplaceItem) => {
+    handleInstall(item);
+  };
+
+  // --- Render Logic ---
+  // Use the previously refactored components:
+  // MarketplaceSearchBar, MarketplaceItemGrid, MarketplaceItemDetailsDialog
+
   return (
     <div className="flex h-full flex-col p-4">
-      {/* Search Bar */}
-      <div className="mb-4 flex gap-2">
-        <Input
-          type="search"
-          placeholder={`Search ${type === 'miniapp' ? 'Miniapps' : 'Characters'}... (by name, tag, author)`}
-          value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
-          onKeyPress={handleKeyPress}
-          disabled={isLoading}
-          className="flex-grow"
-        />
-        <Button onClick={handleSearch} disabled={isLoading}>
-          {isLoading ? (
-            <LuLoader className="h-4 w-4 animate-spin" />
-          ) : (
-            <LuSearch className="h-4 w-4" />
-          )}
-          <span className="ml-2 hidden sm:inline">Search</span>
-        </Button>
-      </div>
+      <MarketplaceSearchBar
+        type={type}
+        searchTerm={searchTerm}
+        onSearchTermChange={setSearchTerm}
+        onSearch={handleSearch}
+        isLoading={isLoading || isInstalling} // Disable search while loading list or installing
+      />
 
-      {/* Item Grid / List */}
-      <ScrollArea className="flex-grow">
-        {isLoading && items.length === 0 && (
-          <div className="flex h-32 items-center justify-center text-muted-foreground">
-            <LuLoader className="mr-2 h-5 w-5 animate-spin" /> Loading items...
-          </div>
-        )}
-        {!isLoading && items.length === 0 && (
-          <div className="flex h-32 items-center justify-center text-muted-foreground">
-            No items found matching your criteria. Check the labels/format on
-            GitHub issues.
-          </div>
-        )}
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-          {items.map((item) => (
-            <MarketplaceItemCard
-              key={item.id}
-              item={item}
-              onViewDetails={() => handleViewDetails(item)}
-              onInstall={() => handleInstall(item)}
-            />
-          ))}
-        </div>
-      </ScrollArea>
+      <MarketplaceItemGrid
+        items={items}
+        isLoading={isLoading} // Loading state for the grid itself
+        onViewDetails={handleViewDetails}
+        onInstall={handleInstallFromCard}
+      />
 
-      {/* Details Dialog */}
-      <Dialog open={isDetailsOpen} onOpenChange={setIsDetailsOpen}>
-        <DialogContent className="sm:max-w-2xl max-h-[80vh] flex flex-col">
-          <DialogHeader>
-            <DialogTitle className="flex items-center">
-              <span className="mr-3 text-2xl">
-                {selectedItemDetails?.metadata?.icon ||
-                  selectedItem?.metadata?.icon ||
-                  '🧩'}
-              </span>
-              {selectedItemDetails?.metadata?.name ||
-                selectedItem?.title ||
-                'Loading...'}
-            </DialogTitle>
-            <DialogDescription>
-              {selectedItemDetails?.metadata?.description ||
-                'Loading description...'}
-            </DialogDescription>
-          </DialogHeader>
-
-          <ScrollArea className="flex-grow pr-6">
-            {' '}
-            {/* Added padding right for scrollbar */}
-            {isDetailsLoading && (
-              <div className="flex h-40 items-center justify-center text-muted-foreground">
-                <LuLoader className="mr-2 h-5 w-5 animate-spin" /> Loading
-                details...
-              </div>
-            )}
-            {!isDetailsLoading && !selectedItemDetails && (
-              <div className="flex h-40 items-center justify-center text-destructive">
-                <LuInfo className="mr-2 h-5 w-5" /> Failed to load details.
-              </div>
-            )}
-            {selectedItemDetails && (
-              <div className="prose prose-sm dark:prose-invert max-w-none py-4">
-                {' '}
-                {/* Basic prose styling */}
-                {/* Render Author, Version, License etc. */}
-                <p className="text-xs text-muted-foreground">
-                  By:{' '}
-                  {selectedItemDetails.metadata?.author ||
-                    selectedItemDetails.githubUser?.login ||
-                    'Unknown'}{' '}
-                  | Version: {selectedItemDetails.metadata?.version || 'N/A'} |
-                  License: {selectedItemDetails.metadata?.license || 'N/A'}
-                </p>
-                {/* Render sanitized HTML description */}
-                {selectedItemDetails.longDescriptionHtml ? (
-                  <div
-                    dangerouslySetInnerHTML={{
-                      __html: DOMPurify.sanitize(
-                        selectedItemDetails.longDescriptionHtml,
-                      ),
-                    }}
-                  />
-                ) : (
-                  <p>
-                    <em>No detailed description provided.</em>
-                  </p>
-                )}
-                {/* Optionally show definition preview (carefully) */}
-                {/* <details> <summary>View Definition JSON</summary> <pre><code>{JSON.stringify(selectedItemDetails.definition, null, 2)}</code></pre> </details> */}
-              </div>
-            )}
-          </ScrollArea>
-
-          <DialogFooter className="mt-4 flex-shrink-0">
-            <Button variant="outline" onClick={() => setIsDetailsOpen(false)}>
-              Close
-            </Button>
-            <Button variant="secondary" asChild>
-              <a
-                href={selectedItem?.url}
-                target="_blank"
-                rel="noopener noreferrer"
-              >
-                <LuGithub className="mr-2 h-4 w-4" /> View on GitHub
-              </a>
-            </Button>
-            <Button
-              onClick={() => handleInstall(selectedItemDetails)}
-              disabled={isDetailsLoading || !selectedItemDetails?.definition}
-            >
-              <LuDownload className="mr-2 h-4 w-4" /> Install
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <MarketplaceItemDetailsDialog
+        isOpen={isDetailsOpen}
+        onOpenChange={setIsDetailsOpen}
+        item={selectedItem}
+        itemDetails={selectedItemDetails}
+        isLoading={isDetailsLoading || isInstalling} // Show loading in dialog if details loading OR installing
+        onInstall={handleInstallFromDialog}
+      />
     </div>
   );
 };

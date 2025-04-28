@@ -1,33 +1,28 @@
-// src/components/RightSidebar.tsx
 import {
-  activeChatAtom,
+  activeChatDataAtom,
   activeChatSourceDefaultsAtom,
   defaultMaxHistoryAtom,
   groupedAvailableModelsAtom,
   updateChatAtom,
 } from '@/store/index';
-// Import necessary atoms
-
-import { commonEmojis, NamespacedModelId } from '@/types';
+import { ChatEntity, NamespacedModelId } from '@/types';
 import { useAtomValue, useSetAtom } from 'jotai';
-import { debounce } from 'lodash'; // Use debounce for input saving
-import React, { useEffect, useMemo, useState } from 'react';
+import { noop } from 'lodash';
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import { LuInfo } from 'react-icons/lu';
 import { toast } from 'sonner';
-import { Button } from './ui/Button';
+import { useDebouncedCallback } from 'use-debounce'; // Keep use-debounce
+import { IconPicker } from './IconPicker';
+import { ModelSelect } from './ModelSelect';
 import { Input } from './ui/Input';
 import { Label } from './ui/Label';
-import {
-  Select,
-  SelectContent,
-  SelectGroup,
-  SelectItem,
-  SelectLabel,
-  SelectTrigger,
-  SelectValue,
-} from './ui/Select';
-import { Slider } from './ui/Slider'; // Use Slider for Temperature
-
+import { Slider } from './ui/Slider';
 import { Textarea } from './ui/Textarea';
 import {
   Tooltip,
@@ -35,36 +30,39 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from './ui/Tooltip';
+// Removed useEffectDebugger as it's not needed for the final version
 
-const DEBOUNCE_SAVE_DELAY = 500; // ms
+const DEBOUNCE_SAVE_DELAY = 500; // ms delay for debounced save
 
 export const ActiveChatSettings: React.FC = () => {
-  const activeChat = useAtomValue(activeChatAtom);
-  const sourceDefaults = useAtomValue(activeChatSourceDefaultsAtom); // Get defaults for placeholders
+  const activeChat = useAtomValue(activeChatDataAtom);
+  const sourceDefaults = useAtomValue(activeChatSourceDefaultsAtom);
   const updateChat = useSetAtom(updateChatAtom);
   const globalDefaultMaxHistory = useAtomValue(defaultMaxHistoryAtom);
-
-  // Get grouped models for the dropdown
   const groupedModels = useAtomValue(groupedAvailableModelsAtom);
+
   const availableModelIds = useMemo(
     () => groupedModels.flatMap((group) => group.models.map((m) => m.id)),
     [groupedModels],
   );
 
-  // Local state to manage form inputs, synced with activeChat
+  // Local state for form inputs remains the same
+  const [name, setName] = useState('');
+  const [icon, setIcon] = useState('');
+  const [model, setModel] = useState<NamespacedModelId | ''>('');
+  const [systemPrompt, setSystemPrompt] = useState('');
+  const [maxHistory, setMaxHistory] = useState<string>('');
   const [temperature, setTemperature] = useState<number | null>(null);
   const [maxTokens, setMaxTokens] = useState<number | null>(null);
   const [topP, setTopP] = useState<number | null>(null);
-  const [name, setName] = useState('');
-  const [icon, setIcon] = useState('');
-  const [model, setModel] = useState<NamespacedModelId | ''>(''); // Use NamespacedModelId or empty string
-  const [systemPrompt, setSystemPrompt] = useState('');
-  const [maxHistory, setMaxHistory] = useState<string>(''); // Store as string for input
 
-  // Update local state when active chat changes
+  // Ref to track if it's the initial mount/sync - crucial for preventing save on load
+  const isInitialMount = useRef(true);
+
+  // Sync local form state when activeChatDataAtom changes (Essential logic)
   useEffect(() => {
+    isInitialMount.current = true; // Set flag ON during sync
     if (activeChat) {
-      // Use chat override if set, otherwise null (to indicate using default)
       setName(activeChat.name);
       setIcon(activeChat.icon);
       setModel(activeChat.model);
@@ -75,8 +73,19 @@ export const ActiveChatSettings: React.FC = () => {
       setTemperature(activeChat.temperature ?? null);
       setMaxTokens(activeChat.maxTokens ?? null);
       setTopP(activeChat.topP ?? null);
+
+      // Use setTimeout to flip the flag OFF *after* state updates propagate
+      // This prevents the first "change" (the sync itself) from triggering saves
+      const timer = setTimeout(() => {
+        isInitialMount.current = false;
+        // console.log('Initial mount/sync complete for chat:', activeChat.id);
+      }, 0); // Delay of 0ms pushes execution after current render cycle
+
+      // console.log('Synced form state from activeChat:', activeChat.id);
+
+      return () => clearTimeout(timer); // Cleanup timeout on unmount/change
     } else {
-      // Reset when no chat is active
+      // Reset form when no chat is active
       setName('');
       setIcon('');
       setModel('');
@@ -85,76 +94,214 @@ export const ActiveChatSettings: React.FC = () => {
       setTemperature(null);
       setMaxTokens(null);
       setTopP(null);
+      // No need to set isInitialMount here, as it's set true when a chat *is* selected
     }
-  }, [activeChat]);
+  }, [activeChat?.id]); // Depend only on the chat ID changing
 
-  // Debounced function to save changes to Jotai state
-  const debouncedUpdateChat = React.useCallback(
-    debounce(
-      (
-        updates: Partial<
-          Pick<
-            Exclude<typeof activeChat, null>,
-            | 'name'
-            | 'icon'
-            | 'temperature'
-            | 'maxTokens'
-            | 'topP'
-            | 'model'
-            | 'systemPrompt'
-            | 'maxHistory'
-          >
-        >,
-        onUpdated?: () => void,
-      ) => {
-        if (activeChat) {
-          console.log('Updating chat overrides:', updates);
-          updateChat({ id: activeChat.id, ...updates });
-          onUpdated?.();
-        }
-      },
-      DEBOUNCE_SAVE_DELAY,
-    ),
-    [activeChat?.id, updateChat], // Recreate debounce if activeChat ID changes
+  // --- Core Save Logic ---
+  // useCallback dependencies *must* include all state variables read inside
+  // to ensure the debounced function closes over the *latest* values when executed.
+  const performSave = useCallback(() => {
+    // Prevent saving if no active chat (shouldn't happen if called correctly, but safe)
+    // The isInitialMount check is now handled *before* calling debouncedSave
+    if (!activeChat) return;
+
+    if (!model) {
+      toast.error('Model cannot be empty.');
+      // Reverting state here might be complex; better to just prevent save.
+      return;
+    }
+
+    // Validate and parse maxHistory
+    let finalMaxHistory: number | null = null;
+    if (maxHistory.trim() !== '') {
+      const parsed = parseInt(maxHistory, 10);
+      if (!isNaN(parsed) && parsed >= 0) {
+        finalMaxHistory = parsed;
+      } else {
+        toast.error(
+          'Invalid Max History value. Must be a non-negative number or blank.',
+        );
+        return; // Prevent saving with invalid input
+      }
+    } // If blank, finalMaxHistory remains null
+
+    // Construct update object (reading current state values)
+    const updates: Partial<
+      Omit<ChatEntity, 'id' | 'createdAt' | 'updatedAt'>
+    > & { id: string } = {
+      id: activeChat.id,
+      name: name.trim() || 'Untitled Chat', // Ensure name isn't just whitespace
+      icon: icon || '💬', // Default icon if empty
+      model: model,
+      systemPrompt: systemPrompt,
+      maxHistory: finalMaxHistory,
+      temperature: temperature,
+      maxTokens: maxTokens,
+      topP: topP,
+    };
+
+    // console.log('Performing save with updates:', updates); // Debug log
+    updateChat(updates);
+    // Note: Success toast is now only shown on *explicit* save for better UX
+  }, [
+    activeChat?.id, // Need id to perform the update
+    name,
+    icon,
+    model,
+    systemPrompt,
+    maxHistory,
+    temperature,
+    maxTokens,
+    topP,
+    updateChat, // The function to call
+  ]);
+
+  // --- Debounced Save Handler (using the useCallback'd performSave) ---
+  const debouncedSave = useDebouncedCallback(performSave, DEBOUNCE_SAVE_DELAY);
+
+  // --- Removed the central useEffect that triggered debouncedSave ---
+  // The logic is now moved into individual handlers below.
+
+  // --- Input Handlers (Optimized: Update state AND call debounce) ---
+
+  const handleNameChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const newName = e.target.value;
+    setName(newName); // Update local state for input responsiveness
+    if (!isInitialMount.current) {
+      debouncedSave(); // Trigger debounce directly after state update
+    }
+  };
+
+  const handleIconChange = useCallback(
+    (newIcon: string) => {
+      setIcon(newIcon);
+      if (!isInitialMount.current) {
+        debouncedSave();
+      }
+    },
+    [debouncedSave, isInitialMount],
   );
 
-  // Cleanup debounce on unmount
-  useEffect(() => {
-    return () => {
-      debouncedUpdateChat.cancel();
-    };
-  }, [debouncedUpdateChat]);
+  const handleModelChange = useCallback(
+    (value: NamespacedModelId | '') => {
+      setModel(value);
+      if (!isInitialMount.current) {
+        debouncedSave();
+      }
+    },
+    [debouncedSave, isInitialMount],
+  );
 
-  const handleTemperatureChange = (value: number[]) => {
-    const newTemp = value[0];
-    setTemperature(newTemp);
-  };
+  const handleSystemPromptChange = useCallback(
+    (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+      const newPrompt = e.target.value;
+      setSystemPrompt(newPrompt);
+      console.log('handleSystemPromptChange');
+      if (!isInitialMount.current) {
+        debouncedSave();
+      }
+    },
+    [debouncedSave, isInitialMount],
+  );
 
-  const handleMaxTokensChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const value = e.target.value;
-    // Allow empty string for null, otherwise parse number
-    const newMaxTokens = value === '' ? null : parseInt(value, 10);
-    // Only update if it's null or a valid positive integer
-    if (newMaxTokens === null || (!isNaN(newMaxTokens) && newMaxTokens > 0)) {
-      setMaxTokens(newMaxTokens);
-    } else if (value === '') {
-      // Handle case where user clears the input
-      setMaxTokens(null);
+  const handleTemperatureChange = useCallback(
+    (value: number[]) => {
+      // Slider typically gives an array, take the first value
+      const newTemp = value[0];
+      setTemperature(newTemp);
+      if (!isInitialMount.current) {
+        debouncedSave();
+      }
+    },
+    [debouncedSave, isInitialMount],
+  );
+
+  const handleMaxTokensChange = useCallback(
+    (e: React.ChangeEvent<HTMLInputElement>) => {
+      const value = e.target.value;
+      const num = value === '' ? null : parseInt(value, 10);
+      // Allow empty string (-> null) or positive integers
+      if (value === '' || (num !== null && !isNaN(num) && num > 0)) {
+        setMaxTokens(num); // Update state first
+        if (!isInitialMount.current) {
+          debouncedSave(); // Then trigger save if valid change
+        }
+      } else if (!num) {
+      } else if (value !== '' && (isNaN(num) || num <= 0)) {
+        // Handle invalid input case - maybe just update state visually without saving?
+        // Or keep the current state and don't save. Let's just update state for now.
+        // The actual save won't happen if the state is invalid during performSave,
+        // but updating the state here allows the user to see their invalid input.
+        // We could add visual feedback later if needed.
+        // No save trigger here for clearly invalid numbers (but allow empty)
+      }
+    },
+    [debouncedSave, isInitialMount],
+  );
+
+  const handleTopPChange = useCallback(
+    (e: React.ChangeEvent<HTMLInputElement>) => {
+      const value = e.target.value;
+      const num = value === '' ? null : parseFloat(value);
+      // Allow empty string (-> null) or numbers between 0 and 1 inclusive
+      if (
+        value === '' ||
+        (num !== null && !isNaN(num) && num >= 0 && num <= 1)
+      ) {
+        setTopP(num); // Update state first
+        if (!isInitialMount.current) {
+          debouncedSave(); // Then trigger save if valid change
+        }
+      } else if (!num) {
+      } else if (value !== '' && (isNaN(num) || num < 0 || num > 1)) {
+        // Handle invalid input (out of range) - similar to maxTokens
+        // No save trigger here for clearly invalid numbers (but allow empty)
+      }
+    },
+    [debouncedSave, isInitialMount],
+  );
+
+  const handleMaxHistoryChange = useCallback(
+    (e: React.ChangeEvent<HTMLInputElement>) => {
+      const newValue = e.target.value;
+      setMaxHistory(newValue); // Update local state immediately (validation happens in performSave)
+      if (!isInitialMount.current) {
+        debouncedSave(); // Trigger debounce; performSave will validate
+      }
+    },
+    [debouncedSave, isInitialMount],
+  );
+
+  // Explicit Save Button Handler
+  const handleExplicitSave = () => {
+    // Cancel any pending debounced save and trigger immediately
+    debouncedSave.flush();
+
+    // Give user feedback *only* if save could proceed (basic checks)
+    // More robust would be if performSave returned success/failure
+    if (activeChat && model) {
+      // Re-check maxHistory validation here just for the toast logic
+      let isValidMaxHistory = true;
+      if (maxHistory.trim() !== '') {
+        const parsed = parseInt(maxHistory, 10);
+        if (isNaN(parsed) || parsed < 0) {
+          isValidMaxHistory = false;
+          // Error toast is shown in performSave if flush triggers it with bad data
+        }
+      }
+      // Show success only if basic requirements met AND maxHistory (if set) is valid
+      if (isValidMaxHistory) {
+        toast.success('Chat settings saved.');
+      }
+    } else if (!model) {
+      // Error toast for model already shown in performSave if flush triggers it
     }
   };
 
-  const handleTopPChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const value = e.target.value;
-    const newTopP = value === '' ? null : parseInt(value, 10);
-    if (newTopP === null || (!isNaN(newTopP) && newTopP > 0)) {
-      setTopP(newTopP);
-      debouncedUpdateChat({ topP: newTopP });
-    } else if (value === '') {
-      setTopP(null);
-    }
-  };
+  noop(handleExplicitSave);
 
-  // Helper to format placeholder text
+  // Format placeholder function remains the same
   const formatPlaceholder = (
     defaultValue: number | null,
     label: string,
@@ -164,243 +311,164 @@ export const ActiveChatSettings: React.FC = () => {
       : `Default (${label})`;
   };
 
-  const handleSave = () => {
-    if (!activeChat) return;
-    if (!model) {
-      toast.error('Model cannot be empty.'); // Basic validation
-      return;
-    }
-
-    const parsedMaxHistory =
-      maxHistory.trim() === '' ? null : Number.parseInt(maxHistory, 10);
-    const finalMaxHistory =
-      parsedMaxHistory === null ||
-      isNaN(parsedMaxHistory) ||
-      parsedMaxHistory < 0
-        ? null
-        : parsedMaxHistory;
-
-    debouncedUpdateChat(
-      {
-        name: name.trim() || 'Untitled Chat',
-        icon: icon || '💬',
-        model: model, // Save the selected NamespacedModelId
-        systemPrompt,
-        maxHistory: finalMaxHistory,
-        temperature,
-        maxTokens,
-        topP,
-      },
-      () => {
-        toast.success('Chat settings saved.');
-      },
-    );
-  };
-  const handleEmojiSelect = (selectedEmoji: string) => setIcon(selectedEmoji);
-
-  const isModelInAvailableList = availableModelIds.includes(
-    model as NamespacedModelId,
-  );
+  // --- Rendering ---
+  const isModelInAvailableList = useMemo(
+    () =>
+      availableModelIds
+        .map((v) => v.toString()) // Ensure comparison with string model ID state
+        .includes(model),
+    [availableModelIds, model],
+  ); // Recalculate only when needed
 
   if (!activeChat) {
     return (
-      <div className="text-muted-foreground flex h-full items-center justify-center border-l p-4 text-center text-sm dark:border-neutral-700">
+      <div className="flex h-full items-center justify-center border-l p-4 text-center text-sm text-neutral-500 dark:border-neutral-700 dark:text-neutral-400">
         Select a chat to see its settings.
       </div>
     );
   }
 
+  // Render the form - ensure onChange/onValueChange point to the *new handlers*
   return (
     <TooltipProvider>
-      <div className="h-full overflow-y-auto bg-neutral-100 p-4 text-sm dark:border-neutral-700 dark:bg-neutral-900">
+      <div className="h-full overflow-y-auto border-l bg-neutral-100 p-4 text-sm dark:border-neutral-700 dark:bg-neutral-900">
         <h2 className="mb-1 text-lg font-semibold text-neutral-950 dark:text-neutral-100">
-          Chat Parameters
+          Active Chat Settings
         </h2>
         <p className="text-muted-foreground mb-4 text-xs">
-          Override model parameters for this chat only. Leave blank to use
-          defaults.
+          Settings auto-save ~{DEBOUNCE_SAVE_DELAY / 1000}s after you stop
+          typing. Leave API fields blank to use defaults.
         </p>
+
+        {/* Display Active Model (Read-only) */}
         <div className="bg-background mb-4 space-y-1 rounded-md border p-3 dark:bg-neutral-950">
           <Label className="text-muted-foreground text-xs font-medium">
             Active Model
           </Label>
           <p className="truncate font-medium" title={activeChat.model}>
             {activeChat.model.split('::')[1] || activeChat.model}
-            {/* Show base name */}
             <span className="text-muted-foreground ml-1 text-xs">
               ({activeChat.model.split('::')[0]})
             </span>
-            {/* Show provider */}
           </p>
         </div>
 
-        <div className="space-y-6">
+        {/* Form Fields */}
+        <div className="space-y-5">
           {/* Chat Name */}
           <div>
-            <Label className="mb-1 text-sm font-medium" htmlFor="chatNameModal">
+            <Label
+              className="mb-1 text-sm font-medium"
+              htmlFor="chat-name-settings"
+            >
               Chat Name
             </Label>
             <Input
-              id="chatNameModal"
+              id="chat-name-settings"
               value={name}
-              onChange={(e) => setName(e.target.value)}
+              onChange={handleNameChange}
               type="text"
+              autoComplete="off"
             />
           </div>
-          {/* Icon Input and Picker */}
-          <div>
-            <Label className="mb-1 text-sm font-medium" htmlFor="chatIconModal">
-              Icon (Emoji)
-            </Label>
-            <div className="flex items-center gap-2">
-              <Input
-                id="chatIconModal"
-                className="w-20 p-1 text-center text-xl"
-                maxLength={2}
-                value={icon}
-                onChange={(e) => setIcon(e.target.value)}
-                type="text"
-              />
-              <div className="flex max-h-20 flex-wrap gap-1 overflow-y-auto rounded border p-1">
-                {commonEmojis.map((emoji) => (
-                  <button
-                    aria-label={`Select ${emoji}`}
-                    className="hover:bg-accent rounded p-1 text-xl"
-                    key={emoji}
-                    onClick={() => handleEmojiSelect(emoji)}
-                    title={`Select ${emoji}`}
-                  >
-                    {emoji}
-                  </button>
-                ))}
-              </div>
-            </div>
-          </div>
-          {/* Model Select (Using grouped list) */}
+
+          {/* Icon (Using the extracted component) */}
+          <IconPicker value={icon} onChange={handleIconChange} />
+
+          {/* Model Select */}
+          <ModelSelect
+            value={model}
+            onChange={handleModelChange} // Pass useCallback version
+            groupedModels={groupedModels}
+            isModelInAvailableList={isModelInAvailableList}
+          />
+
+          {/* Max History */}
           <div>
             <Label
               className="mb-1 text-sm font-medium"
-              htmlFor="chatModelModal"
+              htmlFor="chat-max-history-settings"
             >
-              Model
-            </Label>
-            <Select
-              onValueChange={(value) => setModel(value as NamespacedModelId)}
-              value={model}
-            >
-              <SelectTrigger className="w-full" id="chatModelModal">
-                <SelectValue placeholder="Select a model" />
-              </SelectTrigger>
-              <SelectContent>
-                {groupedModels.map((group) => (
-                  <SelectGroup key={group.providerName}>
-                    <SelectLabel>{group.providerName}</SelectLabel>
-                    {group.models.map((m) => (
-                      <SelectItem key={m.id} value={m.id}>
-                        {m.name}
-                      </SelectItem>
-                    ))}
-                  </SelectGroup>
-                ))}
-                {model && !isModelInAvailableList && (
-                  <SelectGroup>
-                    <SelectLabel className="text-destructive">
-                      Current (Unavailable)
-                    </SelectLabel>
-                    <SelectItem
-                      key={model}
-                      value={model}
-                      className="text-destructive"
-                    >
-                      {model.split('::')[1] || model}
-                    </SelectItem>
-                  </SelectGroup>
-                )}
-                {groupedModels.length === 0 && !model && (
-                  <SelectItem value="none" disabled>
-                    No models available
-                  </SelectItem>
-                )}
-              </SelectContent>
-            </Select>
-          </div>
-          {/* Max History Input */}
-          <div>
-            <Label
-              className="mb-1 text-sm font-medium"
-              htmlFor="chatMaxHistoryModal"
-            >
-              Max History (Messages)
+              Max History Override
             </Label>
             <Input
-              id="chatMaxHistoryModal"
+              id="chat-max-history-settings"
               min="0"
               step="1"
-              placeholder={`Default (${globalDefaultMaxHistory ?? 'None'})`}
-              value={maxHistory}
-              onChange={(e) => setMaxHistory(e.target.value)}
+              placeholder={`Default (${globalDefaultMaxHistory ?? 'Unlimited'})`}
+              value={maxHistory} // Bind to string state
+              onChange={handleMaxHistoryChange}
               type="number"
             />
             <p className="mt-1 text-xs text-neutral-500 dark:text-neutral-400">
-              Leave blank to use the global default.
+              Number of past message pairs sent. Leave blank for global default.
             </p>
           </div>
+
           {/* System Prompt */}
           <div>
             <Label
               className="mb-1 text-sm font-medium"
-              htmlFor="chatSystemPromptModal"
+              htmlFor="chat-prompt-settings"
             >
-              System Prompt
+              System Prompt Override
             </Label>
             <Textarea
-              id="chatSystemPromptModal"
-              placeholder="e.g., You are a helpful assistant."
-              rows={5}
+              id="chat-prompt-settings"
+              placeholder={'Default system prompt...'} // Show default if available
+              rows={6}
               value={systemPrompt}
-              onChange={(e) => setSystemPrompt(e.target.value)}
+              onChange={handleSystemPromptChange}
               className="text-sm"
             />
+            <p className="mt-1 text-xs text-neutral-500 dark:text-neutral-400">
+              Instructions for the AI. Leave blank for provider/model default.
+            </p>
           </div>
 
-          {/* Temperature Slider */}
+          {/* Temperature */}
           <div>
             <div className="mb-2 flex items-center justify-between">
-              <Label htmlFor="chat-temperature">Temperature</Label>
-              <span className="bg-background text-muted-foreground w-12 rounded-md border px-2 py-0.5 text-right text-sm dark:bg-neutral-800">
-                {temperature !== null ? temperature.toFixed(1) : '-'}
-                {/* Display current or '-' */}
+              <Label htmlFor="chat-temperature-settings">
+                Temperature Override
+              </Label>
+              <span className="text-muted-foreground w-12 rounded-md border bg-transparent px-2 py-0.5 text-right text-sm dark:border-neutral-700">
+                {temperature !== null ? temperature.toFixed(1) : 'Def'}
               </span>
             </div>
             <Slider
-              id="chat-temperature"
+              id="chat-temperature-settings"
               min={0}
               max={2}
               step={0.1}
-              // Use local state value if not null, otherwise use source default for slider position
+              // Provide a sensible fallback value for the slider position if state is null
               value={[temperature ?? sourceDefaults.temperature ?? 0.7]}
               onValueChange={handleTemperatureChange}
               className="my-1"
             />
             <p className="text-muted-foreground mt-1 text-xs">
-              Default: {sourceDefaults.temperature?.toFixed(1) ?? 'N/A'}
+              Default: {sourceDefaults.temperature?.toFixed(1) ?? 'API'}.
+              Controls randomness.
               <Tooltip delayDuration={100}>
-                <TooltipTrigger className="ml-1 inline-flex">
+                <TooltipTrigger className="ml-1 inline-flex align-middle">
                   <LuInfo className="h-3 w-3" />
                 </TooltipTrigger>
                 <TooltipContent className="max-w-xs">
-                  Higher values (e.g., 0.8) make output more random, lower
-                  values (e.g., 0.2) make it more focused.
+                  Higher values (e.g., 1.0) make output more random, while lower
+                  values (e.g., 0.2) make it more focused and deterministic.
+                  Leave blank to use the default.
                 </TooltipContent>
               </Tooltip>
             </p>
           </div>
 
-          {/* Max Tokens Input */}
+          {/* Max Tokens */}
           <div>
-            <Label htmlFor="chat-max-tokens">Max Tokens</Label>
+            <Label className="mb-1" htmlFor="chat-maxtokens-settings">
+              Max Tokens Override
+            </Label>
             <Input
-              id="chat-max-tokens"
+              id="chat-maxtokens-settings"
               type="number"
               min="1"
               step="1"
@@ -408,61 +476,61 @@ export const ActiveChatSettings: React.FC = () => {
                 sourceDefaults.maxTokens,
                 'API Default',
               )}
-              // Use local state value if not null, otherwise empty string for input
               value={maxTokens ?? ''}
               onChange={handleMaxTokensChange}
-              className="mt-1"
             />
             <p className="text-muted-foreground mt-1 text-xs">
-              Limit the maximum number of tokens generated in the response.
+              Max response length. Leave blank for default.
               <Tooltip delayDuration={100}>
-                <TooltipTrigger className="ml-1 inline-flex">
+                <TooltipTrigger className="ml-1 inline-flex align-middle">
                   <LuInfo className="h-3 w-3" />
                 </TooltipTrigger>
                 <TooltipContent className="max-w-xs">
-                  Controls the maximum length of the AI's response. Leave blank
-                  to use the model's default limit.
+                  Maximum number of tokens (words/pieces of words) the AI is
+                  allowed to generate in its response.
                 </TooltipContent>
               </Tooltip>
             </p>
           </div>
 
-          {/* Top P Input */}
+          {/* Top P */}
           <div>
-            <Label htmlFor="chat-top-k">Top P</Label>
+            <Label className="mb-1" htmlFor="chat-topp-settings">
+              Top P Override
+            </Label>
             <Input
-              id="chat-top-k"
+              id="chat-topp-settings"
               type="number"
-              min="1"
-              step="1"
+              min="0"
+              max="1"
+              step="0.01"
               placeholder={formatPlaceholder(
                 sourceDefaults.topP,
                 'API Default',
               )}
               value={topP ?? ''}
               onChange={handleTopPChange}
-              className="mt-1"
             />
             <p className="text-muted-foreground mt-1 text-xs">
-              Sample from the K most likely next tokens.
+              Nucleus sampling. Leave blank for default.
               <Tooltip delayDuration={100}>
-                <TooltipTrigger className="ml-1 inline-flex">
+                <TooltipTrigger className="ml-1 inline-flex align-middle">
                   <LuInfo className="h-3 w-3" />
                 </TooltipTrigger>
                 <TooltipContent className="max-w-xs">
-                  Filters the vocabulary to the K most likely tokens at each
-                  step. Lower values restrict creativity. (Not supported by all
-                  models).
+                  Alternative to temperature. Considers only tokens comprising
+                  the top 'P' probability mass (e.g., 0.1 means only tokens in
+                  the top 10% probability are considered). Lower value = less
+                  random.
                 </TooltipContent>
               </Tooltip>
             </p>
           </div>
 
-          <div className="flex justify-end">
-            <Button onClick={handleSave} className="mr-2">
-              Save
-            </Button>
-          </div>
+          {/* Save Button (Now triggers immediate save + feedback) */}
+          {/* <div className="flex justify-end pt-2">
+            <Button onClick={handleExplicitSave}>Save Now</Button>
+          </div> */}
         </div>
       </div>
     </TooltipProvider>

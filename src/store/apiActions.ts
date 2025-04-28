@@ -1,82 +1,63 @@
-import type { Message } from '@/types';
+// src/store/apiActions.ts
 import { atom, Getter, Setter } from 'jotai';
+import { debounce } from 'lodash'; // Import debounce
 import OpenAI from 'openai';
 import { toast } from 'sonner';
 import { v4 as uuidv4 } from 'uuid';
+
+import type { MessageEntity } from '@/types'; // Use internal type
 import { abortControllerAtom, isAssistantLoadingAtom } from './apiState';
-import { updateChatAtom } from './chatActions';
-import { activeChatAtom, getEffectiveChatParams } from './chatDerived';
+import {
+  _activeChatIdAtom,
+  activeChatDataAtom,
+  activeChatIdAtom,
+  updateChatAtom,
+} from './chatActions';
+import { getEffectiveChatParams } from './chatDerived'; // Keep derived params logic
 import { handleMcpToolCallAtom } from './mcp';
 import {
-  appendContentToMessageAtom,
-  finalizeStreamingMessageAtom,
-  updateMessageContentAtom,
-  upsertMessageInActiveChatAtom,
-} from './messageActions';
+  addMessageToActiveChatAtom, // Action to update UI state only
+  finalizeStreamingMessageInDbAtom,
+  updateStreamingMessageUIAtom, // Action to update UI state only
+} from './messageActions'; // Use refactored message actions
+import { getHistoryForApi } from './regeneration'; // Import refactored history getter
+import { chatDataServiceAtom } from './service';
 import {
   apiBaseUrlAtom,
   apiKeyAtom,
   apiProvidersAtom,
   defaultSummaryModelAtom,
-} from './settings';
+} from './settings'; // Keep settings atoms
 
-/** Action to cancel the current ongoing AI generation. */
-export const cancelGenerationAtom = atom(null, (get, set) => {
-  const abortInfo = get(abortControllerAtom);
-  if (abortInfo) {
-    console.log(
-      `User requested cancellation for message: ${abortInfo.messageId}`,
+// Debounce delay for updating message content in DB during streaming (in milliseconds)
+const STREAM_DB_UPDATE_DEBOUNCE_MS = 750;
+
+/** Core logic for calling the OpenAI Chat Completions API with streaming. */
+async function callOpenAIStreamLogic(get: Getter, set: Setter, chatId: string) {
+  console.log(
+    `[callOpenAIStreamLogic] Starting API call for chat ${chatId}...`,
+  );
+
+  // --- 1. Preparation ---
+  const service = get(chatDataServiceAtom);
+  const chat = get(activeChatDataAtom); // Assumes active chat data is loaded
+
+  if (!chat || chat.id !== chatId) {
+    console.error(
+      `[callOpenAIStreamLogic] Active chat data mismatch or not loaded for ${chatId}. Aborting.`,
     );
-    abortInfo.controller.abort('User cancellation'); // Send abort signal
-
-    // The finalizeStreamingMessageAtom logic (called in callOpenAIStreamLogic's finally/catch)
-    // is responsible for cleaning up the abortControllerAtom and isAssistantLoadingAtom state
-    // based on the specific message ID. We don't *necessarily* need to set them here,
-    // but setting loading false can make the UI feel more responsive immediately.
-    // set(isAssistantLoadingAtom, false);
-    // set(abortControllerAtom, null); // Let finalize handle this based on ID match
-
-    toast.info('Generation cancelled.');
-  } else {
-    console.warn('Cancel requested, but no active generation found.');
-    // Ensure loading state is false if somehow it's stuck
-    if (get(isAssistantLoadingAtom)) {
-      set(isAssistantLoadingAtom, false);
-    }
-  }
-});
-
-/**
- * Core logic for calling the OpenAI Chat Completions API with streaming.
- * Handles state updates, cancellation, and MCP tool call detection using
- * a ```json:mcp-tool-call code block at the end of the response.
- */
-export async function callOpenAIStreamLogic(
-  get: Getter,
-  set: Setter,
-  messagesToSend: OpenAI.ChatCompletionMessageParam[],
-) {
-  // --- Get Active Chat and its Effective Parameters (Same as before) ---
-  const activeChat = get(activeChatAtom);
-  if (!activeChat) {
-    console.error('Cannot call API: No active chat.');
-    toast.error('Cannot process request: No active chat selected.');
+    toast.error('Cannot send message: Chat data not available.');
+    // Ensure loading state is off if it somehow got stuck
+    if (get(isAssistantLoadingAtom)) set(isAssistantLoadingAtom, false);
     return;
   }
-  const modelId = activeChat.model;
-  const { temperature, maxTokens, topP } = getEffectiveChatParams(
-    activeChat,
-    get,
-  );
-  console.log(
-    `[API Call] Effective Params for ${modelId}: Temp=${temperature}, MaxTokens=${maxTokens}, TopP=${topP}`,
-  );
 
-  // --- Setup: Get settings, check API key, set loading state (Same as before) ---
+  const modelId = chat.model;
+  const { temperature, maxTokens, topP } = getEffectiveChatParams(chat, get); // Use loaded chat data
+
   const providers = get(apiProvidersAtom);
   const globalApiKey = get(apiKeyAtom);
   const globalApiBaseUrl = get(apiBaseUrlAtom);
-  const activeChatId = activeChat.id; // Use ID directly from activeChat
 
   const [providerId, modelName] = modelId.split('::');
   const providerConfig = providers.find((p) => p.id === providerId);
@@ -97,33 +78,94 @@ export async function callOpenAIStreamLogic(
     return;
   }
 
+  // --- 2. Get Formatted History ---
+  const messagesToSend = await getHistoryForApi(get, chatId);
+  if (!messagesToSend) {
+    console.error(
+      `[callOpenAIStreamLogic] Failed to get message history for ${chatId}. Aborting.`,
+    );
+    // Error toast shown by getHistoryForApi
+    return;
+  }
+  // Ensure history is not empty (besides optional system prompt)
+  const hasUserOrAssistantContent = messagesToSend.some(
+    (msg) =>
+      msg.role === 'user' || msg.role === 'assistant' || msg.role === 'tool',
+  );
+  if (!hasUserOrAssistantContent) {
+    console.warn(
+      `[callOpenAIStreamLogic] No user/assistant/tool messages to send for chat ${chatId}. Aborting.`,
+    );
+    toast.info('Nothing to send to the assistant.');
+    return;
+  }
+
+  // --- 3. Set Loading State & Create Placeholder ---
   set(isAssistantLoadingAtom, true);
-  const assistantMessageId = uuidv4();
+  const assistantMessageId = uuidv4(); // ID for the upcoming response
   const controller = new AbortController();
   set(abortControllerAtom, { controller, messageId: assistantMessageId });
 
-  // --- Add placeholder message (Same as before) ---
-  const placeholderMessage: Message = {
-    id: assistantMessageId,
+  // Add placeholder message to DB and UI
+  const placeholderMessageData: Pick<
+    MessageEntity,
+    'role' | 'content' | 'isStreaming'
+  > = {
     role: 'assistant',
-    content: '',
-    timestamp: Date.now(),
+    content: '', // Start empty
     isStreaming: true,
   };
-  set(upsertMessageInActiveChatAtom, placeholderMessage);
+  // addMessageToActiveChatAtom handles adding to DB and updating activeChatMessagesAtom
+  const placeholderMessage = await set(addMessageToActiveChatAtom, {
+    id: assistantMessageId,
+    ...placeholderMessageData,
+  });
 
-  // --- Accumulate full response & Detect Tool Call at the END ---
-  let fullAssistantResponse = '';
+  if (!placeholderMessage) {
+    console.error(
+      `[callOpenAIStreamLogic] Failed to add placeholder message for ${assistantMessageId}. Aborting.`,
+    );
+    toast.error('Failed to initialize assistant response.');
+    set(isAssistantLoadingAtom, false);
+    set(abortControllerAtom, null);
+    return;
+  }
+
+  // --- 4. Streaming & Updates ---
+  let accumulatedContent = '';
   let finalFinishReason: string | null | undefined = null;
   let toolCallProcessed = false;
+
+  // Debounced function for DB updates during stream
+  const debouncedDbUpdate = debounce(
+    async (messageId: string, content: string) => {
+      try {
+        console.log(
+          `[Debounced DB Update] Updating content for message ${messageId}...`,
+        );
+        await service.updateMessageContent(messageId, content);
+      } catch (dbError) {
+        console.error(
+          `[Debounced DB Update] Failed to update message ${messageId}:`,
+          dbError,
+        );
+        // Optionally retry or notify user? For now, just log.
+      }
+    },
+    STREAM_DB_UPDATE_DEBOUNCE_MS,
+    { leading: false, trailing: true }, // Ensure trailing edge call
+  );
 
   try {
     const openai = new OpenAI({
       apiKey,
       baseURL: apiBaseUrl || undefined,
-      dangerouslyAllowBrowser: true, // Ensure this is acceptable for your security context
+      dangerouslyAllowBrowser: true,
     });
 
+    console.log(
+      `[callOpenAIStreamLogic] Creating stream for ${assistantMessageId}... Model: ${modelName}, Params: Temp=${temperature}, MaxTokens=${maxTokens}, TopP=${topP}`,
+    );
     const stream = await openai.chat.completions.create(
       {
         messages: messagesToSend,
@@ -132,356 +174,414 @@ export async function callOpenAIStreamLogic(
         max_tokens: maxTokens ?? undefined,
         top_p: topP ?? undefined,
         stream: true,
-        // Potentially add 'tool_choice: "none"' if you ONLY want MCP calls
-        // and want to discourage native tool use, though prompt is usually sufficient.
+        // tool_choice: // Add if supporting native tools
+        // tools: // Add if supporting native tools
       },
       { signal: controller.signal },
     );
 
+    // Process stream chunks
     for await (const chunk of stream) {
       const contentChunk = chunk.choices[0]?.delta?.content || '';
       if (contentChunk) {
-        fullAssistantResponse += contentChunk;
-        // Append content smoothly to the UI
-        set(appendContentToMessageAtom, {
-          contentChunk,
+        accumulatedContent += contentChunk;
+        // Update UI state immediately
+        set(updateStreamingMessageUIAtom, {
           messageId: assistantMessageId,
+          contentChunk,
         });
+        // Trigger debounced DB update
+        debouncedDbUpdate(assistantMessageId, accumulatedContent);
       }
 
-      // Store the finish reason when it arrives
+      // Store the finish reason
       if (chunk.choices[0]?.finish_reason) {
         finalFinishReason = chunk.choices[0].finish_reason;
         console.log(
-          `Stream finish reason received: ${finalFinishReason} for ${assistantMessageId}`,
+          `[callOpenAIStreamLogic] Stream finish reason received: ${finalFinishReason} for ${assistantMessageId}`,
         );
       }
 
-      // Handle potential native tool calls if necessary (though we discourage them via prompt)
+      // Handle potential native tool calls if needed later
       if (chunk.choices[0]?.delta?.tool_calls) {
         console.warn(
-          `Native tool call delta detected for ${assistantMessageId}. Ignoring due to MCP preference.`,
+          `[callOpenAIStreamLogic] Native tool call delta detected for ${assistantMessageId}. Ignoring due to MCP preference.`,
         );
-        // Potentially add logic here if you want fallback support for native calls
+        // Set finish reason if appropriate? OpenAI might send 'tool_calls' as finish reason anyway.
       }
     } // End stream loop
 
-    // --- Post-Stream Processing: Check for MCP Tool Call Code Block ---
+    // Ensure any pending debounced update is flushed
+    debouncedDbUpdate.flush();
     console.log(
-      `Stream finished for ${assistantMessageId}. Final Reason: ${finalFinishReason}. Full length: ${fullAssistantResponse.length}`,
+      `[callOpenAIStreamLogic] Stream finished for ${assistantMessageId}. Final Reason: ${finalFinishReason}. Full length: ${accumulatedContent.length}`,
     );
 
-    // Regex to find the ```
-    // - (\n*)?: Optional leading newlines before the block.
-    // - ```json:mcp-tool-call\s*: Matches the opening fence with language specifier.
-    // - (\{[\s\S]*?\}): Captures the JSON object (non-greedy). Handles multi-line JSON.
-    // - \s*```
-    // - \s*$: Ensures this pattern is at the very end of the string (allowing trailing whitespace).
+    // --- 5. Post-Stream Processing ---
+
+    // Check for MCP Tool Call Code Block at the end
     const mcpCodeBlockRegex =
-      /(\n*)?```json:mcp-tool-call\s*(\{[\s\S]*?\})\s*```s*$/;
-    const match = fullAssistantResponse.match(mcpCodeBlockRegex);
+      /(\n*)?```json:mcp-tool-call\s*(\{[\s\S]*?\})\s*```\s*$/;
+    const match = accumulatedContent.match(mcpCodeBlockRegex);
+    let finalContentToSave = accumulatedContent; // Content including MCP block initially
+    let toolCallInfoForFinalize = null; // Store tool call info if parsed
 
     if (match) {
-      // const leadingNewlines = match[1] ?? ''; // Optional leading newlines before block
-      const jsonString = match[2]; // Captured JSON object as string
-      console.debug('matched json: \n', jsonString);
-      // const blockLength = match.length; // Full length of the matched block pattern
-
-      // Extract the conversational content BEFORE the block
-      // const conversationalContent = fullAssistantResponse.substring(
-      //   0,
-      //   fullAssistantResponse.length - blockLength
-      // ).trim(); // Trim trailing whitespace from conversational part
-
+      const jsonString = match[2];
       try {
         const parsedArgs = JSON.parse(jsonString);
-
-        // Validate the structure (basic check)
+        // Basic validation
         if (
           typeof parsedArgs === 'object' &&
           parsedArgs !== null &&
           typeof parsedArgs.serverId === 'string' &&
           typeof parsedArgs.toolName === 'string' &&
-          // Allow 'arguments' to be missing or any type (validation happens later)
-          parsedArgs.hasOwnProperty('arguments')
+          parsedArgs.hasOwnProperty('arguments') // Allow arguments to be any type initially
         ) {
           console.log(
-            `[MCP Tool Call Detected] Server: ${parsedArgs.serverId}, Tool: ${parsedArgs.toolName}`,
+            `[callOpenAIStreamLogic] MCP Tool Call Detected: Server=${parsedArgs.serverId}, Tool=${parsedArgs.toolName}`,
           );
           toast.info(`Assistant wants to use tool: ${parsedArgs.toolName}`);
 
-          const callId = uuidv4();
-          // Update the message to *only* contain the conversational part
-          set(updateMessageContentAtom, {
-            messageId: assistantMessageId,
-            // newContent: conversationalContent, // Show only text before the block
-            newContent:
-              fullAssistantResponse + `\n<hidden>call-id: ${callId}</hidden>`, // Now show full because AI may misunderstand whether he has called a tool or not
-          });
+          const callId = uuidv4(); // Generate unique ID for this call instance
 
-          // Trigger the handler with the parsed arguments object
+          // Prepare ToolCallInfo to store with the message (using 'pending' initially)
+          toolCallInfoForFinalize = {
+            type: 'pending', // Will be handled by handleMcpToolCallAtom
+            callId,
+            serverId: parsedArgs.serverId,
+            serverName: '', // Will be filled by handler
+            toolName: parsedArgs.toolName,
+            args: parsedArgs.arguments,
+          } as MessageEntity['toolCallInfo']; // Needs refinement based on actual types
+
+          // Content to save in DB should ideally not include the raw block
+          // unless needed for display/debugging. Let's hide it for now.
+          // finalContentToSave = accumulatedContent.substring(0, match.index).trim(); // Content before block
+          // Or keep full content but mark tool info? Keep full for now for simplicity.
+          finalContentToSave = accumulatedContent; // + `\n<hidden>call-id: ${callId}</hidden>`; // Keep full for context
+
+          // Trigger the MCP handler
           set(handleMcpToolCallAtom, {
             callId,
-            chatId: activeChatId,
+            chatId: chatId,
             serverId: parsedArgs.serverId,
             toolName: parsedArgs.toolName,
-            // Pass the actual parsed arguments object, not a string
-            // The handler will validate against the schema
             args: parsedArgs.arguments,
-            rawBlock: match[0], // Pass the raw block for potential logging/debugging
+            rawBlock: match[0],
           });
 
-          toolCallProcessed = true; // Mark as processed
+          toolCallProcessed = true; // Mark MCP call as handled
         } else {
-          // JSON structure is invalid
-          throw new Error(
-            'Invalid MCP tool call JSON structure. Missing required fields (serverId, toolName, arguments).',
-          );
+          throw new Error('Invalid MCP tool call JSON structure.');
         }
       } catch (parseError: any) {
         console.error(
-          `[MCP Tool Call] Failed to parse JSON arguments for ${assistantMessageId}:`,
+          `[callOpenAIStreamLogic] Failed to parse MCP JSON for ${assistantMessageId}:`,
           parseError,
         );
         toast.error(
           `Tool call failed: AI returned invalid JSON format. (${parseError.message})`,
         );
-        // Keep the full response (including the bad block) for debugging
-        set(updateMessageContentAtom, {
-          messageId: assistantMessageId,
-          newContent:
-            fullAssistantResponse +
-            `\n\n--- Error From LLM Client: Tool call format invalid ---\n\n` +
-            `MCP Error: Failed to parse arguments for tool call. Please provide a valid JSON string.`,
-        });
-        // Don't set toolCallProcessed = true
+        // Append error info to the content for debugging
+        finalContentToSave =
+          accumulatedContent +
+          `\n\n--- Error: Invalid Tool Call Format ---\n${parseError.message}`;
+        // Do not set toolCallProcessed = true
       }
     }
 
-    // --- Finalize Message State ---
-    // Finalize ONLY if a tool call wasn't successfully processed.
-    // If it was processed, the handler is now responsible for the flow.
-    // The message content is already updated to exclude the block.
+    // --- 6. Finalize Message State in DB ---
+    // Finalize ONLY if a valid MCP tool call wasn't successfully initiated.
+    // If MCP was processed, handleMcpToolCallAtom takes over the flow for this turn.
     if (!toolCallProcessed) {
       console.log(
-        `Finalizing message ${assistantMessageId} normally (no valid tool call detected/processed).`,
+        `[callOpenAIStreamLogic] Finalizing message ${assistantMessageId} normally (no valid tool call processed).`,
       );
-      set(finalizeStreamingMessageAtom, assistantMessageId);
+      // Check for non-standard finish reasons
+      let isErrorFinal = false;
+      if (
+        finalFinishReason &&
+        finalFinishReason !== 'stop' &&
+        finalFinishReason !== 'tool_calls'
+      ) {
+        console.warn(
+          `[callOpenAIStreamLogic] Stream finished with non-standard reason: ${finalFinishReason} for message ${assistantMessageId}`,
+        );
+        if (finalFinishReason === 'length') {
+          toast.warning('Response may be truncated due to maximum length.');
+          finalContentToSave +=
+            '\n\n[Warning: Response truncated due to length limit]';
+        } else if (finalFinishReason === 'content_filter') {
+          toast.error('Response stopped due to content filter.');
+          finalContentToSave = '[Error: Response stopped by content filter]'; // Replace content entirely
+          isErrorFinal = true;
+        }
+        // Handle other reasons if necessary
+      } else if (finalFinishReason === 'tool_calls') {
+        // This means native tool calls were generated, which we currently ignore.
+        console.warn(
+          `[callOpenAIStreamLogic] Model used native 'tool_calls' finish reason for ${assistantMessageId}. Ignoring native call.`,
+        );
+        toast.warning(
+          'AI tried using a different tool format. MCP format preferred.',
+        );
+      }
+
+      // Finalize in DB and UI state (handles loading/abort state cleanup)
+      set(finalizeStreamingMessageInDbAtom, {
+        messageId: assistantMessageId,
+        finalContent: finalContentToSave,
+        isError: isErrorFinal,
+        toolCallInfo: null, // No MCP tool call processed
+      });
     } else {
       console.log(
-        `Skipping normal finalization for ${assistantMessageId} as MCP tool call was processed.`,
+        `[callOpenAIStreamLogic] Skipping normal finalization for ${assistantMessageId} as MCP tool call was processed.`,
       );
-      // Ensure loading state is reset EVEN IF tool call is processed,
-      // unless the tool call handler itself manages subsequent loading states.
-      // It's often better for the handler to manage this if it involves further async work.
-      // For now, let's assume the handler DOES NOT manage it, so we reset here.
-      // If the handler DOES manage it, remove this line.
-      set(isAssistantLoadingAtom, false);
-      set(abortControllerAtom, null); // Clear abort controller as this sequence is done.
-    }
-
-    // Handle finish reasons warnings (after potential tool call processing)
-    // We check this regardless of tool call, as truncation/filtering could still occur.
-    if (
-      finalFinishReason &&
-      finalFinishReason !== 'stop' &&
-      finalFinishReason !== 'tool_calls'
-    ) {
-      console.warn(
-        `Stream finished with non-standard reason: ${finalFinishReason} for message ${assistantMessageId}`,
-      );
-      if (finalFinishReason === 'length') {
-        toast.warning('Response may be truncated due to maximum length.', {
-          duration: 5000,
-        });
-        // Append warning to message *if* no tool call processed (otherwise it might look weird)
-        if (!toolCallProcessed) {
-          set(appendContentToMessageAtom, {
-            messageId: assistantMessageId,
-            contentChunk:
-              '\n\n[Warning: Response truncated due to length limit]',
-          });
-        }
-      } else if (finalFinishReason === 'content_filter') {
-        toast.error('Response stopped due to content filter.', {
-          duration: 5000,
-        });
-        if (!toolCallProcessed) {
-          set(appendContentToMessageAtom, {
-            messageId: assistantMessageId,
-            contentChunk: '\n\n[Error: Response stopped by content filter]',
-          });
-        }
-      }
-      // If finish_reason is 'tool_calls', it means the *native* OpenAI tool call mechanism was triggered.
-      // Our prompt discourages this, but if it happens, we log it.
-    } else if (finalFinishReason === 'tool_calls') {
-      console.warn(
-        `Model used native 'tool_calls' finish reason for ${assistantMessageId}, despite MCP instructions. Ignoring native call.`,
-      );
-      toast.warning(
-        'AI tried using a different tool format. MCP format preferred.',
-      );
+      // MCP handler is now responsible. However, we *still* need to finalize the assistant message
+      // itself to mark it as non-streaming and potentially store the ToolCallInfo.
+      set(finalizeStreamingMessageInDbAtom, {
+        messageId: assistantMessageId,
+        finalContent: finalContentToSave, // Content including MCP block (or just conversational part)
+        isError: false,
+        toolCallInfo: toolCallInfoForFinalize, // Store the parsed tool call info
+      });
     }
   } catch (error: any) {
     const isAbortError = error?.name === 'AbortError';
-    console.error(`OpenAI API Error/Abort (${assistantMessageId}):`, error);
+    console.error(
+      `[callOpenAIStreamLogic] OpenAI API Error/Abort (${assistantMessageId}):`,
+      error,
+    );
+    debouncedDbUpdate.cancel(); // Cancel any pending debounced write
 
-    // Only show error toast/update message if it wasn't a deliberate user cancel.
-    // Tool call processing happens *after* the stream, so errors during stream
-    // should generally be shown unless it's a user abort.
-    if (!isAbortError) {
+    let errorContent = `Error: ${error?.message ?? 'Failed to get response'}`;
+    if (isAbortError) {
+      console.log(
+        `[callOpenAIStreamLogic] Generation cancelled/aborted by user for message ${assistantMessageId}.`,
+      );
+      // Use accumulated content + cancellation notice
+      errorContent = accumulatedContent + `\n\n[Generation cancelled]`;
+    } else {
       toast.error(`Error: ${error?.message ?? 'Failed to get response.'}`);
-      // Update the placeholder with the error message
-      set(updateMessageContentAtom, {
-        messageId: assistantMessageId,
-        newContent: `Error: ${error?.message ?? 'Failed to get response'}`,
-        // Keep isStreaming false or let finalize handle it
-      });
-    } else {
-      console.log(
-        `Generation cancelled/aborted by user for message ${assistantMessageId}.`,
-      );
-      // Update message content to indicate cancellation
-      set(updateMessageContentAtom, {
-        messageId: assistantMessageId,
-        newContent: fullAssistantResponse + `\n\n[Generation cancelled]`,
-      });
     }
 
-    // Always finalize the message state on error or abort, regardless of tool call attempts.
-    // This ensures isStreaming is set to false and loading indicators are reset.
-    console.log(
-      `Finalizing message ${assistantMessageId} due to error or abort.`,
-    );
-    set(finalizeStreamingMessageAtom, assistantMessageId);
-  } finally {
-    // Ensure loading state and abort controller are reset if not handled elsewhere
-    // (e.g., if finalizeStreamingMessageAtom doesn't handle these)
-    // Note: We reset loading/abort in the successful tool call case explicitly now.
-    // Finalize handles resetting these in normal success/error cases.
-    // Check if finalizeStreamingMessageAtom already resets these; if so, this might be redundant.
-    // set(isAssistantLoadingAtom, false); // Often handled by finalize
-    // set(abortControllerAtom, null);     // Often handled by finalize
+    // Finalize the message in DB/UI as an error state
+    // This also handles cleaning up loading/abort state
+    set(finalizeStreamingMessageInDbAtom, {
+      messageId: assistantMessageId,
+      finalContent: errorContent,
+      isError: true, // Mark as error
+      toolCallInfo: null,
+    });
   }
+  // No finally block needed, as finalizeStreamingMessageInDbAtom handles cleanup
 }
 
-/** Generates a concise chat title based on the first user message using AI. */
-export async function generateChatTitle(
-  set: Setter,
-  get: Getter, // Pass get
-  chatId: string,
-  userMessageContent: string,
-): Promise<void> {
-  const apiKey = get(apiKeyAtom); // Read values using get
-  const summaryModelId = get(defaultSummaryModelAtom); // Get the configured summary model
-  const providers = get(apiProvidersAtom); // Get providers to find config
+// --- Action Atoms ---
 
-  if (!apiKey && !providers.some((p) => p.enabled && p.apiKey)) {
-    console.warn('Cannot generate title: No global or provider API Key set.');
-    return;
-  }
-  if (!userMessageContent?.trim()) {
-    console.warn('Cannot generate title: User message is empty.');
-    return;
-  }
-  if (!summaryModelId) {
-    console.warn(
-      'Cannot generate title: Default Summary Model not configured.',
-    );
-    return;
-  }
-
-  // Determine API settings for the summary model
-  const [providerId, modelName] = summaryModelId.split('::');
-  const providerConfig = providers.find((p) => p.id === providerId);
-
-  const finalApiKey = providerConfig?.apiKey || get(apiKeyAtom); // Use provider key or global
-  const finalApiBaseUrl = providerConfig?.apiBaseUrl || get(apiBaseUrlAtom); // Use provider URL or global
-
-  if (!finalApiKey) {
-    console.warn(
-      `Cannot generate title: API Key not resolved for summary model ${summaryModelId}.`,
-    );
-    return; // Need a key to make the call
-  }
-
-  // Truncate long messages to avoid excessive token usage/cost for title generation
-  let processedContent = userMessageContent;
-  if (processedContent.length > 1000) {
-    // Example length limit
-    processedContent =
-      processedContent.slice(0, 500) +
-      '...[truncated]...' +
-      processedContent.slice(-500);
-  }
-
-  const prompt = `Based *only* on the following user message, generate a concise (3-6 words) chat title that starts with a single relevant emoji. Examples: "🚀 Project Phoenix Kickoff", "💡 Brainstorming New Features", "🤔 Debugging Login Issue". Respond with ONLY the title text, nothing else.
-
-User Message: "${processedContent}"`;
-
-  try {
-    const openai = new OpenAI({
-      apiKey: finalApiKey,
-      baseURL: finalApiBaseUrl || undefined,
-      dangerouslyAllowBrowser: true,
-    });
-
-    console.log(
-      `Generating chat title for ${chatId} with model ${modelName}...`,
-    );
-    const response = await openai.chat.completions.create({
-      model: modelName,
-      messages: [
-        { role: 'user', content: prompt } as OpenAI.ChatCompletionMessageParam,
-      ],
-
-      max_tokens: 30,
-      temperature: 0.5, // Fixed temperature for title generation
-      stream: false,
-      // stop: ['\n'], // Optional: try stopping at newline
-    });
-
-    let generatedTitle = response.choices[0]?.message?.content
-      ?.trim()
-      .replace(/(\r\n|\n|\r)/gm, '') // Remove line breaks
-      .replace(/["'`]/g, ''); // Remove quotes/backticks
-
-    if (generatedTitle) {
-      // Simple regex to find leading emoji (might need refinement)
-      const emojiRegex =
-        /^([\p{Emoji_Presentation}\p{Extended_Pictographic}])/u;
-      const emojiMatch = generatedTitle.match(emojiRegex);
-
-      let icon = '💬'; // Default icon if no emoji found
-      if (emojiMatch) {
-        icon = emojiMatch[0]; // Extract the emoji
-        // Remove the matched emoji and surrounding space from the title
-        generatedTitle = generatedTitle.replace(emojiRegex, '').trim();
-      }
-
-      // Ensure title isn't just an emoji or empty after extraction
-      if (!generatedTitle) {
-        console.warn('Generated title was empty after removing emoji.');
-        generatedTitle =
-          userMessageContent.split(' ').slice(0, 5).join(' ') + '...'; // Fallback title
-        icon = '💬'; // Reset icon if title became empty
-      }
-
+/** Action to cancel the current ongoing AI generation. */
+export const cancelGenerationAtom = atom(
+  null, // Write-only
+  (get, set) => {
+    const abortInfo = get(abortControllerAtom);
+    if (abortInfo) {
       console.log(
-        `Generated title: "${generatedTitle}", Icon: "${icon}" for chat ${chatId}`,
+        `[cancelGenerationAtom] User requested cancellation for message: ${abortInfo.messageId}`,
       );
+      toast.info('Attempting to cancel generation...');
+      abortInfo.controller.abort('User cancellation'); // Send abort signal
 
-      // Update the chat using the updateChatAtom action
-      set(updateChatAtom, { id: chatId, name: generatedTitle, icon: icon });
+      // Let the finalize logic within callOpenAIStreamLogic handle state cleanup
+      // based on the AbortError being caught. Setting loading state here might cause race conditions.
+      // set(isAssistantLoadingAtom, false); // Avoid setting here
+      // set(abortControllerAtom, null);   // Avoid setting here
     } else {
-      console.warn('Title generation resulted in empty content.');
-      // No update needed if generation failed
+      console.warn(
+        '[cancelGenerationAtom] Cancel requested, but no active generation found.',
+      );
+      // Ensure loading state is false if somehow it's stuck
+      if (get(isAssistantLoadingAtom)) {
+        set(isAssistantLoadingAtom, false);
+      }
     }
-  } catch (error) {
-    console.error('Error generating chat title:', error);
-    // Don't update the title on error, keep the default/current one
-    // Optional: Show a subtle error toast?
-    // toast.error("Couldn't auto-generate title.");
-  }
-}
+  },
+);
+
+/**
+ * Main action to trigger a chat completion for the active chat.
+ * Optionally adds a user message first.
+ */
+export const triggerChatCompletionAtom = atom(
+  null, // Write-only
+  async (get, set, chatId: string, userMessageContent?: string) => {
+    const currentActiveChatId = get(activeChatIdAtom);
+    if (chatId !== currentActiveChatId) {
+      console.warn(
+        `[triggerChatCompletionAtom] Attempted trigger for non-active chat ${chatId}. Setting active first.`,
+      );
+      set(_activeChatIdAtom, chatId);
+      // Wait briefly for chat data to potentially load via effect? Or rely on callOpenAIStreamLogic check?
+      // A small delay might help, but complicates logic. Let's rely on the check inside callOpenAIStreamLogic.
+      await new Promise((resolve) => setTimeout(resolve, 50)); // Small delay, may not be sufficient
+    }
+
+    // If user content is provided, add it as a user message first
+    if (
+      userMessageContent &&
+      typeof userMessageContent === 'string' &&
+      userMessageContent.trim().length > 0
+    ) {
+      console.log(
+        `[triggerChatCompletionAtom] Adding user message to chat ${chatId} before API call.`,
+      );
+      const userMessageData: Pick<MessageEntity, 'role' | 'content'> = {
+        role: 'user',
+        content: userMessageContent.trim(),
+      };
+      // Wait for the message to be added before proceeding
+      const addedMsg = await set(addMessageToActiveChatAtom, userMessageData);
+      if (!addedMsg) {
+        console.error(
+          '[triggerChatCompletionAtom] Failed to add user message. Aborting API call.',
+        );
+        toast.error('Failed to send message.');
+        return; // Stop if user message couldn't be saved
+      }
+    } else {
+      console.log(
+        `[triggerChatCompletionAtom] Triggering completion for chat ${chatId} without adding new user message.`,
+      );
+    }
+
+    // Call the core streaming logic function
+    // Use set directly as callOpenAIStreamLogic is async
+    await callOpenAIStreamLogic(get, set, chatId);
+  },
+);
+
+/** Generates a concise chat title based on user message using AI. */
+export const generateChatTitle = atom(
+  null, // Write-only
+  async (
+    get,
+    set,
+    {
+      chatId,
+      userMessageContent,
+    }: { chatId: string; userMessageContent: string },
+  ) => {
+    // This function seems less dependent on the main chat state refactoring,
+    // but ensure it uses the correct API key/URL resolution.
+
+    const globalApiKey = get(apiKeyAtom);
+    const summaryModelId = get(defaultSummaryModelAtom);
+    const providers = get(apiProvidersAtom);
+    const globalApiBaseUrl = get(apiBaseUrlAtom);
+
+    if (!userMessageContent?.trim()) {
+      console.warn(
+        '[generateChatTitle] Cannot generate title: User message is empty.',
+      );
+      return;
+    }
+    if (!summaryModelId) {
+      console.warn(
+        '[generateChatTitle] Cannot generate title: Default Summary Model not configured.',
+      );
+      return;
+    }
+
+    // Resolve API settings for the summary model
+    const [providerId, modelName] = summaryModelId.split('::');
+    const providerConfig = providers.find(
+      (p) => p.id === providerId && p.enabled,
+    );
+    const finalApiKey = providerConfig?.apiKey || globalApiKey;
+    const finalApiBaseUrl = providerConfig?.apiBaseUrl || globalApiBaseUrl;
+
+    if (!finalApiKey) {
+      console.warn(
+        `[generateChatTitle] API Key not resolved for summary model ${summaryModelId}. Cannot generate title.`,
+      );
+      return; // Cannot make the call without a key
+    }
+    if (!modelName) {
+      console.warn(
+        `[generateChatTitle] Invalid model name extracted from ${summaryModelId}. Cannot generate title.`,
+      );
+      return;
+    }
+
+    console.log(
+      `[generateChatTitle] Generating title for ${chatId} with model ${modelName}...`,
+    );
+
+    // Truncate long messages
+    let processedContent =
+      userMessageContent.length > 800
+        ? `${userMessageContent.slice(0, 400)}...[truncated]...${userMessageContent.slice(-400)}`
+        : userMessageContent;
+
+    const prompt = `Based *only* on the following user message, generate a concise (3-6 words) chat title that starts with a single relevant emoji. Examples: "🚀 Project Phoenix Kickoff", "💡 Brainstorming New Features", "🤔 Debugging Login Issue". Respond with ONLY the title text, nothing else.\n\nUser Message: "${processedContent}"`;
+
+    try {
+      const openai = new OpenAI({
+        apiKey: finalApiKey,
+        baseURL: finalApiBaseUrl || undefined,
+        dangerouslyAllowBrowser: true,
+      });
+
+      const response = await openai.chat.completions.create({
+        model: modelName,
+        messages: [{ role: 'user', content: prompt }],
+        max_tokens: 30,
+        temperature: 0.5,
+        stream: false,
+      });
+
+      let generatedTitle = response.choices[0]?.message?.content
+        ?.trim()
+        .replace(/(\r\n|\n|\r)/gm, '')
+        .replace(/["'`]/g, '');
+
+      if (generatedTitle) {
+        const emojiRegex =
+          /^([\p{Emoji_Presentation}\p{Extended_Pictographic}])/u;
+        const emojiMatch = generatedTitle.match(emojiRegex);
+        let icon = '💬'; // Default
+
+        if (emojiMatch) {
+          icon = emojiMatch[0];
+          generatedTitle = generatedTitle.replace(emojiRegex, '').trim();
+        }
+
+        if (!generatedTitle) {
+          console.warn(
+            '[generateChatTitle] Generated title was empty after removing emoji.',
+          );
+          generatedTitle =
+            userMessageContent.split(' ').slice(0, 5).join(' ') + '...'; // Fallback
+          icon = '💬';
+        }
+
+        console.log(
+          `[generateChatTitle] Generated title: "${generatedTitle}", Icon: "${icon}" for chat ${chatId}`,
+        );
+
+        // Update the chat using the updateChatAtom action (which uses the service)
+        set(updateChatAtom, { id: chatId, name: generatedTitle, icon: icon });
+        // Note: updateChatAtom handles updating DB and UI state atoms (incl. metadata list)
+      } else {
+        console.warn(
+          '[generateChatTitle] Title generation resulted in empty content.',
+        );
+      }
+    } catch (error) {
+      console.error('[generateChatTitle] Error:', error);
+      // Don't update title on error
+      // toast.error("Couldn't auto-generate title."); // Optional user feedback
+    }
+  },
+);

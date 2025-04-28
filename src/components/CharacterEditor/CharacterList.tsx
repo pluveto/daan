@@ -24,9 +24,10 @@ import {
 import { downloadJson } from '@/lib/download';
 import { readFileAsText } from '@/lib/file';
 import { cn } from '@/lib/utils';
-import { customCharactersAtom } from '@/store/index';
+import { loadedCharactersAtom } from '@/store';
 import { CustomCharacter } from '@/types';
 import { useAtomValue } from 'jotai';
+import { isNull } from 'lodash';
 import React, { useRef } from 'react';
 import {
   LuChevronDown,
@@ -47,10 +48,10 @@ interface CharacterListProps {
   characters: CustomCharacter[]; // Use sorted characters passed from parent
   selectedId: string | null;
   onSelect: (id: string) => void;
-  onAdd: () => string; // Returns the new ID
-  onDelete: (id: string) => boolean;
-  onMove: (id: string, direction: 'up' | 'down') => void;
-  onDuplicate: (id: string) => string | null; // Returns new ID or null
+  onAdd: () => Promise<string | null>; // Returns the new ID or null
+  onDelete: (id: string) => Promise<boolean>;
+  onMove: (id: string, direction: 'up' | 'down') => Promise<void>;
+  onDuplicate: (id: string) => Promise<string | null>; // Returns new ID or null
   onImport: (data: unknown[]) => void;
 }
 
@@ -64,19 +65,19 @@ export const CharacterList: React.FC<CharacterListProps> = ({
   onDuplicate,
   onImport,
 }) => {
-  const allCharactersUnsorted = useAtomValue(customCharactersAtom); // Needed for export all
+  const allCharactersUnsorted = useAtomValue(loadedCharactersAtom); // Needed for export all
   const importCharFileInputRef = useRef<HTMLInputElement>(null);
 
   const currentCharacterData = characters.find((c) => c.id === selectedId);
 
-  const handleAddClick = () => {
-    const newId = onAdd();
-    onSelect(newId); // Select the newly added character
+  const handleAddClick = async () => {
+    const newId = await onAdd();
+    newId && onSelect(newId); // Select the newly added character
   };
 
-  const handleDeleteConfirm = () => {
+  const handleDeleteConfirm = async () => {
     if (selectedId) {
-      const deleted = onDelete(selectedId);
+      const deleted = await onDelete(selectedId);
       if (deleted) {
         // Parent will handle clearing selection if necessary
         toast.success(`Character "${currentCharacterData?.name}" deleted.`);
@@ -86,15 +87,15 @@ export const CharacterList: React.FC<CharacterListProps> = ({
     }
   };
 
-  const handleMoveClick = (direction: 'up' | 'down') => {
+  const handleMoveClick = async (direction: 'up' | 'down') => {
     if (selectedId) {
       onMove(selectedId, direction);
     }
   };
 
-  const handleDuplicateClick = () => {
+  const handleDuplicateClick = async () => {
     if (selectedId) {
-      const newId = onDuplicate(selectedId);
+      const newId = await onDuplicate(selectedId);
       if (newId) {
         onSelect(newId); // Select the duplicate
         toast.success(`Character "${currentCharacterData?.name}" duplicated.`);
@@ -104,7 +105,7 @@ export const CharacterList: React.FC<CharacterListProps> = ({
     }
   };
 
-  const handleTriggerImport = () => {
+  const handleTriggerImport = async () => {
     importCharFileInputRef.current?.click();
   };
 
@@ -147,6 +148,10 @@ export const CharacterList: React.FC<CharacterListProps> = ({
   };
 
   const handleExportAll = () => {
+    if (isNull(allCharactersUnsorted)) {
+      toast.error('Still loading characters. Please wait.');
+      return;
+    }
     // Export the characters as currently sorted in the editor list
     if (characters.length > 0) {
       downloadJson(characters, 'all_characters_sorted.json');
@@ -314,7 +319,7 @@ export const CharacterList: React.FC<CharacterListProps> = ({
               </DropdownMenuItem>
               <DropdownMenuSub>
                 <DropdownMenuSubTrigger
-                  disabled={allCharactersUnsorted.length === 0}
+                  disabled={allCharactersUnsorted?.length === 0}
                 >
                   <LuDownload className="mr-2 h-4 w-4" />
                   Export to JSON...
@@ -328,7 +333,7 @@ export const CharacterList: React.FC<CharacterListProps> = ({
                   </DropdownMenuItem>
                   <DropdownMenuItem
                     onClick={handleExportAll}
-                    disabled={allCharactersUnsorted.length === 0}
+                    disabled={allCharactersUnsorted?.length === 0}
                   >
                     <LuFileJson className="mr-2 h-4 w-4" /> Export All (
                     {characters.length})
