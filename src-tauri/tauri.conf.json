@@ -1,7 +1,7 @@
 {
   "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
   "productName": "daan",
-  "version": "0.4.1-beta.1",
+  "version": "0.4.1-beta.2",
   "identifier": "com.fojosoft.daan",
   "build": {
     "frontendDist": "../dist",
@@ -25,7 +25,14 @@
   },
   "bundle": {
     "active": true,
-    "targets": "all",
+    "targets": [
+      "deb",
+      "rpm",
+      "appimage",
+      "nsis",
+      "app",
+      "dmg"
+    ],
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",
