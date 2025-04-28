@@ -18,12 +18,10 @@ import {
   LuFlaskConical,
   LuOrbit,
   LuPalette,
-  LuShoppingBag,
 } from 'react-icons/lu';
 // Import Tab components
 import { ApiSettingsTab } from './settings/ApiSettingsTab';
 import { FunctionSettingsTab } from './settings/FunctionSettingsTab';
-import { MarketPlaceTab } from './settings/MarketPlaceTab';
 import { McpSettingsTab } from './settings/McpSettingsTab';
 import { MiniappSettingsTab } from './settings/MiniappSettingsTab';
 import { UiSettingsTab } from './settings/UiSettingsTab';
@@ -81,13 +79,6 @@ export const SystemSettingsDialog: React.FC<
       icon: <LuCog className="mr-2 h-4 w-4" />,
       component: <FunctionSettingsTab />,
       enable: true,
-    },
-    {
-      id: 'marketplace',
-      label: 'Marketplace',
-      icon: <LuShoppingBag className="mr-2 h-4 w-4" />,
-      component: <MarketPlaceTab />,
-      enable: false,
     },
   ];
 

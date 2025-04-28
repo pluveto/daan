@@ -19,7 +19,7 @@ export function atomWithSafeStorage<Value>(
   key: string,
   initialValue: Value,
   storage?: Storage | undefined,
-  options?:
+  options:
     | {
         getOnInit?: boolean;
       }

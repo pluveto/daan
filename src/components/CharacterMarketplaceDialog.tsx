@@ -19,8 +19,10 @@ import {
   installCharacterAtom,
   isCharacterMarketplaceOpenAtom,
 } from '@/store';
+import { MarketplaceItemDetailsDialog } from './Marketplace/MarketplaceItemDetailsDialog';
 import { MarketplaceItemGrid } from './Marketplace/MarketplaceItemGrid';
 import { MarketplaceSearchBar } from './Marketplace/MarketplaceSearchBar';
+import { useViewDetail } from './Marketplace/useViewDetail';
 
 // Define items per page constant
 const ITEMS_PER_PAGE = 12; // Adjust as needed
@@ -170,6 +172,8 @@ export const CharacterMarketplaceDialog: React.FC = () => {
     }
   };
 
+  const detail = useViewDetail({ type: 'character' });
+
   return (
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
       {/* Dialog container with flex column layout and max height */}
@@ -187,13 +191,23 @@ export const CharacterMarketplaceDialog: React.FC = () => {
           isLoading={isLoading || !!installingId} // Disable if loading or installingId is set
         />
 
+        <MarketplaceItemDetailsDialog
+          isOpen={detail.isDetailsOpen}
+          onOpenChange={detail.setIsDetailsOpen}
+          item={detail.selectedItem}
+          itemDetails={detail.selectedItemDetails}
+          isLoading={detail.isDetailsLoading} // Show loading in dialog if details loading OR installing
+          installingId={installingId}
+          onInstall={handleInstall}
+        />
+
         {/* Scrollable area for the item grid */}
         <div className="min-h-0 flex-grow overflow-y-auto pr-2 pt-4">
           <MarketplaceItemGrid
             items={items}
             isLoading={isLoading && items.length === 0} // Show loading spinner mainly on initial load
-            onViewDetails={() => {
-              /* Implement view details if needed */
+            onViewDetails={(item) => {
+              detail.handleViewDetails(item);
             }}
             onInstall={handleInstall}
             installingId={installingId} // Pass the installingId to the grid
