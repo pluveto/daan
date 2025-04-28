@@ -23,7 +23,7 @@ export function atomWithSafeStorage<Value>(
     | {
         getOnInit?: boolean;
       }
-    | undefined,
+    | undefined = { getOnInit: true },
 ) {
   return atomWithStorage<Value>(
     key,
@@ -31,6 +31,7 @@ export function atomWithSafeStorage<Value>(
     {
       getItem: (key, initialValue) => {
         const storedValue = (storage ?? localStorage).getItem(key);
+        console.log(`localStorage key "${key}":`, storedValue);
         if (storedValue === null) {
           return initialValue;
         }

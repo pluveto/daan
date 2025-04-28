@@ -17,6 +17,7 @@ import { LuCalendar, LuDownload, LuEye, LuTag, LuUser } from 'react-icons/lu';
 
 interface MarketplaceItemCardProps {
   item: MarketplaceItem;
+  installingId: number | null;
   onViewDetails: (item: MarketplaceItem) => void;
   onInstall: (item: MarketplaceItem) => void; // Simplified install trigger
 }
@@ -25,6 +26,7 @@ export const MarketplaceItemCard: React.FC<MarketplaceItemCardProps> = ({
   item,
   onViewDetails,
   onInstall,
+  installingId,
 }) => {
   const { metadata, title, githubUser, updatedAt, labels } = item;
   const displayIcon =
@@ -33,6 +35,7 @@ export const MarketplaceItemCard: React.FC<MarketplaceItemCardProps> = ({
   const displayDesc = metadata?.description || 'No description provided.';
   const displayAuthor = githubUser?.login || 'Unknown';
   const displayTags = metadata?.tags || [];
+  const isCurrentlyInstalling = installingId === item.id;
 
   return (
     <Card className="flex h-full flex-col">
@@ -81,8 +84,14 @@ export const MarketplaceItemCard: React.FC<MarketplaceItemCardProps> = ({
           <LuEye className="mr-1 h-4 w-4" /> Details
         </Button>
         {/* Simplified Install Button */}
-        <Button size="sm" onClick={() => onInstall(item)} title="Install">
-          <LuDownload className="mr-1 h-4 w-4" /> Install
+        <Button
+          size="sm"
+          onClick={() => onInstall(item)}
+          title="Install"
+          disabled={!!installingId}
+        >
+          <LuDownload className="mr-1 h-4 w-4" />
+          {isCurrentlyInstalling ? 'Installing...' : 'Install'}
         </Button>
         {/* Optional: Link to GitHub Issue */}
         {/* <Button variant="outline" size="icon" asChild> <a href={item.url} target="_blank" rel="noopener noreferrer"><LuGithub /></a> </Button> */}

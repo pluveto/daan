@@ -7,6 +7,7 @@ import { MarketplaceItemCard } from './MarketplaceItemCard'; // Assuming this ex
 interface MarketplaceItemGridProps {
   items: MarketplaceItem[];
   isLoading: boolean;
+  installingId: number | null;
   onViewDetails: (item: MarketplaceItem) => void;
   onInstall: (item: MarketplaceItem) => void;
 }
@@ -14,6 +15,7 @@ interface MarketplaceItemGridProps {
 export const MarketplaceItemGrid: React.FC<MarketplaceItemGridProps> = ({
   items,
   isLoading,
+  installingId,
   onViewDetails,
   onInstall,
 }) => {
@@ -35,6 +37,7 @@ export const MarketplaceItemGrid: React.FC<MarketplaceItemGridProps> = ({
           <MarketplaceItemCard
             key={item.id}
             item={item}
+            installingId={installingId}
             onViewDetails={() => onViewDetails(item)}
             onInstall={() => onInstall(item)} // Pass basic install handler
           />

@@ -642,3 +642,17 @@
 .opacity-0 {
   opacity: 0;
 }
+
+/* Gap */
+.gap-1 {
+  gap: 0.5rem;
+}
+.gap-2 {
+  gap: 0.5rem;
+}
+.gap-4 {
+  gap: 1rem;
+}
+.gap-8 {
+  gap: 2rem;
+}

@@ -27,7 +27,7 @@ import { DependenciesSection } from './DependenciesSection';
 import { GeneralInfoSection } from './GeneralInfoSection';
 import { McpDefinitionEditor } from './McpDefinitionEditor';
 import { PermissionsSection } from './PermissionsSection';
-import DEFAULT_HTML from './sample.html?raw'; // Import raw content
+// import DEFAULT_HTML from './sample.html?raw'; // Import raw content
 
 const sizeSchema = z.object({
   width: z.number().min(1, 'Width must be greater than 0.'),
@@ -97,7 +97,7 @@ export function MiniappEditor({
         name: '',
         icon: '📦', // Default icon
         description: '',
-        htmlContent: DEFAULT_HTML,
+        htmlContent: '',
         configSchema: {},
         defaultConfig: {},
         defaultWindowSize: { width: 800, height: 600 },

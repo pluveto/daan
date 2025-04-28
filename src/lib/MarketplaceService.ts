@@ -60,8 +60,19 @@ const octokit = new Octokit({
 
 function extractCodeBlock(
   markdown: string,
-  lang: 'json' | 'html',
+  lang: string,
+  locator: string | undefined = undefined,
 ): string | null {
+  if (locator) {
+    // search after locator (if provided)
+    const index = markdown
+      .toLocaleLowerCase()
+      .indexOf(locator.toLocaleLowerCase());
+    if (index === -1) {
+      return null;
+    }
+    markdown = markdown.slice(index + locator.length);
+  }
   const regex = new RegExp('```' + lang + '\\s*([\\s\\S]*?)\\s*```');
   const match = markdown.match(regex);
   return match ? match[1].trim() : null;
@@ -82,7 +93,11 @@ async function parseIssueBody(body: string | null | undefined): Promise<{
 
     // 2. Extract Definition JSON (excluding htmlContent potentially)
     let definition: Record<string, any> | null = null;
-    const jsonString = extractCodeBlock(markdownContent, 'json'); // Use helper
+    const jsonString = extractCodeBlock(
+      markdownContent,
+      'json',
+      '## Installation Data',
+    ); // Use helper
     if (jsonString) {
       try {
         const parsedJson = JSON.parse(jsonString);
@@ -112,19 +127,27 @@ async function parseIssueBody(body: string | null | undefined): Promise<{
       MarketplaceItemMetadataSchema.safeParse(definition).data ?? null;
 
     // --- NEW: Extract HTML Content ---
-    const htmlString = extractCodeBlock(markdownContent, 'html'); // Use helper
+    const htmlContent = extractCodeBlock(
+      markdownContent,
+      'html',
+      '## HTML Content',
+    ); // Use helper
+    const promptContent =
+      extractCodeBlock(markdownContent, 'markdown', '## Prompt') ??
+      extractCodeBlock(markdownContent, 'md', '## Prompt');
 
     // Combine if necessary: Prioritize separate HTML block if it exists
-    if (definition && htmlString) {
+    if (definition && htmlContent) {
       // If separate HTML block exists, add/overwrite it in the definition object
-      definition.htmlContent = htmlString;
+      definition.htmlContent = htmlContent;
+      definition.prompt = promptContent;
     } else if (definition && !definition.htmlContent) {
       // If definition exists but has no htmlContent AND no separate block was found
       console.warn(
         'MarketplaceService: Definition JSON found, but no htmlContent inside or in a separate ```html block.',
       );
       // Potentially invalidate the item? Or let install fail later? For now, keep definition as is.
-    } else if (!definition && htmlString) {
+    } else if (!definition && htmlContent) {
       // If ONLY html block exists, create a minimal definition? Less ideal.
       console.warn(
         'MarketplaceService: Found HTML block but no definition JSON block.',
@@ -153,11 +176,19 @@ async function parseIssueBody(body: string | null | undefined): Promise<{
 async function fetchMarketplaceItems(
   label: string,
   query?: string,
-): Promise<MarketplaceItem[]> {
+  page: number = 1,
+  perPage: number = 50,
+): Promise<{
+  items: MarketplaceItem[];
+  totalCount: number;
+}> {
   try {
     // Construct search query: label + user query + is:open + is:issue
     let q = `repo:${GITHUB_OWNER}/${GITHUB_REPO} is:issue is:open label:"${label}"`;
     if (query?.trim()) {
+      if (query.trim().startsWith('repo:')) {
+        q = query.trim();
+      }
       q += ` ${query.trim()}`; // Add user search terms
     }
 
@@ -165,7 +196,8 @@ async function fetchMarketplaceItems(
     // Use search API for filtering by label and query terms
     const response = await octokit.rest.search.issuesAndPullRequests({
       q,
-      per_page: 50, // Adjust page size as needed
+      per_page: perPage, // Adjust page size as needed
+      page: page,
     });
 
     console.log(
@@ -202,11 +234,14 @@ async function fetchMarketplaceItems(
     );
 
     // Filter out nulls if any parsing failed critically
-    return items.filter((item): item is MarketplaceItem => item !== null);
+    return {
+      items: items.filter((item): item is MarketplaceItem => !!item),
+      totalCount: response.data.total_count,
+    };
   } catch (error: any) {
     console.error(`MarketplaceService: Error fetching ${label} items:`, error);
     toast.error(`Failed to fetch marketplace items: ${error.message}`);
-    return [];
+    return { items: [], totalCount: 0 };
   }
 }
 
@@ -277,12 +312,26 @@ async function fetchItemDetails(
 // --- Public API ---
 export const MarketplaceService = {
   /** Search for Miniapps in the marketplace */
-  searchMiniapps: (query?: string): Promise<MarketplaceItem[]> => {
-    return fetchMarketplaceItems(MINIAPP_LABEL, query);
+  searchMiniapps: (
+    query?: string,
+    page: number = 1,
+    perPage: number = 50,
+  ): Promise<{
+    items: MarketplaceItem[];
+    totalCount: number;
+  }> => {
+    return fetchMarketplaceItems(MINIAPP_LABEL, query, page, perPage);
   },
   /** Search for Characters in the marketplace */
-  searchCharacters: (query?: string): Promise<MarketplaceItem[]> => {
-    return fetchMarketplaceItems(CHARACTER_LABEL, query);
+  searchCharacters: (
+    query?: string,
+    page: number = 1,
+    perPage: number = 50,
+  ): Promise<{
+    items: MarketplaceItem[];
+    totalCount: number;
+  }> => {
+    return fetchMarketplaceItems(CHARACTER_LABEL, query, page, perPage);
   },
   /** Get full details (including definition) for a specific Miniapp issue */
   getMiniappDetails: (
