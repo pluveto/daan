@@ -1,4 +1,4 @@
-// src/hostApi.js
+// src/host-api.js
 // --- Start of hostApi script ---
 // This script MUST be included in the <head> or <body> of the Miniapp HTML.
 // It provides the communication bridge for the Miniapp to interact with the Daan host application.
@@ -151,7 +151,7 @@ window.hostApi = (() => {
       // Dispatch specific event for LLM chunk
       window.dispatchEvent(
         new CustomEvent('daan:llmChunk', {
-          detail: { requestId, chunk: payload },
+          detail: { requestId, chunk: payload.chunk },
         }),
       );
     } else if (type === 'llmCallResponseFinal' && requestId) {
@@ -160,7 +160,7 @@ window.hostApi = (() => {
         new CustomEvent('daan:llmFinal', {
           detail: {
             requestId,
-            result: payload,
+            result: payload.content,
             finishReason:
               payload.finishReason /* Adjust based on host structure */,
           },
@@ -399,9 +399,9 @@ window.hostApi = (() => {
        * Requires listening for 'daan:llmChunk', 'daan:llmFinal', 'daan:llmError' CustomEvents.
        * @param {object} options - Call options.
        * @param {string} options.requestId - A unique ID you provide to track this specific call.
-       * @param {string} options.model - The namespaced model ID (e.g., "openai::gpt-4o").
+       * @param {string | undefined} options.model - The namespaced model ID (e.g., "openai::gpt-4o").
        * @param {Array<{role: string, content: string}>} options.messages - The message history/prompt.
-       * @param {boolean} options.stream - Whether to stream the response (true) or get it all at once (false).
+       * @param {boolean} options.stream - Whether to stream the response (true) or get it all at once (false). when false, data will be received in 'daan:llmFinal' event.
        * @param {number} [options.temperature] - Optional temperature override.
        * @param {number} [options.maxTokens] - Optional maxTokens override.
        * @param {number} [options.topP] - Optional topP override.
@@ -416,11 +416,9 @@ window.hostApi = (() => {
           );
         }
         // Basic validation, host will do more thorough checks
-        if (!options.model || !Array.isArray(options.messages)) {
+        if (!Array.isArray(options.messages)) {
           return Promise.reject(
-            new Error(
-              'Miniapp: hostApi.llm.call requires model and messages array.',
-            ),
+            new Error('Miniapp: hostApi.llm.call requires messages array.'),
           );
         }
         return callHost('llmCall', options, 60000); // Longer timeout for potentially long calls

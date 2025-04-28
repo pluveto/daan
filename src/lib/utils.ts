@@ -104,3 +104,32 @@ export function normalizeMath(text: string): string {
 export function sleep(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
+
+export function postProcessRawAIJsonResponse(aiResponseContent: string) {
+  try {
+    JSON.parse(aiResponseContent);
+    return;
+  } catch (parseError) {
+    console.warn(
+      '[autoFillCharacterAtom] Failed to parse AI JSON response directly, attempting to remove code fence...',
+      parseError,
+    );
+    const cleanedContent = aiResponseContent.replace(
+      /```json\s*([\s\S]*?)\s*```/g,
+      '$1',
+    );
+    try {
+      let ret = JSON.parse(cleanedContent);
+      console.log(
+        '[autoFillCharacterAtom] Successfully parsed AI JSON response after removing code fence.',
+      );
+      return ret;
+    } catch (cleanedParseError) {
+      console.error(
+        '[autoFillCharacterAtom] Failed to parse AI JSON response even after removing code fence:',
+        cleanedParseError,
+      );
+      throw new Error('AI returned invalid JSON.');
+    }
+  }
+}

@@ -52,7 +52,6 @@ export const MarketplaceItemDetailsDialog: React.FC<
         </DialogHeader>
 
         <ScrollArea className="flex-grow pr-6">
-          {' '}
           {/* Added padding right for scrollbar */}
           {isLoading && (
             <div className="flex h-40 items-center justify-center text-muted-foreground">
@@ -67,14 +66,11 @@ export const MarketplaceItemDetailsDialog: React.FC<
           )}
           {itemDetails && (
             <div className="prose prose-sm dark:prose-invert max-w-none py-4">
-              {' '}
               {/* Basic prose styling */}
               <p className="text-xs text-muted-foreground">
-                By:{' '}
-                {itemDetails.metadata?.author ||
-                  itemDetails.githubUser?.login ||
-                  'Unknown'}{' '}
-                | Version: {itemDetails.metadata?.version || 'N/A'} | License:{' '}
+                By:
+                {itemDetails.githubUser?.login || 'Unknown'}| Version:{' '}
+                {itemDetails.metadata?.version || 'N/A'} | License:
                 {itemDetails.metadata?.license || 'N/A'}
               </p>
               {itemDetails.longDescriptionHtml ? (

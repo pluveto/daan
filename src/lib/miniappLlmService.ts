@@ -141,7 +141,7 @@ export function handleLlmGetDefaults(get: Getter): LlmDefaultSettings {
 
 /** Callbacks used by handleLlmCall */
 export interface StreamCallbacks {
-  onChunk: (chunk: any) => void; // Sends one chunk back
+  onChunk: (chunk: string) => void; // Sends one chunk back
   onComplete: (finalResult: any) => void; // Sends the final aggregated result
   onError: (error: Error) => void; // Sends an error
 }
@@ -159,13 +159,17 @@ export async function handleLlmCall(
   callbacks: StreamCallbacks,
   signal: AbortSignal,
 ) {
-  const { model, messages, stream, ...callOptions } = options;
+  const { model: specifiedModel, messages, stream, ...callOptions } = options;
 
+  const namespacedModel = specifiedModel || get(defaultModelAtom);
   try {
     // 1. Resolve API Key and Endpoint
-    const { apiKey, baseUrl, modelName } = resolveApiConfig(model, get);
+    const { apiKey, baseUrl, modelName } = resolveApiConfig(
+      namespacedModel,
+      get,
+    );
     if (!apiKey) {
-      throw new Error(`API Key not configured for model ${model}.`);
+      throw new Error(`API Key not configured for model ${namespacedModel}.`);
     }
 
     // 2. Instantiate Client (Assuming OpenAI for now)
@@ -204,7 +208,7 @@ export async function handleLlmCall(
         if (contentChunk) fullContent += contentChunk;
 
         // Send the raw chunk back for the Miniapp to process
-        callbacks.onChunk(chunk);
+        callbacks.onChunk(contentChunk);
 
         // Store potential finish reason
         if (chunk.choices[0]?.finish_reason) {
@@ -253,7 +257,7 @@ export async function handleLlmCall(
       return; // Stop execution here for abort
     }
     console.error(
-      `Miniapp LLM Service: Error during call for model ${model}:`,
+      `Miniapp LLM Service: Error during call for model ${namespacedModel}:`,
       error,
     );
     callbacks.onError(

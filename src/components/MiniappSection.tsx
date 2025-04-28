@@ -8,6 +8,7 @@ import {
 } from '@/components/ui/Tooltip';
 import {
   focusMiniappWindowAtom,
+  isMiniappMarketplaceOpenAtom,
   isMiniappSearchOpenAtom,
   orderedRunningMiniappsAtom,
   setMiniappOrderAtom,
@@ -33,7 +34,7 @@ import {
 import { CSS } from '@dnd-kit/utilities';
 import { useAtomValue, useSetAtom } from 'jotai';
 import React from 'react';
-import { LuPackage, LuPlus } from 'react-icons/lu'; // Default icon
+import { LuPackage, LuPlus, LuStore } from 'react-icons/lu'; // Default icon
 
 interface SortableMiniappIconProps {
   instance: MiniappInstance & { definition?: MiniappDefinitionEntity };
@@ -128,6 +129,7 @@ export const MiniappSection: React.FC = () => {
   const runningMiniapps = useAtomValue(orderedRunningMiniappsAtom);
   const setMiniappOrder = useSetAtom(setMiniappOrderAtom);
   const setMiniappSearchOpen = useSetAtom(isMiniappSearchOpenAtom);
+  const setMiniappMarketplaceOpen = useSetAtom(isMiniappMarketplaceOpenAtom);
   const focusWindow = useSetAtom(focusMiniappWindowAtom);
   const toggleMinimize = useSetAtom(toggleMinimizeMiniappAtom);
 
@@ -157,6 +159,7 @@ export const MiniappSection: React.FC = () => {
   };
 
   const handleAddClick = () => setMiniappSearchOpen(true);
+  const onOpenMarketplaceClick = () => setMiniappMarketplaceOpen(true);
 
   return (
     <>
@@ -164,7 +167,14 @@ export const MiniappSection: React.FC = () => {
         <div className="flex-1 font-medium tracking-wider uppercase">
           MiniApps
         </div>
-        {/* Maybe add other controls later */}
+        <Button
+          variant="ghost"
+          size="xs"
+          onClick={onOpenMarketplaceClick}
+          aria-label="Open Character Marketplace"
+        >
+          <LuStore className="h-4 w-4" />
+        </Button>
       </div>
       <DndContext
         sensors={sensors}

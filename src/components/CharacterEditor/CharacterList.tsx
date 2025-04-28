@@ -23,12 +23,13 @@ import {
 } from '@/components/ui/DropdownMenu';
 import { downloadJson } from '@/lib/download';
 import { readFileAsText } from '@/lib/file';
+import { formatCharacterForPublishing } from '@/lib/miniappImportExport';
 import { cn } from '@/lib/utils';
 import { loadedCharactersAtom } from '@/store';
 import { CustomCharacter } from '@/types';
 import { useAtomValue } from 'jotai';
 import { isNull } from 'lodash';
-import React, { useRef } from 'react';
+import React, { useCallback, useRef } from 'react';
 import {
   LuChevronDown,
   LuChevronUp,
@@ -37,6 +38,8 @@ import {
   LuDownload,
   LuEllipsis,
   LuFileJson,
+  LuFileText,
+  LuGithub,
   LuMinus,
   LuPlus,
   LuTrash2,
@@ -108,6 +111,55 @@ export const CharacterList: React.FC<CharacterListProps> = ({
   const handleTriggerImport = async () => {
     importCharFileInputRef.current?.click();
   };
+
+  const handleExportForPublishing = useCallback(() => {
+    if (!currentCharacterData) {
+      return;
+    }
+
+    const author = 'GitHubUsername'; // Placeholder
+    const GITHUB_OWNER = 'pluveto';
+    const GITHUB_REPO = 'daan';
+    let markdownContent = formatCharacterForPublishing(
+      currentCharacterData,
+      author,
+    );
+
+    if (!navigator.clipboard) {
+      toast.error('Failed to access clipboard. Please copy from the console.');
+      console.log(markdownContent);
+      return;
+    }
+    navigator.clipboard
+      .writeText(markdownContent)
+      .then(() => {
+        toast.success('Marketplace Markdown copied to clipboard!', {
+          description: (
+            <span>
+              Go to GitHub Issues, create a new issue, paste this content, and
+              add the 'market-character' label.
+              <a
+                href={`https://github.com/${GITHUB_OWNER}/${GITHUB_REPO}/issues/new`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="ml-2 inline-flex items-center text-blue-500 hover:underline"
+              >
+                Create Issue <LuGithub className="ml-1 h-4 w-4" />
+              </a>
+            </span>
+          ),
+          duration: 10000,
+        });
+      })
+      .catch((err) => {
+        console.error('Failed to copy Markdown:', err);
+        toast.error(
+          'Failed to access clipboard. Please copy from the console.',
+        );
+        console.log(markdownContent);
+        return;
+      });
+  }, []);
 
   const handleFileImport = async (
     event: React.ChangeEvent<HTMLInputElement>,
@@ -314,9 +366,13 @@ export const CharacterList: React.FC<CharacterListProps> = ({
                 )}
               </AlertDialog>
               <DropdownMenuSeparator />
+              <DropdownMenuItem onClick={handleExportForPublishing}>
+                <LuFileText className="mr-2 h-4 w-4" /> Export for publishing...
+              </DropdownMenuItem>
               <DropdownMenuItem onClick={handleTriggerImport}>
                 <LuUpload className="mr-2 h-4 w-4" /> Import from JSON...
               </DropdownMenuItem>
+
               <DropdownMenuSub>
                 <DropdownMenuSubTrigger
                   disabled={allCharactersUnsorted?.length === 0}

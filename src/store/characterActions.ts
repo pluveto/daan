@@ -1,5 +1,9 @@
 // src/store/characterActions.ts
-import { UpdateCharacterDto } from '@/services/ChatDataService';
+import { postProcessRawAIJsonResponse } from '@/lib/utils';
+import {
+  CreateCharacterDto,
+  UpdateCharacterDto,
+} from '@/services/ChatDataService';
 import type { CharacterEntity } from '@/types/internal';
 import { atom } from 'jotai';
 import OpenAI from 'openai'; // Keep OpenAI import for auto-fill API call
@@ -230,6 +234,33 @@ export const duplicateCharacterAtom = atom(
   },
 );
 
+/** Installs a character from the marketplace by creating it in the DB and refreshing the list. */
+export const installCharacterAtom = atom(
+  null,
+  async (get, set, installDto: CreateCharacterDto): Promise<void> => {
+    const service = get(chatDataServiceAtom);
+    console.log(
+      '[installCharacterAtom] Installing character from marketplace...',
+    );
+    try {
+      // Service handles assigning sort order and timestamps
+      const createdChar = await service.createCharacter(installDto);
+      console.log(
+        `[installCharacterAtom] Character ${createdChar.id} created in DB.`,
+      );
+
+      // Refresh character list from DB
+      set(loadCharactersAtom);
+
+      toast.success(`Character "${createdChar.name}" installed successfully!`);
+    } catch (error) {
+      console.error('[installCharacterAtom] Failed:', error);
+      toast.error('Failed to install character.');
+      throw error; // Let caller handle dialog closing
+    }
+  },
+);
+
 // --- Auto-fill Action ---
 
 /** Attempts to auto-fill character details using AI based on partial input. */
@@ -272,7 +303,7 @@ export const autoFillCharacterAtom = atom(
     }
 
     set(isCharacterAutoFillingAtom, true);
-    toast.info('🤖 Attempting to auto-fill character...');
+    toast.info('Attempting to auto-fill character...');
     console.log(
       `[autoFillCharacterAtom] Requesting auto-fill for char ${characterToFill?.id} with model ${modelName}...`,
     );
@@ -361,7 +392,7 @@ JSON Response format (ONLY the JSON object):
       // 4. Parse and Validate AI Response
       let aiJson: Partial<CharacterEntity>;
       try {
-        aiJson = JSON.parse(aiResponseContent);
+        aiJson = postProcessRawAIJsonResponse(aiResponseContent);
       } catch (parseError) {
         console.error(
           '[autoFillCharacterAtom] Failed to parse AI JSON response:',

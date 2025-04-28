@@ -21,7 +21,7 @@ export interface LlmDefaultSettings {
 /** Parameters for hostApi.llm.call() */
 export interface LlmCallParams {
   requestId: string; // Miniapp-generated ID for this specific call
-  model: NamespacedModelId;
+  model: NamespacedModelId | undefined;
   messages: Array<{ role: string; content: string }>; // Simplify for bridge
   stream: boolean;
   temperature?: number | null;

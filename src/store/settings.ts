@@ -7,13 +7,13 @@ import type { ApiProviderConfig, NamespacedModelId } from '@/types'; // Use Name
 /** Global fallback API Key. */
 export const apiKeyAtom = atomWithSafeStorage<string | null>(
   'globalSettings_apiKey',
-  null,
+  import.meta.env.VITE_APP_DEFAULT_GLOBAL_API_KEY ?? null,
 );
 
 /** Global fallback custom OpenAI-compatible API base URL. */
 export const apiBaseUrlAtom = atomWithSafeStorage<string | null>(
   'globalSettings_apiBaseUrl',
-  null,
+  import.meta.env.VITE_APP_DEFAULT_GLOBAL_API_BASE_URL ?? null,
 );
 
 /** Default Temperature for API calls (0.0 to 2.0). */

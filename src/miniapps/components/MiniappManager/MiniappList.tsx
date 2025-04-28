@@ -319,7 +319,7 @@ export function MiniappList() {
                                     className="text-destructive focus:bg-destructive/10 focus:text-destructive"
                                     onSelect={(e) => e.preventDefault()} // Prevent closing dropdown immediately
                                   >
-                                    <LuTrash2 className="mr-2 h-4 w-4" />{' '}
+                                    <LuTrash2 className="mr-2 h-4 w-4" />
                                     Delete...
                                   </DropdownMenuItem>
                                 </AlertDialogTrigger>
@@ -330,14 +330,14 @@ export function MiniappList() {
                                       Are you sure?
                                     </AlertDialogTitle>
                                     <AlertDialogDescription>
-                                      This will permanently delete the{' '}
+                                      This will permanently delete the
                                       <strong className="px-1">
                                         {def.name}
-                                      </strong>{' '}
+                                      </strong>
                                       Miniapp definition.
                                       {isRunning && (
                                         <span className="text-destructive block pt-2 font-semibold">
-                                          Warning: {runningInstanceCount}{' '}
+                                          Warning: {runningInstanceCount}
                                           instance(s) running and will be
                                           closed.
                                         </span>

@@ -31,7 +31,7 @@ export const MarketplaceItemCard: React.FC<MarketplaceItemCardProps> = ({
     metadata?.icon || (labels.includes(MINIAPP_LABEL) ? '📦' : '👤');
   const displayName = metadata?.name || title;
   const displayDesc = metadata?.description || 'No description provided.';
-  const displayAuthor = metadata?.author || githubUser?.login || 'Unknown';
+  const displayAuthor = githubUser?.login || 'Unknown';
   const displayTags = metadata?.tags || [];
 
   return (
@@ -46,7 +46,7 @@ export const MarketplaceItemCard: React.FC<MarketplaceItemCardProps> = ({
             <CardDescription className="mt-1 flex items-center text-xs text-muted-foreground">
               <LuUser className="mr-1 h-3 w-3" /> By {displayAuthor}
               <span className="mx-2">|</span>
-              <LuCalendar className="mr-1 h-3 w-3" /> Updated{' '}
+              <LuCalendar className="mr-1 h-3 w-3" /> Updated
               {formatDateLabel(updatedAt)}
             </CardDescription>
           </div>
