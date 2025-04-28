@@ -18,8 +18,10 @@ import {
   miniappDataServiceAtom,
   miniappsDefinitionAtom,
 } from '@/store';
+import { MarketplaceItemDetailsDialog } from './Marketplace/MarketplaceItemDetailsDialog';
 import { MarketplaceItemGrid } from './Marketplace/MarketplaceItemGrid';
 import { MarketplaceSearchBar } from './Marketplace/MarketplaceSearchBar';
+import { useViewDetail } from './Marketplace/useViewDetail';
 
 // Define items per page constant for easy modification
 const ITEMS_PER_PAGE = 12; // Adjust as needed
@@ -166,6 +168,8 @@ export const MiniappMarketplaceDialog: React.FC = () => {
     }
   };
 
+  const detail = useViewDetail({ type: 'miniapp' });
+
   return (
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
       {/*
@@ -186,6 +190,16 @@ export const MiniappMarketplaceDialog: React.FC = () => {
           isLoading={isLoading || !!installingId} // Disable search during loading/installing
         />
 
+        <MarketplaceItemDetailsDialog
+          isOpen={detail.isDetailsOpen}
+          onOpenChange={detail.setIsDetailsOpen}
+          item={detail.selectedItem}
+          itemDetails={detail.selectedItemDetails}
+          isLoading={detail.isDetailsLoading} // Show loading in dialog if details loading OR installing
+          installingId={installingId}
+          onInstall={handleInstall}
+        />
+
         {/*
           This div contains the item grid and will scroll if content overflows.
           'flex-grow' makes it take available vertical space.
@@ -196,8 +210,8 @@ export const MiniappMarketplaceDialog: React.FC = () => {
           <MarketplaceItemGrid
             items={items}
             isLoading={isLoading && items.length === 0} // Show loading state primarily on initial load
-            onViewDetails={() => {
-              /* Implement view details if needed */
+            onViewDetails={(item) => {
+              detail.handleViewDetails(item);
             }}
             onInstall={handleInstall}
             installingId={installingId} // Pass installing state to potentially disable install buttons

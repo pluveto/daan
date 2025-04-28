@@ -12,9 +12,9 @@ import {
   MarketplaceItem,
   ParsedMarketplaceItem,
 } from '@/lib/MarketplaceService';
-import DOMPurify from 'dompurify';
 import React from 'react';
 import { LuDownload, LuGithub, LuInfo, LuLoader } from 'react-icons/lu';
+import { CodeBlock } from '../ui/CodeBlock';
 
 interface MarketplaceItemDetailsDialogProps {
   isOpen: boolean;
@@ -23,6 +23,7 @@ interface MarketplaceItemDetailsDialogProps {
   itemDetails: ParsedMarketplaceItem | null;
   isLoading: boolean;
   onInstall: (details: ParsedMarketplaceItem) => void;
+  installingId: number | null;
 }
 
 export const MarketplaceItemDetailsDialog: React.FC<
@@ -69,23 +70,17 @@ export const MarketplaceItemDetailsDialog: React.FC<
               {/* Basic prose styling */}
               <p className="text-xs text-muted-foreground">
                 By:
-                {itemDetails.githubUser?.login || 'Unknown'}| Version:{' '}
+                {itemDetails.githubUser?.login || 'Unknown'}| Version:
                 {itemDetails.metadata?.version || 'N/A'} | License:
                 {itemDetails.metadata?.license || 'N/A'}
               </p>
-              {itemDetails.longDescriptionHtml ? (
-                <div
-                  dangerouslySetInnerHTML={{
-                    __html: DOMPurify.sanitize(itemDetails.longDescriptionHtml),
-                  }}
-                />
-              ) : (
-                <p>
-                  <em>No detailed description provided.</em>
-                </p>
-              )}
               {/* Optionally show definition preview */}
-              {/* <details> <summary>View Definition JSON</summary> <pre><code>{JSON.stringify(itemDetails.definition, null, 2)}</code></pre> </details> */}
+              <details>
+                <summary>View Definition JSON</summary>
+                <CodeBlock className="language-json">
+                  {JSON.stringify(itemDetails.definition, null, 2)}
+                </CodeBlock>
+              </details>
             </div>
           )}
         </ScrollArea>
