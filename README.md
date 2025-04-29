@@ -13,6 +13,10 @@ Daan (答案, "Answer" in Chinese) is a concise and lightweight client for inter
 
 ## Key Features
 
+- **🆕 Miniapp Functionality:** Convert your frequently used features directly into a mini-app for use in a mini-window.
+- **🆕 Miniapp and Character Market:** Publish your presets to GitHub issues and install/reuse them in Daan with one click.
+- **🆕 Miniapp as MCP Service:** Miniapps also support running as MCP services, enabling low-threshold development of simple MCP servers.
+
 - **✨ Minimalist Interface:** Focus on the conversation, not clutter.
 - **🔌 MCP (Model Context Protocol):** Enhance AI responses with external tools and knowledge.
 - **👤 Character Customization:** Create and reuse chat personas with specific prompts and settings.
@@ -30,6 +34,8 @@ Daan (答案, "Answer" in Chinese) is a concise and lightweight client for inter
 
 ![MCP Feature](assets/mcp.screenshot.png)
 ![Character Customization](assets/character.screenshot.png)
+![Miniapp](assets/miniapp.screenshot.png)
+![Market](assets/market.screenshot.png)
 ![Dark Mode](assets/screenshot-dark.png)
 ![Light Mode](assets/screenshot-light.png)
 
