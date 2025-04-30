@@ -369,7 +369,7 @@ export const ConversationActionsMenu: React.FC = () => {
               <AlertDialogFooter>
                 <AlertDialogCancel>Cancel</AlertDialogCancel>
                 <AlertDialogAction
-                  className="bg-destructive..."
+                  className="bg-destructive"
                   onClick={handleClearUnpinned}
                 >
                   Delete Unpinned
