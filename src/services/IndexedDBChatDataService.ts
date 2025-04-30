@@ -15,7 +15,9 @@ import type {
 } from './ChatDataService';
 
 // Define interfaces matching DB schema - can often reuse internal types directly
-type ChatRecord = ChatEntity;
+type ChatRecord = Omit<ChatEntity, 'isPinned'> & {
+  isPinned: number; // indexedDB doesn't support boolean, use 0/1 instead
+};
 type MessageRecord = MessageEntity;
 type CharacterRecord = CharacterEntity;
 
@@ -95,32 +97,47 @@ export class IndexedDBChatDataService implements ChatDataService {
           icon: c.icon,
           updatedAt: c.updatedAt,
           createdAt: c.createdAt,
-          isPinned: c.isPinned,
+          isPinned: !!c.isPinned,
         })),
       );
   }
   async getChatById(chatId: string): Promise<ChatEntity | null> {
-    return (await this.db.chats.get(chatId)) ?? null;
+    let record = await this.db.chats.get(chatId);
+    if (!record) {
+      return null;
+    }
+    return {
+      ...record,
+      isPinned: !!record.isPinned,
+    };
   }
   async createChat(
     chatData: Omit<ChatEntity, 'id' | 'createdAt' | 'updatedAt'>,
   ): Promise<ChatEntity> {
     const newId = uuidv4();
     const now = Date.now();
-    const newChat: ChatEntity = {
+    const newChat: ChatRecord = {
       ...chatData,
       id: newId,
+      isPinned: +chatData.isPinned,
       createdAt: now,
       updatedAt: now,
     };
     await this.db.chats.add(newChat);
-    return newChat;
+    return {
+      ...newChat,
+      isPinned: !!newChat.isPinned,
+    };
   }
   async updateChat(
     chatId: string,
     updates: Partial<Omit<ChatEntity, 'id' | 'createdAt' | 'updatedAt'>>,
   ): Promise<void> {
-    await this.db.chats.update(chatId, { ...updates, updatedAt: Date.now() });
+    await this.db.chats.update(chatId, {
+      ...updates,
+      updatedAt: Date.now(),
+      isPinned: +(updates.isPinned ?? false),
+    });
   }
   async deleteChat(chatId: string): Promise<void> {
     await this.db.transaction(
@@ -134,6 +151,7 @@ export class IndexedDBChatDataService implements ChatDataService {
     );
   }
   async deleteChats(chatIds: string[]): Promise<void> {
+    console.log('[ChatDataService] deleteChats', chatIds);
     await this.db.transaction(
       'rw',
       this.db.chats,
@@ -149,7 +167,11 @@ export class IndexedDBChatDataService implements ChatDataService {
       .where('isPinned')
       .equals(0)
       .primaryKeys(); // 0 for false in IndexedDB often
-    if (unpinnedIds.length > 0) await this.deleteChats(unpinnedIds);
+    if (unpinnedIds.length > 0) {
+      await this.deleteChats(unpinnedIds);
+    } else {
+      console.log('[ChatDataService] No unpinned chats to delete.');
+    }
   }
 
   // --- Message Placeholders ---
