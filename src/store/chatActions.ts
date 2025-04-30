@@ -86,7 +86,6 @@ export const createNewChatAtom = atom(
     set(_activeChatIdAtom, newChat.id); // Set as active
     set(loadChatListMetadataAtom); // Reload chat list
     set(loadActiveChatDetailAtom);
-    toast.success(`Chat "${newChat.name}" created.`);
 
     // Set the new chat as active
     set(focusInputAtom, (c) => c + 1); // Trigger input focus
