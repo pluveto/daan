@@ -288,7 +288,6 @@ export const clearUnpinnedChatsAtom = atom(null, async (get, set) => {
       set(_activeChatIdAtom, null);
     }
     set(loadChatListMetadataAtom);
-    toast.success('Unpinned chats deleted.');
   } catch (error) {
     console.error('[clearUnpinnedChatsAtom] Failed:', error);
     toast.error('Failed to delete unpinned chats.');
