@@ -134,3 +134,14 @@ export function postProcessRawAIJsonResponse(aiResponseContent: string) {
     }
   }
 }
+
+export const kebabToPascalCase = (str: string): string => {
+  if (!str) return '';
+  return str
+    .split('-')
+    .map((segment) => {
+      if (!segment) return '';
+      return segment.charAt(0).toUpperCase() + segment.slice(1);
+    })
+    .join('');
+};

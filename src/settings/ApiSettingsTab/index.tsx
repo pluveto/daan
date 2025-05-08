@@ -15,6 +15,8 @@ import { Switch } from '@/components/ui/Switch';
 import { TooltipProvider } from '@/components/ui/Tooltip';
 import { ValidatedInput } from '@/components/ui/ValidatedInput'; // Import the new component
 
+import { kebabToPascalCase } from '@/lib/utils';
+import { tempFetchedModelsAtom } from '@/store';
 import {
   apiBaseUrlAtom,
   apiKeyAtom,
@@ -26,7 +28,7 @@ import {
 import { ApiModelConfig, ApiProviderConfig, NamespacedModelId } from '@/types';
 import { useAtom } from 'jotai';
 import React, { useCallback } from 'react';
-import { LuPlus, LuSave, LuTrash2 } from 'react-icons/lu'; // Added LuCheck, LuRotateCcw potentially if not using ValidatedInput everywhere
+import { LuDownload, LuLoader, LuPlus, LuSave, LuTrash2 } from 'react-icons/lu'; // Added LuCheck, LuRotateCcw potentially if not using ValidatedInput everywhere
 import { v4 as uuidv4 } from 'uuid';
 import ModelEditor from './ModelEditor'; // Import the updated ModelEditor
 
@@ -109,6 +111,9 @@ export const ApiSettingsTab: React.FC = () => {
   const [globalMaxTokens, setGlobalMaxTokens] = useAtom(defaultMaxTokensAtom);
   const [globalTopP, setGlobalTopP] = useAtom(defaultTopPAtom);
   const [providers, setProviders] = useAtom(apiProvidersAtom);
+  const [tempFetchedModels, setTempFetchedModels] = useAtom(
+    tempFetchedModelsAtom,
+  );
 
   // --- Atom Update Callbacks (Memoized) ---
   const handleSaveGlobalApiKey = useCallback(
@@ -246,6 +251,87 @@ export const ApiSettingsTab: React.FC = () => {
     },
     [providers, setProviders],
   ); // Add providers dependency
+
+  const handleFetchModels = useCallback(
+    async (providerIndex: number) => {
+      const provider = providers[providerIndex];
+      if (!provider) {
+        console.error(
+          'Provider not found for fetching models at index:',
+          providerIndex,
+        );
+        return;
+      }
+
+      const fetchedModelsData = await setTempFetchedModels({
+        targetProviderId: provider.id,
+      });
+
+      if (!fetchedModelsData || fetchedModelsData.length === 0) {
+        console.log(
+          `No models fetched for provider ${provider.name} or an empty list was returned.`,
+        );
+        return;
+      }
+
+      const currentProviderModels = provider.models || [];
+      const existingModelIds = new Set(currentProviderModels.map((m) => m.id));
+
+      const newApiModels: ApiModelConfig[] = fetchedModelsData
+        .map((fetchedModelItem) => {
+          if (!fetchedModelItem || !fetchedModelItem.id) {
+            console.warn(
+              'Fetched model item is invalid or missing id:',
+              fetchedModelItem,
+            );
+            return null;
+          }
+          const namespacedModelId: NamespacedModelId = `${provider.id}::${fetchedModelItem.id}`;
+
+          if (existingModelIds.has(namespacedModelId)) {
+            return null; // Skip if model with this NamespacedModelId already exists
+          }
+
+          const modelName = kebabToPascalCase(fetchedModelItem.id);
+
+          return {
+            id: namespacedModelId,
+            name: modelName,
+            temperature: null,
+            maxTokens: null,
+            topP: null,
+            supportsFileUpload: false, // Default values
+            supportsImageUpload: false, // Default values
+          };
+        })
+        .filter((model) => model !== null); // Filter out nulls (already existing or invalid models)
+
+      if (newApiModels.length > 0) {
+        setProviders((currentProviders) => {
+          const newProviders = [...currentProviders];
+          // Ensure providerIndex is still valid, though it should be given the initial check
+          if (providerIndex < 0 || providerIndex >= newProviders.length) {
+            console.error('Provider index out of bounds during state update.');
+            return currentProviders;
+          }
+          const providerToUpdate = newProviders[providerIndex];
+          newProviders[providerIndex] = {
+            ...providerToUpdate,
+            models: [...(providerToUpdate.models || []), ...newApiModels],
+          };
+          return newProviders;
+        });
+        console.log(
+          `Added ${newApiModels.length} new models to provider '${provider.name}'.`,
+        );
+      } else {
+        console.log(
+          `No new models to add to provider '${provider.name}' (all fetched models might already exist or were invalid).`,
+        );
+      }
+    },
+    [providers, setProviders, setTempFetchedModels],
+  );
 
   const handleRemoveModel = useCallback(
     (providerIndex: number, modelIndex: number) => {
@@ -457,14 +543,35 @@ export const ApiSettingsTab: React.FC = () => {
                     <div className="space-y-2">
                       <div className="flex items-center justify-between">
                         <h5 className="text-sm font-semibold">Models</h5>
-                        <Button
-                          type="button"
-                          size="xs"
-                          variant="outline"
-                          onClick={() => handleAddModel(providerIndex)}
-                        >
-                          <LuPlus className="mr-1 h-3 w-3" /> Add Model
-                        </Button>
+                        <div className="flex space-x-2">
+                          <Button
+                            type="button"
+                            size="xs"
+                            variant="outline"
+                            disabled={tempFetchedModels.loading === true}
+                            onClick={() => handleFetchModels(providerIndex)}
+                          >
+                            {tempFetchedModels.loading === true ? (
+                              <>
+                                <LuLoader className="mr-1 h-3 w-3" /> Fetching
+                                Models...
+                              </>
+                            ) : (
+                              <>
+                                <LuDownload className="mr-1 h-3 w-3" /> Fetch
+                                Models
+                              </>
+                            )}
+                          </Button>
+                          <Button
+                            type="button"
+                            size="xs"
+                            variant="outline"
+                            onClick={() => handleAddModel(providerIndex)}
+                          >
+                            <LuPlus className="mr-1 h-3 w-3" /> Add Model
+                          </Button>
+                        </div>
                       </div>
                       <ScrollArea className="h-48 rounded-md border">
                         <div className="space-y-2 p-2">
