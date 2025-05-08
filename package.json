@@ -1,6 +1,6 @@
 {
   "name": "@pluveto/daan",
-  "version": "0.4.1-beta.3",
+  "version": "0.4.2",
   "author": "Pluveto <zijing.zhang@proton.me>",
   "repository": {
     "type": "git",
@@ -39,6 +39,7 @@
     "@radix-ui/react-visually-hidden": "^1.2.0",
     "@tailwindcss/forms": "^0.5.10",
     "@tailwindcss/vite": "^4.1.4",
+    "@tanstack/react-query": "^5.75.5",
     "@tauri-apps/api": "^2.5.0",
     "@types/dompurify": "^3.2.0",
     "@types/react-syntax-highlighter": "^15.5.13",
@@ -52,6 +53,7 @@
     "dexie": "^4.0.11",
     "dompurify": "^3.2.5",
     "jotai": "^2.12.3",
+    "jotai-tanstack-query": "^0.9.0",
     "lodash": "^4.17.21",
     "lucide-react": "^0.488.0",
     "marked": "^15.0.11",

@@ -6,6 +6,8 @@ import { toast } from 'sonner';
 import { v4 as uuidv4 } from 'uuid';
 
 import type { MessageEntity } from '@/types'; // Use internal type
+import { Page } from 'openai/pagination.mjs';
+import { Model } from 'openai/resources/index.mjs';
 import { abortControllerAtom, isAssistantLoadingAtom } from './apiState';
 import {
   _activeChatIdAtom,
@@ -31,6 +33,13 @@ import {
 
 // Debounce delay for updating message content in DB during streaming (in milliseconds)
 const STREAM_DB_UPDATE_DEBOUNCE_MS = 750;
+
+export interface ResolvedApiConfig {
+  apiKey?: string;
+  baseUrl?: string;
+  providerId?: string; // The provider ID that was used for resolution
+  error?: string;
+}
 
 /** Core logic for calling the OpenAI Chat Completions API with streaming. */
 async function callOpenAIStreamLogic(get: Getter, set: Setter, chatId: string) {
@@ -582,6 +591,193 @@ export const generateChatTitle = atom(
       console.error('[generateChatTitle] Error:', error);
       // Don't update title on error
       // toast.error("Couldn't auto-generate title."); // Optional user feedback
+    }
+  },
+);
+
+/**
+ * Resolves the API key and base URL to use for an API call,
+ * considering global defaults and provider-specific overrides.
+ * @param get Jotai getter function
+ * @param targetProviderId Optional: The ID of a specific provider to use.
+ *                         If undefined, uses global/default settings.
+ *                         If a providerId is given but not found or disabled, it's an error.
+ *                         If a provider is found, its settings override globals.
+ * @returns ResolvedApiConfig object
+ */
+export const resolveApiConfig = (
+  get: Getter,
+  targetProviderId?: string,
+): ResolvedApiConfig => {
+  const globalApiKey = get(apiKeyAtom);
+  const globalApiBaseUrl = get(apiBaseUrlAtom);
+  const providers = get(apiProvidersAtom);
+
+  let finalApiKey: string | null = globalApiKey;
+  let finalApiBaseUrl: string | null = globalApiBaseUrl;
+  let resolvedProviderId: string | undefined = targetProviderId;
+  let error: string | undefined;
+
+  if (targetProviderId) {
+    const provider = providers.find((p) => p.id === targetProviderId);
+    if (!provider) {
+      error = `Provider with ID "${targetProviderId}" not found.`;
+      return { error, providerId: targetProviderId };
+    }
+    if (!provider.enabled) {
+      error = `Provider "${provider.name}" (ID: ${targetProviderId}) is disabled.`;
+      return { error, providerId: targetProviderId };
+    }
+
+    // Provider-specific settings override globals if they exist
+    finalApiKey = provider.apiKey || globalApiKey;
+    finalApiBaseUrl = provider.apiBaseUrl || globalApiBaseUrl;
+    resolvedProviderId = provider.id;
+  } else {
+    // Using global/default settings
+    // This case might represent a "default" provider that uses global settings.
+    // For clarity, you might want a "default" provider in your apiProvidersAtom list.
+    // For now, we assume `targetProviderId = undefined` means use globals directly.
+    resolvedProviderId = 'global'; // Or a more descriptive default ID
+  }
+
+  if (!finalApiKey) {
+    error = `API Key not resolved. Target provider: ${targetProviderId || 'global/default'}. Please configure API key.`;
+  }
+
+  return {
+    apiKey: finalApiKey ?? undefined,
+    baseUrl: finalApiBaseUrl ?? undefined,
+    error,
+    providerId: resolvedProviderId,
+  };
+};
+
+interface ModelsAtomState {
+  data: Model[] | null;
+  loading: boolean;
+  error: Error | null;
+  targetProviderId: string | null; // To track which provider the current data is for
+}
+
+const initialModelsState: ModelsAtomState = {
+  data: null,
+  loading: false,
+  error: null,
+  targetProviderId: null,
+};
+
+export const tempFetchedModelsAtom = atom(
+  initialModelsState,
+  async (get, set, { targetProviderId }: Partial<ModelsAtomState>) => {
+    // If targetProviderId is null/undefined, reset to initial state or handle as an error
+    if (!targetProviderId) {
+      console.warn(
+        '[modelsAtom] No targetProviderId provided. Clearing models.',
+      );
+      set(tempFetchedModelsAtom, initialModelsState);
+      return;
+    }
+
+    // Prevent re-fetch if already loading for the same provider or data is fresh (optional)
+    const currentState = get(tempFetchedModelsAtom);
+    if (
+      currentState.loading &&
+      currentState.targetProviderId === targetProviderId
+    ) {
+      console.log(
+        `[modelsAtom] Already fetching for provider "${targetProviderId}". Skipping.`,
+      );
+      return;
+    }
+
+    set(tempFetchedModelsAtom, {
+      ...get(tempFetchedModelsAtom), // Keep existing data while loading for a new provider if desired
+      loading: true,
+      error: null,
+      // targetProviderId: targetProviderId // Can set this here or on success
+    });
+
+    const {
+      apiKey,
+      baseUrl,
+      error: configError,
+      providerId: resolvedProviderIdForFetch,
+    } = resolveApiConfig(get, targetProviderId);
+
+    if (configError) {
+      console.error(
+        `[modelsAtom] Configuration error for provider "${targetProviderId}": ${configError}`,
+      );
+      set(tempFetchedModelsAtom, {
+        data: null,
+        loading: false,
+        error: new Error(`Configuration error: ${configError}`),
+        targetProviderId: targetProviderId, // Track that an attempt was made
+      });
+      return;
+    }
+
+    if (!apiKey) {
+      console.warn('[modelsAtom] No API key resolved. Cannot fetch models.');
+      set(tempFetchedModelsAtom, {
+        data: null,
+        loading: false,
+        error: new Error('API key is not available for fetching models.'),
+        targetProviderId: targetProviderId, // Track that an attempt was made
+      });
+      return;
+    }
+
+    console.log(
+      `[modelsAtom] Fetching models using provider config: ${resolvedProviderIdForFetch} (target: ${targetProviderId})`,
+    );
+
+    try {
+      const openai = new OpenAI({
+        apiKey: apiKey,
+        baseURL: baseUrl || undefined,
+        dangerouslyAllowBrowser: true, // Ensure this is intended and secured
+      });
+
+      const responsePage = await openai.models.list();
+      let fetchedModels: Model[] = [];
+
+      if (responsePage && Array.isArray(responsePage.data)) {
+        fetchedModels = responsePage.data as Model[]; // Assuming Model structure matches OpenAI's
+      } else if (
+        typeof (responsePage as any)?.getPaginatedItems === 'function'
+      ) {
+        // Fallback for your custom Page structure if it was used
+        fetchedModels = (
+          responsePage as unknown as Page<Model>
+        ).getPaginatedItems();
+      } else {
+        console.warn(
+          '[modelsAtom] Unexpected response structure from openai.models.list()',
+        );
+        // Keep fetchedModels as []
+      }
+
+      set(tempFetchedModelsAtom, {
+        data: fetchedModels,
+        loading: false,
+        error: null,
+        targetProviderId: targetProviderId,
+      });
+
+      return fetchedModels;
+    } catch (errorInstance) {
+      console.error('[modelsAtom] Error fetching models:', errorInstance);
+      set(tempFetchedModelsAtom, {
+        data: null, // Or keep stale data: currentState.data if preferred on error
+        loading: false,
+        error:
+          errorInstance instanceof Error
+            ? errorInstance
+            : new Error(String(errorInstance)),
+        targetProviderId: targetProviderId,
+      });
     }
   },
 );
