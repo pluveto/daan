@@ -1,4 +1,4 @@
-// src/components/ConversationActionsMenu.tsx (Updated - Phase 5)
+// src/components/ConversationActionsMenu.tsx (Updated - Phase 5 + Shortcuts)
 import {
   AlertDialog,
   AlertDialogAction,
@@ -22,10 +22,8 @@ import {
 } from '@/components/ui/DropdownMenu';
 import { readFileAsText } from '@/lib/file';
 import {
-  activeChatDataAtom, // Use derived atom for active chat data
-
-  // --- Use new atoms/actions ---
-  chatListMetadataAtom, // Use sorted metadata list
+  activeChatDataAtom,
+  chatListMetadataAtom,
   clearUnpinnedChatsAtom,
   createNewChatAtom,
   deleteChatAtom,
@@ -34,17 +32,12 @@ import {
   exportAllChatsAtom,
   exportCurrentChatAtom,
   forkChatAtom,
-  // --- Import/Export Actions ---
-  importChatsAtom, // Use metadata list
+  importChatsAtom,
   sortedChatsMetadataAtom,
   togglePinChatAtom,
 } from '@/store/index';
-// --- Remove unused imports ---
-// import { Chat } from '@/types'; // No longer needed directly
-// import { downloadJson } from '@/lib/download'; // Handled by actions now
-// --- End Remove ---
 import { useAtomValue, useSetAtom } from 'jotai';
-import React, { useMemo, useRef } from 'react';
+import React, { useEffect, useMemo, useRef } from 'react'; // Added useEffect
 import {
   LuArchiveRestore,
   LuArrowDownToLine,
@@ -63,13 +56,10 @@ import { toast } from 'sonner';
 import { Button } from './ui/Button';
 
 export const ConversationActionsMenu: React.FC = () => {
-  // --- Get state values using new atoms ---
-  const activeChat = useAtomValue(activeChatDataAtom); // Reads activeChatDataAtom indirectly
-  const chatMetadata = useAtomValue(chatListMetadataAtom); // Read metadata list
-  const sortedMetadata = useAtomValue(sortedChatsMetadataAtom); // Read sorted metadata list
-  // --- End new atoms ---
+  const activeChat = useAtomValue(activeChatDataAtom);
+  const chatMetadata = useAtomValue(chatListMetadataAtom);
+  const sortedMetadata = useAtomValue(sortedChatsMetadataAtom);
 
-  // --- Action setters (remain mostly the same, point to refactored actions) ---
   const createNewChat = useSetAtom(createNewChatAtom);
   const togglePinChat = useSetAtom(togglePinChatAtom);
   const deleteChat = useSetAtom(deleteChatAtom);
@@ -77,43 +67,36 @@ export const ConversationActionsMenu: React.FC = () => {
   const forkChat = useSetAtom(forkChatAtom);
   const deleteOlder = useSetAtom(deleteChatsOlderThanAtom);
   const deleteNewer = useSetAtom(deleteChatsNewerThanAtom);
-  const importChats = useSetAtom(importChatsAtom); // Use refactored import action
-  const exportAll = useSetAtom(exportAllChatsAtom); // Use refactored export action
-  const exportCurrent = useSetAtom(exportCurrentChatAtom); // Use refactored export action
-  // --- End Action setters ---
+  const importChats = useSetAtom(importChatsAtom);
+  const exportAll = useSetAtom(exportAllChatsAtom);
+  const exportCurrent = useSetAtom(exportCurrentChatAtom);
 
   const importFileInputRef = useRef<HTMLInputElement>(null);
 
-  // --- Calculate dynamic states based on new atoms ---
   const hasChats = useMemo(
     () => chatMetadata !== null && chatMetadata.length > 0,
     [chatMetadata],
   );
   const isChatActive = !!activeChat;
-  // isChatPinned can now directly use the loaded active chat data
   const isChatPinned = activeChat?.isPinned ?? false;
 
-  // Calculate index based on sorted metadata
   const activeChatIndex = useMemo(() => {
     if (!activeChat || !sortedMetadata) return -1;
     return sortedMetadata.findIndex((c) => c.id === activeChat.id);
   }, [activeChat, sortedMetadata]);
 
-  // Logic for enabling delete above/below remains the same, but uses recalculated index
   const canDeleteBelow =
     isChatActive &&
     activeChatIndex !== -1 &&
-    activeChatIndex < sortedMetadata.length - 1; // Corrected logic: can delete if not last
-  const canDeleteAbove = isChatActive && activeChatIndex > 0; // Corrected logic: can delete if not first
+    activeChatIndex < sortedMetadata.length - 1;
+  const canDeleteAbove = isChatActive && activeChatIndex > 0;
 
-  // Calculate hasUnpinned based on metadata
   const hasUnpinned = useMemo(
     () => chatMetadata?.some((c) => !c.isPinned) ?? false,
     [chatMetadata],
   );
-  // --- End dynamic state calculation ---
 
-  // --- Action Handlers (Simplified: just call the action atom) ---
+  // --- Action Handlers ---
   const handlePinToggle = () => {
     if (activeChat) {
       togglePinChat(activeChat.id);
@@ -122,8 +105,11 @@ export const ConversationActionsMenu: React.FC = () => {
       );
     }
   };
-  const handleDeleteCurrent = () => {
+
+  // This handler is for the menu item, which uses confirmation
+  const handleDeleteCurrentWithConfirmation = () => {
     if (activeChat) {
+      // This function will be called by the AlertDialog's action button
       deleteChat(activeChat.id);
       toast.success('Conversation deleted');
     }
@@ -153,7 +139,6 @@ export const ConversationActionsMenu: React.FC = () => {
       toast.success('Newer conversations deleted');
     }
   };
-  // --- End Action Handlers ---
 
   // --- Import/Export Handlers ---
   const handleTriggerImport = () => {
@@ -171,8 +156,7 @@ export const ConversationActionsMenu: React.FC = () => {
     try {
       const fileContent = await readFileAsText(file);
       const importedData = JSON.parse(fileContent);
-      // Call the refactored importChats atom action
-      importChats(importedData); // Action handles validation, processing, toasts
+      importChats(importedData);
     } catch (error) {
       console.error('Import failed:', error);
       toast.error(
@@ -185,17 +169,48 @@ export const ConversationActionsMenu: React.FC = () => {
     }
   };
   const handleExportAll = () => {
-    exportAll(); // Call the refactored export action
+    exportAll();
   };
   const handleExportCurrent = () => {
-    exportCurrent(); // Call the refactored export action
+    exportCurrent();
   };
-  // --- End Import/Export Handlers ---
+
+  // --- Keyboard Shortcuts ---
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      // Check for Ctrl (Windows/Linux) or Command (macOS)
+      const isCtrlOrCmd = event.ctrlKey || event.metaKey;
+
+      if (isCtrlOrCmd && (event.key === 'n' || event.key === 'N')) {
+        event.preventDefault(); // Prevent browser's default "New Window"
+        console.log('Ctrl+N pressed: Creating new chat');
+        createNewChat();
+        // toast.success('New conversation created'); // Optional: toast for shortcut
+      }
+
+      if (isCtrlOrCmd && (event.key === 'w' || event.key === 'W')) {
+        if (activeChat) {
+          event.preventDefault(); // Prevent browser's default "Close Tab/Window"
+          console.log(
+            `Ctrl+W pressed: Deleting current chat ID: ${activeChat.id}`,
+          );
+          deleteChat(activeChat.id); // Directly delete, no confirmation
+          toast.success('Conversation deleted');
+        } else {
+          console.log('Ctrl+W pressed: No active chat to delete');
+        }
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [activeChat, createNewChat, deleteChat]); // Add dependencies
 
   // --- Render ---
   return (
     <>
-      {/* Hidden File Input for Import */}
       <input
         type="file"
         ref={importFileInputRef}
@@ -205,7 +220,6 @@ export const ConversationActionsMenu: React.FC = () => {
       />
 
       <DropdownMenu>
-        {/* Trigger (unchanged) */}
         <DropdownMenuTrigger asChild>
           <Button variant="ghost" size="xs">
             <LuEllipsis className="h-4 w-4" />
@@ -213,12 +227,15 @@ export const ConversationActionsMenu: React.FC = () => {
           </Button>
         </DropdownMenuTrigger>
 
-        {/* Content (use updated variables/handlers) */}
         <DropdownMenuContent align="end" className="w-56">
-          {/* --- Menu Items --- */}
           <DropdownMenuItem onClick={() => createNewChat()}>
             <LuCirclePlus className="mr-2 h-4 w-4" />
             <span>New Conversation</span>
+            <span className="ml-auto text-xs tracking-widest text-muted-foreground">
+              {navigator.platform.toUpperCase().indexOf('MAC') >= 0
+                ? '⌘N'
+                : 'Ctrl+N'}
+            </span>
           </DropdownMenuItem>
           <DropdownMenuItem onClick={handlePinToggle} disabled={!isChatActive}>
             {isChatPinned ? (
@@ -235,19 +252,16 @@ export const ConversationActionsMenu: React.FC = () => {
 
           <DropdownMenuSeparator />
 
-          {/* Import / Export */}
           <DropdownMenuItem onClick={handleTriggerImport}>
             <LuUpload className="mr-2 h-4 w-4" />
             <span>Import Conversation(s)...</span>
           </DropdownMenuItem>
           <DropdownMenuSub>
-            {/* Disable Export sub-menu if no chats exist */}
             <DropdownMenuSubTrigger disabled={!hasChats}>
               <LuDownload className="mr-2 h-4 w-4" />
               <span>Export...</span>
             </DropdownMenuSubTrigger>
             <DropdownMenuSubContent>
-              {/* Disable items based on state */}
               <DropdownMenuItem onClick={handleExportAll} disabled={!hasChats}>
                 <LuFileJson className="mr-2 h-4 w-4" />
                 <span>All conversations (JSON)</span>
@@ -264,12 +278,10 @@ export const ConversationActionsMenu: React.FC = () => {
 
           <DropdownMenuSeparator />
 
-          {/* Destructive Actions with Confirmation Dialogs */}
-          {/* Delete Below */}
           <AlertDialog>
             <AlertDialogTrigger asChild>
               <DropdownMenuItem
-                onSelect={(e) => e.preventDefault()} // Prevent closing menu
+                onSelect={(e) => e.preventDefault()}
                 disabled={!isChatActive || !canDeleteBelow}
                 variant="destructive"
                 aria-disabled={!isChatActive || !canDeleteBelow}
@@ -294,7 +306,7 @@ export const ConversationActionsMenu: React.FC = () => {
               <AlertDialogFooter>
                 <AlertDialogCancel>Cancel</AlertDialogCancel>
                 <AlertDialogAction
-                  className="bg-destructive..."
+                  className="bg-destructive hover:bg-destructive/90" // Added hover style
                   onClick={handleDeleteBelow}
                 >
                   Delete Below
@@ -303,7 +315,6 @@ export const ConversationActionsMenu: React.FC = () => {
             </AlertDialogContent>
           </AlertDialog>
 
-          {/* Delete Above */}
           <AlertDialog>
             <AlertDialogTrigger asChild>
               <DropdownMenuItem
@@ -332,7 +343,7 @@ export const ConversationActionsMenu: React.FC = () => {
               <AlertDialogFooter>
                 <AlertDialogCancel>Cancel</AlertDialogCancel>
                 <AlertDialogAction
-                  className="bg-destructive..."
+                  className="bg-destructive hover:bg-destructive/90" // Added hover style
                   onClick={handleDeleteAbove}
                 >
                   Delete Above
@@ -341,12 +352,11 @@ export const ConversationActionsMenu: React.FC = () => {
             </AlertDialogContent>
           </AlertDialog>
 
-          {/* Delete Unpinned */}
           <AlertDialog>
             <AlertDialogTrigger asChild>
               <DropdownMenuItem
                 onSelect={(e) => e.preventDefault()}
-                disabled={!hasUnpinned} // Disable if no unpinned chats
+                disabled={!hasUnpinned}
                 variant="destructive"
                 aria-disabled={!hasUnpinned}
                 className={
@@ -369,7 +379,7 @@ export const ConversationActionsMenu: React.FC = () => {
               <AlertDialogFooter>
                 <AlertDialogCancel>Cancel</AlertDialogCancel>
                 <AlertDialogAction
-                  className="bg-destructive"
+                  className="bg-destructive hover:bg-destructive/90" // Added hover style
                   onClick={handleClearUnpinned}
                 >
                   Delete Unpinned
@@ -378,7 +388,7 @@ export const ConversationActionsMenu: React.FC = () => {
             </AlertDialogContent>
           </AlertDialog>
 
-          {/* Delete Current */}
+          {/* Delete Current - Menu item still uses confirmation */}
           <AlertDialog>
             <AlertDialogTrigger asChild>
               <DropdownMenuItem
@@ -394,6 +404,11 @@ export const ConversationActionsMenu: React.FC = () => {
               >
                 <LuTrash2 className="mr-2 h-4 w-4" />
                 <span>Delete Current</span>
+                <span className="ml-auto text-xs tracking-widest text-muted-foreground">
+                  {navigator.platform.toUpperCase().indexOf('MAC') >= 0
+                    ? '⌘W'
+                    : 'Ctrl+W'}
+                </span>
               </DropdownMenuItem>
             </AlertDialogTrigger>
             <AlertDialogContent>
@@ -407,8 +422,8 @@ export const ConversationActionsMenu: React.FC = () => {
               <AlertDialogFooter>
                 <AlertDialogCancel>Cancel</AlertDialogCancel>
                 <AlertDialogAction
-                  className="bg-destructive..."
-                  onClick={handleDeleteCurrent}
+                  className="bg-destructive hover:bg-destructive/90" // Added hover style
+                  onClick={handleDeleteCurrentWithConfirmation} // Use the specific handler for confirmation
                 >
                   Delete Current
                 </AlertDialogAction>

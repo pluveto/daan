@@ -27,3 +27,4 @@ tauri = { version = "2.5.0", features = [] }
 tauri-plugin-log = "2.0.0-rc"
 tokio = { version = "1", features = ["full"] } # For async IO
 uuid = { version = "1", features = ["v4"] } # For generating unique IDs
+shell-words = "1.1.0" 
