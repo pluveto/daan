@@ -343,7 +343,7 @@ export const McpServerForm: React.FC<McpServerFormProps> = ({
                     />
                   </FormControl>
                   <FormDescription>
-                    Comma-separated arguments to pass to the command.
+                    Newline(\n)-separated arguments to pass to the command.
                     {/* For Textarea: Arguments to pass to the command, one per line. */}
                   </FormDescription>
                   <FormMessage />
