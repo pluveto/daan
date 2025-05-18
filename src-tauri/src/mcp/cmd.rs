@@ -139,7 +139,7 @@ pub async fn start_external_process(
                     "Initial spawn failed (NotFound): {}. Attempting OS-specific retry.",
                     e
                 );
-
+                 /* https://github.com/modelcontextprotocol/servers/issues/1526#issuecomment-2819858033 */
                 let (retry_command_str, retry_args_vec) = if cfg!(target_os = "windows") {
                     let mut new_args = vec!["/c".to_string(), command.clone()];
                     new_args.extend(args.clone()); // Add original args after original command
