@@ -1,4 +1,5 @@
 // src/components/ChatMessageItem.tsx (Optimized)
+import { useStreamThrottle } from '@/hooks/use-stream-throttle';
 import { cn, normalizeMath } from '@/lib/utils';
 import { approveToolCallAtom, denyToolCallAtom } from '@/store';
 import type { Message, ToolCallInfo } from '@/types';
@@ -26,7 +27,7 @@ import {
   LuTriangleAlert,
   LuUser,
 } from 'react-icons/lu';
-import ReactMarkdown from 'react-markdown';
+import ReactMarkdown, { Components } from 'react-markdown';
 import rehypeKatex from 'rehype-katex';
 import rehypeRaw from 'rehype-raw';
 import remarkGfm from 'remark-gfm';
@@ -103,6 +104,16 @@ const msgPostProcess = ({ isStreaming, content }: Message) => {
   tmp = normalizeMath(tmp);
 
   return tmp;
+};
+
+const REMARK_PLUGINS = [remarkGfm, remarkMath];
+const REHYPE_PLUGINS = [rehypeRaw, rehypeKatex];
+
+const MARKDOWN_COMPONENTS: Components = {
+  code: CodeBlock as any,
+  // @ts-ignore
+  hidden: ({ children }) => <div className="invisible">{children}</div>,
+  p: ({ children }) => <div className="mb-2 last:mb-0">{children}</div>,
 };
 
 // --- New Tool Call Info Type Guards ---
@@ -199,6 +210,9 @@ const _ChatMessageItem: React.FC<ChatMessageItemProps> = ({
   const approveToolCall = useSetAtom(approveToolCallAtom);
   const denyToolCall = useSetAtom(denyToolCallAtom);
 
+  const shouldThrottle = message.isStreaming && !isEditing;
+  const displayContent = useStreamThrottle(message.content, shouldThrottle, 70);
+
   // --- Memoized Calculations (Good practice) ---
   const numTokens = useMemo(() => {
     return showEstimatedTokens ? approximateTokenSize(message.content) : 0;
@@ -209,10 +223,16 @@ const _ChatMessageItem: React.FC<ChatMessageItemProps> = ({
       return message.content;
     }
     if (message.role === 'assistant') {
-      return msgPostProcess(message);
+      return msgPostProcess({ ...message, content: displayContent });
     }
-    return message.content;
-  }, [message.content, isEditing]); // Depend on isEditing too
+    return displayContent;
+  }, [
+    displayContent,
+    isEditing,
+    message.content,
+    message.isStreaming,
+    message.role,
+  ]);
 
   // --- Effect to Initialize and Focus Editor ---
   useEffect(() => {
@@ -412,14 +432,9 @@ const _ChatMessageItem: React.FC<ChatMessageItemProps> = ({
           {/* Render content using markdown for potential formatting in results */}
           <div className="prose prose-sm dark:prose-invert max-w-none">
             <ReactMarkdown
-              components={{
-                code: CodeBlock,
-                // @ts-ignore
-                hidden: ({ children }) => (
-                  <div className="invisible">{children}</div>
-                ),
-                p: ({ children }) => <>{children}</>,
-              }}
+              components={MARKDOWN_COMPONENTS}
+              remarkPlugins={REMARK_PLUGINS}
+              rehypePlugins={REHYPE_PLUGINS}
             >
               {message.content}
             </ReactMarkdown>
@@ -473,19 +488,9 @@ const _ChatMessageItem: React.FC<ChatMessageItemProps> = ({
           <>
             <div className="prose prose-sm dark:prose-invert prose-p:my-1 prose-pre:my-1 max-w-none">
               <ReactMarkdown
-                components={{
-                  code: CodeBlock,
-                  // Ensure p doesn't add excessive margins if prose styles handle it
-                  p: ({ children }) => (
-                    <div className="mb-2 last:mb-0">{children}</div>
-                  ),
-                  // @ts-ignore
-                  hidden: ({ children }) => (
-                    <div className="invisible">{children}</div>
-                  ),
-                }}
-                remarkPlugins={[remarkGfm, remarkMath]}
-                rehypePlugins={[rehypeRaw, rehypeKatex]}
+                components={MARKDOWN_COMPONENTS}
+                remarkPlugins={REMARK_PLUGINS}
+                rehypePlugins={REHYPE_PLUGINS}
               >
                 {processedContent}
               </ReactMarkdown>
